@@ -367,13 +367,16 @@ class PackageWorkflowTestCase(unittest.TestCase):
         setup = self.workflow[setup_start:setup_end]
 
         smoke = setup.index('if ("${{ inputs.mode }}" -eq "smoke")')
+        copied_payload = setup.index('Copy-Item ".\\dist\\qualitybound\\*" $source -Recurse -Force')
         dummy = setup.index('Set-Content -Path (Join-Path $ffmpeg "ffmpeg.exe")')
         non_smoke = setup.index("} else {", dummy)
         real_source = setup.index('$source = ".\\dist\\qualitybound"')
-        self.assertLess(smoke, dummy)
+        self.assertLess(smoke, copied_payload)
+        self.assertLess(copied_payload, dummy)
         self.assertLess(dummy, non_smoke)
         self.assertLess(non_smoke, real_source)
         self.assertEqual(setup.count("Set-Content -Path (Join-Path $ffmpeg"), 2)
+        self.assertNotIn('Copy-Item ".\\dist\\qualitybound\\qualitybound.exe" $source', setup)
 
         install_start = self.workflow.index("- name: Install and smoke test Windows Setup package")
         install_end = self.workflow.index("- name: Silent uninstall of installed Windows Setup package", install_start)
@@ -381,6 +384,7 @@ class PackageWorkflowTestCase(unittest.TestCase):
         self.assertIn('if ("${{ inputs.mode }}" -ne "smoke")', install)
         self.assertIn('"FFmpeg\\bin\\ffmpeg.exe"', install)
         self.assertIn('"FFmpeg\\bin\\ffprobe.exe"', install)
+        self.assertIn('if ($cliHelp -notmatch "QualityBound CLI")', install)
         self.assertNotIn('inputs.mode }}" -eq "release"', install)
 
     def test_ffmpeg_cache_is_restored_once_before_unix_and_windows_prepare(self) -> None:
