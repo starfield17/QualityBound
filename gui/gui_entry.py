@@ -26,7 +26,7 @@ def run_gui(argv: list[str] | None = None) -> int:
             f"i18n warning ({diagnostic.locale}): {diagnostic.message}",
             file=sys.stderr,
         )
-    parser = argparse.ArgumentParser(description="Video compressor GUI")
+    parser = argparse.ArgumentParser(description="QualityBound GUI")
     parser.add_argument(
         "--lang",
         choices=[info.code for info in catalog.languages()],

@@ -36,7 +36,7 @@ from core.smart.vmaf import (  # noqa: E402
 )
 
 
-USER_AGENT = "Video-compressor-release-ci/1.0"
+USER_AGENT = "QualityBound-release-ci/1.0"
 LICENSE_NAMES = {"LICENSE.md", "COPYING.GPLv3", "VMAF-LICENSE.txt"}
 REQUIRED_FILTERS = {"libvmaf", "siti", "scdet"}
 _COMMIT_RE = re.compile(r"[0-9a-f]{40}")

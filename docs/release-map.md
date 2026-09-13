@@ -20,7 +20,7 @@ scripts.
 | `scripts/build_nuitka.py` | Owns Nuitka command construction, version normalization, staging, and platform output discovery. |
 | `scripts/prepare_ffmpeg.py` | Downloads and validates the target-specific FFmpeg bundle described by `packaging/ffmpeg/manifest.json`. |
 | `scripts/build_setup.py` | Validates the staged Windows tree and passes release, path, and architecture defines to Inno Setup. |
-| `packaging/windows/installer.iss` | Owns Windows installer identity and behavior, including migration from legacy MSI installs. |
+| `packaging/windows/installer.iss` | Owns the QualityBound Windows installer identity and per-user installation behavior. |
 | `scripts/sign_windows.ps1` | Authenticode-signs the staged application executable and final Setup executable when release secrets exist. |
 | `test/test_release_workflows.py` | Enforces the reusable-workflow layout, matrix targets, and cross-workflow artifact contracts. |
 | `test/test_ci_plan.py` | Enforces the routing policy: canonical matrices, monotonicity, fail-closed unknown paths. |
@@ -41,12 +41,12 @@ scripts.
 - `scripts/build_nuitka.py` is the source of truth for accepted numeric versions
   and generated package layout. Release tags use `vMAJOR.MINOR.PATCH` or the
   supported four-part numeric form.
-- `packaging/windows/installer.iss` is the single source of truth for the Inno
-  `AppId`. A literal GUID begins with `{{` because Inno escapes a literal left
-  brace by doubling it. Do not inject the AppId with an ISCC `/D` define.
-- The legacy MSI `WindowsInstaller` registry value is `REG_DWORD`; query it with
-  `RegQueryDWordValue`, not `RegQueryStringValue`. Registry helper root keys use
-  Inno's `HKEY` type and built-in `HKCU`/`HKLM` constants; do not redeclare them.
+- `packaging/windows/installer.iss` is the single source of truth for the new
+  QualityBound Inno `AppId`. A literal GUID begins with `{{` because Inno
+  escapes a literal left brace by doubling it. Do not inject the AppId with an
+  ISCC `/D` define.
+- QualityBound intentionally does not detect, remove, or upgrade legacy Video
+  Compressor MSI/Inno installations. Users uninstall the old product manually.
 - The installer contract installs Inno Setup 7.1.0 in portable mode under
   `workdir`, passes its exact `ISCC.exe` path to `build_setup.py`, and compiles
   `installer.iss` for x86_64 and ARM64 before any expensive Nuitka release

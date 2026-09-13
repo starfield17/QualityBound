@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 
-APP_DISPLAY_NAME = "Video Compressor"
+APP_DISPLAY_NAME = "QualityBound"
 APP_ICON_RELATIVE_PATH = Path("assets") / "app.svg"
 
 

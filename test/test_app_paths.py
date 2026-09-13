@@ -21,7 +21,7 @@ class AppPathsCompiledEnvironmentTestCase(unittest.TestCase):
 
     def test_sys_frozen_uses_executable_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            executable = Path(temp_dir) / "video-compressor"
+            executable = Path(temp_dir) / "qualitybound"
             with (
                 patch.object(app_paths, "__compiled__", None, create=True),
                 patch.object(sys, "frozen", True, create=True),
@@ -42,7 +42,7 @@ class AppPathsCompiledEnvironmentTestCase(unittest.TestCase):
 
     def test_nuitka_compiled_marker_uses_executable_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            executable = Path(temp_dir) / "video-compressor"
+            executable = Path(temp_dir) / "qualitybound"
             with (
                 patch.object(app_paths, "__compiled__", object(), create=True),
                 patch.object(sys, "frozen", False, create=True),
@@ -55,8 +55,8 @@ class AppPathsCompiledEnvironmentTestCase(unittest.TestCase):
     def test_macos_app_bundle_uses_resources_and_application_support(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            app_bundle = root / "Video Compressor.app"
-            executable = app_bundle / "Contents" / "MacOS" / "video-compressor"
+            app_bundle = root / "QualityBound.app"
+            executable = app_bundle / "Contents" / "MacOS" / "qualitybound"
             resources = app_bundle / "Contents" / "Resources"
             resources_config = resources / "config" / "presets"
             resources_config.mkdir(parents=True)
@@ -64,7 +64,7 @@ class AppPathsCompiledEnvironmentTestCase(unittest.TestCase):
             executable.parent.mkdir(parents=True)
             executable.write_text("executable", encoding="utf-8")
             home = root / "home"
-            runtime_config = home / "Library" / "Application Support" / "Video Compressor" / "config"
+            runtime_config = home / "Library" / "Application Support" / "QualityBound" / "config"
             runtime_config.mkdir(parents=True)
             (runtime_config / "user.json").write_text("user", encoding="utf-8")
 
@@ -82,14 +82,14 @@ class AppPathsCompiledEnvironmentTestCase(unittest.TestCase):
                 self.assertEqual(app_paths.bundle_root(), resources.resolve())
                 self.assertEqual(
                     app_paths.app_root(),
-                    home / "Library" / "Application Support" / "Video Compressor",
+                    home / "Library" / "Application Support" / "QualityBound",
                 )
                 config_dir, workdir = app_paths.ensure_runtime_layout()
 
             self.assertEqual(config_dir, runtime_config)
             self.assertEqual(
                 workdir,
-                home / "Library" / "Application Support" / "Video Compressor" / "workdir",
+                home / "Library" / "Application Support" / "QualityBound" / "workdir",
             )
             self.assertEqual((runtime_config / "presets" / "default.json").read_text(encoding="utf-8"), "default")
             self.assertEqual((runtime_config / "user.json").read_text(encoding="utf-8"), "user")
@@ -98,7 +98,7 @@ class AppPathsCompiledEnvironmentTestCase(unittest.TestCase):
                     home
                     / "Library"
                     / "Application Support"
-                    / "Video Compressor"
+                    / "QualityBound"
                     / "translations"
                 ).is_dir()
             )
@@ -108,8 +108,8 @@ class AppPathsCompiledEnvironmentTestCase(unittest.TestCase):
     def test_macos_app_upgrade_creates_translations_dir_and_leaves_old_i18n_untouched(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            app_bundle = root / "Video Compressor.app"
-            executable = app_bundle / "Contents" / "MacOS" / "video-compressor"
+            app_bundle = root / "QualityBound.app"
+            executable = app_bundle / "Contents" / "MacOS" / "qualitybound"
             bundled_i18n = app_bundle / "Contents" / "Resources" / "config" / "i18n"
             bundled_i18n.mkdir(parents=True)
             (bundled_i18n / "en.json").write_text(
@@ -124,7 +124,7 @@ class AppPathsCompiledEnvironmentTestCase(unittest.TestCase):
                 home
                 / "Library"
                 / "Application Support"
-                / "Video Compressor"
+                / "QualityBound"
                 / "config"
                 / "i18n"
             )
@@ -156,7 +156,7 @@ class AppPathsCompiledEnvironmentTestCase(unittest.TestCase):
     def test_cli_default_catalog_uses_bundle_i18n_in_macos_app(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            resources = root / "Video Compressor.app" / "Contents" / "Resources"
+            resources = root / "QualityBound.app" / "Contents" / "Resources"
             i18n_dir = resources / "config" / "i18n"
             i18n_dir.mkdir(parents=True)
             for name in ("en.json", "zh_cn.json"):
@@ -165,7 +165,7 @@ class AppPathsCompiledEnvironmentTestCase(unittest.TestCase):
                     encoding="utf-8",
                 )
             app_support = (
-                root / "Library" / "Application Support" / "Video Compressor"
+                root / "Library" / "Application Support" / "QualityBound"
             )
             app_support.mkdir(parents=True)
 
@@ -176,7 +176,7 @@ class AppPathsCompiledEnvironmentTestCase(unittest.TestCase):
                 catalog = cli_entry._default_catalog()
             self.assertIn("en", catalog.known_locales())
             self.assertIn("zh_cn", catalog.known_locales())
-            self.assertEqual(catalog.translator("zh_cn").t("app.title"), "视频压缩器")
+            self.assertEqual(catalog.translator("zh_cn").t("app.title"), "QualityBound")
 
 
 if __name__ == "__main__":

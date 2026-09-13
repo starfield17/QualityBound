@@ -1,8 +1,8 @@
-# Video Compressor repository guide
+# QualityBound repository guide
 
 ## Purpose and map
 
-This repository builds the Video Compressor desktop application. `core/` contains
+This repository builds the QualityBound desktop application. `core/` contains
 platform-neutral domain and encoding logic, `cli/` contains command-line
 entrypoints, `gui/` contains the PySide6 user interface, and `main.py` selects an
 entrypoint and is the composition root. Build and packaging helpers live in
@@ -59,3 +59,14 @@ Run architecture checks alone with
   real-world quality. Record tool versions, seeds and measured costs.
 
 See `docs/ci-workflows.md` for the routing policy and workflow profiles.
+
+## Documentation style
+
+- Prefer concrete mechanisms over marketing adjectives. Name what the software
+  measures, selects, validates, or publishes.
+- Do not describe behavior as advanced, intelligent, powerful, robust, or
+  revolutionary when a factual mechanism can be stated instead.
+- Do not use emoji unless it carries information that text cannot express.
+- Keep repository badges limited to CI, release, and license status.
+- Keep the README user-facing. Put algorithm, architecture, evaluation, and
+  release detail in the relevant document under `docs/`.

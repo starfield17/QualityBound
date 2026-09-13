@@ -1,6 +1,6 @@
 {
   "language.name": "简体中文",
-  "app.title": "视频压缩器",
+  "app.title": "QualityBound",
   "cli.plan_header": "计划项数量: {count}",
   "cli.plan_ready": "可执行",
   "cli.plan_skip": "跳过",

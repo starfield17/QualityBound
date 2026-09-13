@@ -11,14 +11,14 @@ ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS = ROOT / ".github" / "workflows"
 
 RELEASE_EXPECTED_PACKAGES = [
-    "video-compressor-{release}-windows-x86_64.zip",
-    "video-compressor-{release}-windows-x86_64-setup.exe",
-    "video-compressor-{release}-windows-arm64.zip",
-    "video-compressor-{release}-windows-arm64-setup.exe",
-    "video-compressor-{release}-linux-x86_64.tar.gz",
-    "video-compressor-{release}-linux-arm64.tar.gz",
-    "video-compressor-{release}-macos-arm64.tar.gz",
-    "video-compressor-{release}-macos-arm64.dmg",
+    "qualitybound-{release}-windows-x86_64.zip",
+    "qualitybound-{release}-windows-x86_64-setup.exe",
+    "qualitybound-{release}-windows-arm64.zip",
+    "qualitybound-{release}-windows-arm64-setup.exe",
+    "qualitybound-{release}-linux-x86_64.tar.gz",
+    "qualitybound-{release}-linux-arm64.tar.gz",
+    "qualitybound-{release}-macos-arm64.tar.gz",
+    "qualitybound-{release}-macos-arm64.dmg",
 ]
 
 
@@ -224,8 +224,8 @@ class ReleaseWorkflowTestCase(unittest.TestCase):
         # The Windows Setup upload glob must live in _package.yml and match
         # both the generic target archive and the -setup.exe file.
         package = _workflow("_package.yml")
-        self.assertIn("video-compressor-${{ github.ref_name }}-${{ inputs.target }}-setup.exe", package)
-        self.assertIn("video-compressor-${{ github.ref_name }}-${{ inputs.target }}.*", package)
+        self.assertIn("qualitybound-${{ github.ref_name }}-${{ inputs.target }}-setup.exe", package)
+        self.assertIn("qualitybound-${{ github.ref_name }}-${{ inputs.target }}.*", package)
 
     def test_release_expected_packages_are_eight(self) -> None:
         self.assertEqual(len(RELEASE_EXPECTED_PACKAGES), 8)
@@ -369,7 +369,7 @@ class PackageWorkflowTestCase(unittest.TestCase):
         smoke = setup.index('if ("${{ inputs.mode }}" -eq "smoke")')
         dummy = setup.index('Set-Content -Path (Join-Path $ffmpeg "ffmpeg.exe")')
         non_smoke = setup.index("} else {", dummy)
-        real_source = setup.index('$source = ".\\dist\\video-compressor"')
+        real_source = setup.index('$source = ".\\dist\\qualitybound"')
         self.assertLess(smoke, dummy)
         self.assertLess(dummy, non_smoke)
         self.assertLess(non_smoke, real_source)
@@ -394,8 +394,8 @@ class PackageWorkflowTestCase(unittest.TestCase):
     def test_package_workflow_release_uploads(self) -> None:
         self.assertIn("release-package-${{ inputs.target }}", self.workflow)
         self.assertIn("-setup.exe", self.workflow)
-        self.assertIn("video-compressor-${{ github.ref_name }}-${{ inputs.target }}.*", self.workflow)
-        self.assertIn("video-compressor-${{ github.ref_name }}-${{ inputs.target }}-setup.exe", self.workflow)
+        self.assertIn("qualitybound-${{ github.ref_name }}-${{ inputs.target }}.*", self.workflow)
+        self.assertIn("qualitybound-${{ github.ref_name }}-${{ inputs.target }}-setup.exe", self.workflow)
 
     def test_package_workflow_preserves_windows_smokes(self) -> None:
         self.assertIn("Setup silent install", self.workflow)

@@ -1,4 +1,4 @@
-"""Deterministic CI routing policy for the Video Compressor repository.
+"""Deterministic CI routing policy for the QualityBound repository.
 
 This module is the single source of truth for the automatic minimum
 verification plan that GitHub Actions runs for a given set of changed paths.

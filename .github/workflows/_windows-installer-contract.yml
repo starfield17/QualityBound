@@ -76,12 +76,12 @@ jobs:
           $ffmpeg = Join-Path $source "FFmpeg\bin"
           $output = Join-Path $env:GITHUB_WORKSPACE "workdir\installer-contract-output"
           New-Item -ItemType Directory -Force -Path $ffmpeg, $output | Out-Null
-          Set-Content -Path (Join-Path $source "video-compressor.exe") -Value "contract"
+          Set-Content -Path (Join-Path $source "qualitybound.exe") -Value "contract"
           Set-Content -Path (Join-Path $ffmpeg "ffmpeg.exe") -Value "contract"
           Set-Content -Path (Join-Path $ffmpeg "ffprobe.exe") -Value "contract"
 
           foreach ($architecture in @("x86_64", "arm64")) {
-              $setup = Join-Path $output "video-compressor-contract-$architecture-setup.exe"
+              $setup = Join-Path $output "qualitybound-contract-$architecture-setup.exe"
               python .\scripts\build_setup.py `
                 --version "$version" `
                 --architecture $architecture `

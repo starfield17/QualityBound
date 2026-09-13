@@ -37,7 +37,7 @@ fi
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 temporary_root="${TMPDIR:-$project_root/workdir/tmp}"
 mkdir -p "$temporary_root"
-temporary_dir="$(mktemp -d "$temporary_root/video-compressor-dmg.XXXXXXXX")"
+temporary_dir="$(mktemp -d "$temporary_root/qualitybound-dmg.XXXXXXXX")"
 temporary_path="$temporary_dir/image.dmg"
 staging_dir="$temporary_dir/root"
 cleanup() {

@@ -72,7 +72,7 @@ def build_iscc_command(
 
 def validate_source(source_dir: Path, icon_path: Path) -> None:
     required = (
-        source_dir / "video-compressor.exe",
+        source_dir / "qualitybound.exe",
         source_dir / "FFmpeg" / "bin" / "ffmpeg.exe",
         source_dir / "FFmpeg" / "bin" / "ffprobe.exe",
         icon_path,
@@ -89,7 +89,7 @@ def _argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", required=True)
     parser.add_argument("--architecture", choices=tuple(ARCHITECTURES), required=True)
-    parser.add_argument("--source-dir", type=Path, default=root / "dist" / "video-compressor")
+    parser.add_argument("--source-dir", type=Path, default=root / "dist" / "qualitybound")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--intermediate-dir",

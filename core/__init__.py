@@ -1,2 +1,1 @@
-"""Core business logic for the video compressor project."""
-
+"""Core business logic for QualityBound."""

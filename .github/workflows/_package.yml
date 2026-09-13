@@ -205,7 +205,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $executable = ".\dist\video-compressor\video-compressor.exe"
+          $executable = ".\dist\qualitybound\qualitybound.exe"
           if (-not (Test-Path $executable)) {
               throw "Packaged executable not found: $executable"
           }
@@ -214,11 +214,11 @@ jobs:
               exit $LASTEXITCODE
           }
           if ("${{ inputs.mode }}" -ne "smoke") {
-              & ".\dist\video-compressor\FFmpeg\bin\ffmpeg.exe" -hide_banner -version
+              & ".\dist\qualitybound\FFmpeg\bin\ffmpeg.exe" -hide_banner -version
               if ($LASTEXITCODE -ne 0) {
                   exit $LASTEXITCODE
               }
-              & ".\dist\video-compressor\FFmpeg\bin\ffprobe.exe" -hide_banner -version
+              & ".\dist\qualitybound\FFmpeg\bin\ffprobe.exe" -hide_banner -version
               if ($LASTEXITCODE -ne 0) {
                   exit $LASTEXITCODE
               }
@@ -232,7 +232,7 @@ jobs:
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           .\scripts\sign_windows.ps1 `
-            -Files ".\dist\video-compressor\video-compressor.exe"
+            -Files ".\dist\qualitybound\qualitybound.exe"
 
       - name: Install pinned Inno Setup for Windows installer smoke
         if: runner.os == 'Windows'
@@ -271,7 +271,7 @@ jobs:
           RELEASE_VERSION: ${{ steps.version.outputs.numeric }}
         run: |
           if ("${{ inputs.mode }}" -eq "release") {
-              $setup = "video-compressor-$env:GITHUB_REF_NAME-${{ inputs.target }}-setup.exe"
+              $setup = "qualitybound-$env:GITHUB_REF_NAME-${{ inputs.target }}-setup.exe"
             } else {
               $setup = "workdir\setup-${{ inputs.mode }}-${{ inputs.target }}-setup.exe"
             }
@@ -279,11 +279,11 @@ jobs:
               $source = ".\workdir\setup-${{ inputs.mode }}-source"
               $ffmpeg = Join-Path $source "FFmpeg\bin"
               New-Item -ItemType Directory -Force -Path $ffmpeg | Out-Null
-              Copy-Item ".\dist\video-compressor\video-compressor.exe" $source
+              Copy-Item ".\dist\qualitybound\qualitybound.exe" $source
               Set-Content -Path (Join-Path $ffmpeg "ffmpeg.exe") -Value "${{ inputs.mode }}"
               Set-Content -Path (Join-Path $ffmpeg "ffprobe.exe") -Value "${{ inputs.mode }}"
             } else {
-              $source = ".\dist\video-compressor"
+              $source = ".\dist\qualitybound"
             }
           python .\scripts\build_setup.py `
             --version "$env:RELEASE_VERSION" `
@@ -321,7 +321,7 @@ jobs:
               throw "Setup silent install failed with exit code $($install.ExitCode)"
           }
 
-          & (Join-Path $installed "video-compressor.exe") --cli --help
+          & (Join-Path $installed "qualitybound.exe") --cli --help
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
@@ -353,8 +353,8 @@ jobs:
           if ($uninstall.ExitCode -ne 0) {
               throw "Setup silent uninstall failed with exit code $($uninstall.ExitCode)"
           }
-          if (Test-Path (Join-Path $installed "video-compressor.exe")) {
-              throw "Uninstall did not remove video-compressor.exe"
+          if (Test-Path (Join-Path $installed "qualitybound.exe")) {
+              throw "Uninstall did not remove qualitybound.exe"
           }
           if (Test-Path (Join-Path $installed "FFmpeg")) {
               throw "Uninstall did not remove the FFmpeg directory"
@@ -364,12 +364,12 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          test -f dist/video-compressor/video-compressor
-          chmod +x dist/video-compressor/video-compressor
-          ./dist/video-compressor/video-compressor --cli --help
+          test -f dist/qualitybound/qualitybound
+          chmod +x dist/qualitybound/qualitybound
+          ./dist/qualitybound/qualitybound --cli --help
           if [ "${{ inputs.mode }}" != "smoke" ]; then
-              dist/video-compressor/FFmpeg/bin/ffmpeg -hide_banner -version
-              dist/video-compressor/FFmpeg/bin/ffprobe -hide_banner -version
+              dist/qualitybound/FFmpeg/bin/ffmpeg -hide_banner -version
+              dist/qualitybound/FFmpeg/bin/ffprobe -hide_banner -version
             fi
 
       - name: Smoke test macOS app bundle and DMG
@@ -378,9 +378,9 @@ jobs:
         env:
           TARGET_ARCH: ${{ inputs.target_arch }}
         run: |
-          app="dist/Video Compressor.app"
-          executable="$app/Contents/MacOS/video-compressor"
-          dmg="dist/video-compressor.dmg"
+          app="dist/QualityBound.app"
+          executable="$app/Contents/MacOS/qualitybound"
+          dmg="dist/qualitybound.dmg"
           test -d "$app"
           test -f "$app/Contents/Info.plist"
           test -x "$executable"
@@ -406,10 +406,10 @@ jobs:
           mount_dir="$(mktemp -d)"
           hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount_dir"
           trap 'hdiutil detach "$mount_dir"' EXIT
-          test -d "$mount_dir/Video Compressor.app"
+          test -d "$mount_dir/QualityBound.app"
           test -L "$mount_dir/Applications"
           test "$(readlink "$mount_dir/Applications")" = "/Applications"
-          codesign --verify --deep --strict "$mount_dir/Video Compressor.app"
+          codesign --verify --deep --strict "$mount_dir/QualityBound.app"
           hdiutil detach "$mount_dir"
           trap - EXIT
           rmdir "$mount_dir"
@@ -418,24 +418,24 @@ jobs:
         if: runner.os == 'Windows' && inputs.mode == 'release'
         shell: pwsh
         run: |
-          $archive = "video-compressor-$env:GITHUB_REF_NAME-${{ inputs.target }}.zip"
-          7z a -tzip $archive ".\dist\video-compressor"
+          $archive = "qualitybound-$env:GITHUB_REF_NAME-${{ inputs.target }}.zip"
+          7z a -tzip $archive ".\dist\qualitybound"
 
       - name: Archive Linux package (release)
         if: runner.os == 'Linux' && inputs.mode == 'release'
         shell: bash
         run: |
-          tar -czf "video-compressor-${GITHUB_REF_NAME}-${{ inputs.target }}.tar.gz" \
-            -C dist video-compressor
+          tar -czf "qualitybound-${GITHUB_REF_NAME}-${{ inputs.target }}.tar.gz" \
+            -C dist qualitybound
 
       - name: Archive macOS app bundle (release)
         if: runner.os == 'macOS' && inputs.package_kind == 'macos-app' && inputs.mode == 'release'
         shell: bash
         run: |
-          tar -czf "video-compressor-${GITHUB_REF_NAME}-${{ inputs.target }}.tar.gz" \
-            -C dist "Video Compressor.app"
-          cp "dist/video-compressor.dmg" \
-            "video-compressor-${GITHUB_REF_NAME}-${{ inputs.target }}.dmg"
+          tar -czf "qualitybound-${GITHUB_REF_NAME}-${{ inputs.target }}.tar.gz" \
+            -C dist "QualityBound.app"
+          cp "dist/qualitybound.dmg" \
+            "qualitybound-${GITHUB_REF_NAME}-${{ inputs.target }}.dmg"
 
       - name: Upload release packages
         if: inputs.mode == 'release'
@@ -443,8 +443,8 @@ jobs:
         with:
           name: release-package-${{ inputs.target }}
           path: |
-            video-compressor-${{ github.ref_name }}-${{ inputs.target }}.*
-            video-compressor-${{ github.ref_name }}-${{ inputs.target }}-setup.exe
+            qualitybound-${{ github.ref_name }}-${{ inputs.target }}.*
+            qualitybound-${{ github.ref_name }}-${{ inputs.target }}-setup.exe
           include-hidden-files: true
           if-no-files-found: error
 

@@ -31,7 +31,7 @@ class WindowsSetupTestCase(unittest.TestCase):
             common = {
                 "version": "1.6.1",
                 "source_dir": root / "source",
-                "output_path": root / "video-compressor-setup.exe",
+                "output_path": root / "qualitybound-setup.exe",
                 "intermediate_dir": root / "intermediate",
                 "icon_path": root / "app.ico",
                 "iscc_executable": "ISCC.exe",
@@ -91,7 +91,7 @@ class WindowsSetupTestCase(unittest.TestCase):
             with self.assertRaisesRegex(FileNotFoundError, "Setup source is incomplete"):
                 validate_source(source, icon)
 
-            (source / "video-compressor.exe").write_bytes(b"exe")
+            (source / "qualitybound.exe").write_bytes(b"exe")
             ffmpeg_bin = source / "FFmpeg" / "bin"
             ffmpeg_bin.mkdir(parents=True)
             (ffmpeg_bin / "ffmpeg.exe").write_bytes(b"exe")
@@ -108,12 +108,12 @@ class WindowsSetupManifestTestCase(unittest.TestCase):
         self.assertNotIn("PrivilegesRequiredOverridesAllowed=admin", self.manifest)
 
     def test_default_directory_uses_local_app_data(self) -> None:
-        self.assertIn("DefaultDirName={localappdata}\\Programs\\Video Compressor", self.manifest)
+        self.assertIn("DefaultDirName={localappdata}\\Programs\\QualityBound", self.manifest)
 
     def test_start_menu_shortcut_with_working_directory(self) -> None:
         self.assertIn("[Icons]", self.manifest)
         self.assertIn(
-            'Name: "{group}\\Video Compressor"; Filename: "{app}\\video-compressor.exe"; WorkingDir: "{app}"',
+            'Name: "{group}\\QualityBound"; Filename: "{app}\\qualitybound.exe"; WorkingDir: "{app}"',
             self.manifest,
         )
 
@@ -126,7 +126,7 @@ class WindowsSetupManifestTestCase(unittest.TestCase):
         self.assertNotIn("[Registry]", sections)
 
     def test_uninstall_display_icon_points_at_application(self) -> None:
-        self.assertIn("UninstallDisplayIcon={app}\\video-compressor.exe", self.manifest)
+        self.assertIn("UninstallDisplayIcon={app}\\qualitybound.exe", self.manifest)
 
     def test_standalone_tree_is_installed_recursively(self) -> None:
         self.assertIn('Source: "{#SourceDir}\\*"; DestDir: "{app}"', self.manifest)
@@ -137,32 +137,16 @@ class WindowsSetupManifestTestCase(unittest.TestCase):
         self.assertIn("ArchitecturesAllowed={#ArchitecturesAllowed}", self.manifest)
         self.assertIn("ArchitecturesInstallIn64BitMode={#ArchitecturesInstallIn64BitMode}", self.manifest)
 
-    def test_stable_app_id_is_declared(self) -> None:
-        self.assertIn("AppId={{4478BF58-30E3-5232-AE83-3E33254B3385}", self.manifest)
+    def test_qualitybound_app_id_is_declared(self) -> None:
+        self.assertIn("AppId={{F1434831-589A-59FC-9A61-AEA4B9403BFC}", self.manifest)
         self.assertNotIn("#define MyAppId", self.manifest)
 
-    def test_legacy_msi_migration_is_present(self) -> None:
-        self.assertIn("RegQueryDWordValue", self.manifest)
-        self.assertIn("VersionIsWindowsInstaller <> 1", self.manifest)
-        self.assertNotIn("SplitString", self.manifest)
-        self.assertIn("msiexec.exe", self.manifest)
-        self.assertIn("PrepareToInstall", self.manifest)
+    def test_previous_installer_identity_is_not_reused(self) -> None:
+        self.assertNotIn("4478BF58-30E3-5232-AE83-3E33254B3385", self.manifest)
 
-    def test_registry_helpers_use_inno_root_key_contract(self) -> None:
-        self.assertIn(
-            "function QueryMsiRegistration(const RootKey: HKEY;",
-            self.manifest,
-        )
-        self.assertNotIn("HKCU = $80000001", self.manifest)
-        self.assertNotIn("HKLM = $80000002", self.manifest)
-        self.assertIn(
-            "QueryMsiRegistration(HKCU, VC_UNINSTALL_KEY",
-            self.manifest,
-        )
-        self.assertIn(
-            "QueryMsiRegistration(HKLM, VC_UNINSTALL_KEY",
-            self.manifest,
-        )
+    def test_legacy_video_compressor_migration_is_not_carried_forward(self) -> None:
+        self.assertNotIn("msiexec.exe", self.manifest)
+        self.assertNotIn("PrepareToInstall", self.manifest)
 
 
 if __name__ == "__main__":

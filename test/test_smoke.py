@@ -160,7 +160,7 @@ class SmokeTestCase(unittest.TestCase):
     def test_main_window_applies_desktop_polish_contract(self) -> None:
         window = MainWindow(self.repo_root, language="en")
         try:
-            self.assertIn("VideoCompressorTheme", window.styleSheet())
+            self.assertIn("QualityBoundTheme", window.styleSheet())
             self.assertEqual(window.toolbar.toolButtonStyle(), Qt.ToolButtonTextBesideIcon)
             for action in [
                 window.add_files_action,

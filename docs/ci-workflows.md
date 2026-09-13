@@ -87,8 +87,9 @@ and the installer contract must pass (`preflight`) before the five native
 suite (tests belong to `_test.yml`). Publish validates the exact eight release
 packages, writes `SHA256SUMS.txt`, and creates or updates the GitHub Release.
 
-The Windows upload glob covers both the target archive and
-`-setup.exe`; it must keep matching `video-compressor-${{ github.ref_name }}-${{ inputs.target }}-setup.exe`.
+The Windows upload glob covers both the target archive and `-setup.exe`; it
+must keep matching
+`qualitybound-${{ github.ref_name }}-${{ inputs.target }}-setup.exe`.
 
 ## Local acceptance
 

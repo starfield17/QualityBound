@@ -1,4 +1,4 @@
-# FFmpeg for Video Compressor v2.6.0
+# FFmpeg for QualityBound v2.6.0
 
 Smart mode requires the project maintainer's dedicated FFmpeg distribution:
 [starfield17/ffmpeg-vmaf-v1-builds](https://github.com/starfield17/ffmpeg-vmaf-v1-builds/releases/tag/ffmpeg-9.0.1-vmaf-v1.0.16-r3).

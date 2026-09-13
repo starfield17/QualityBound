@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="1280" height="640" viewBox="0 0 1280 640" role="img"
+     aria-labelledby="title description">
+  <title id="title">QualityBound social preview</title>
+  <desc id="description">Quality-constrained video compression with VMAF and output-size targets.</desc>
+  <defs>
+    <clipPath id="screenshot-clip">
+      <rect x="662" y="78" width="542" height="484" rx="18"/>
+    </clipPath>
+  </defs>
+
+  <rect width="1280" height="640" fill="#f4f7fb"/>
+  <rect x="46" y="46" width="1188" height="548" rx="28" fill="#ffffff" stroke="#c4d2e3" stroke-width="2"/>
+
+  <image x="78" y="78" width="62" height="62" xlink:href="../../packaging/assets/app.png"/>
+  <text x="162" y="123" fill="#315276" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+        font-size="29" font-weight="700">QualityBound</text>
+
+  <text x="78" y="211" fill="#17283b" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+        font-size="42" font-weight="700">Quality-constrained</text>
+  <text x="78" y="261" fill="#17283b" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+        font-size="42" font-weight="700">video compression</text>
+  <text x="78" y="307" fill="#52657a" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+        font-size="20">VMAF-guided search with independent holdout verification</text>
+
+  <rect x="78" y="357" width="220" height="94" rx="14" fill="#eef4fa" stroke="#c4d2e3"/>
+  <text x="100" y="391" fill="#52657a" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+        font-size="16" font-weight="600">QUALITY</text>
+  <text x="100" y="429" fill="#315276" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+        font-size="30" font-weight="700">VMAF ≥ 90</text>
+
+  <rect x="316" y="357" width="220" height="94" rx="14" fill="#eef4fa" stroke="#c4d2e3"/>
+  <text x="338" y="391" fill="#52657a" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+        font-size="16" font-weight="600">SIZE</text>
+  <text x="338" y="429" fill="#315276" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+        font-size="30" font-weight="700">Output ≤ 50%</text>
+
+  <path d="M 180 506 H 452" stroke="#31c3b7" stroke-width="8" stroke-linecap="round"/>
+  <path d="M 434 489 L 454 506 L 434 523" fill="none" stroke="#31c3b7" stroke-width="8"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="78" y="552" fill="#52657a" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+        font-size="18">Content-aware Scout</text>
+  <text x="398" y="552" fill="#315276" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+        font-size="18" font-weight="700">AV1 / HEVC</text>
+
+  <rect x="646" y="62" width="574" height="516" rx="22" fill="#e8eef5" stroke="#b8c8da" stroke-width="2"/>
+  <g clip-path="url(#screenshot-clip)">
+    <image x="662" y="78" width="800" height="500" preserveAspectRatio="xMinYMin slice"
+           xlink:href="qualitybound-main-window.png"/>
+  </g>
+</svg>

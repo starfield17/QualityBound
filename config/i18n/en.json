@@ -1,6 +1,6 @@
 {
   "language.name": "English",
-  "app.title": "Video Compressor",
+  "app.title": "QualityBound",
   "cli.plan_header": "Plan items: {count}",
   "cli.plan_ready": "READY",
   "cli.plan_skip": "SKIP",

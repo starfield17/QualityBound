@@ -13,7 +13,7 @@ def _write_json(path: Path, data: object) -> None:
 
 EN_BASE = {
     LANGUAGE_NAME_KEY: "English",
-    "app.title": "Video Compressor",
+    "app.title": "QualityBound",
     "app.window": "Window {count}",
     "app.ratio": "Ratio {value:.1f}",
 }
@@ -37,13 +37,13 @@ class TranslationCatalogTestCase(unittest.TestCase):
         self.assertEqual([LanguageInfo("en", "English")], catalog.languages())
         tr = catalog.translator("en")
         self.assertEqual("en", tr.language)
-        self.assertEqual("Video Compressor", tr.t("app.title"))
+        self.assertEqual("QualityBound", tr.t("app.title"))
 
     def test_builtin_discovery_and_stable_sort_english_first(self) -> None:
         bundle = self._bundle(
             {
                 "en.json": EN_BASE,
-                "zh_cn.json": {**EN_BASE, LANGUAGE_NAME_KEY: "简体中文", "app.title": "视频压缩器"},
+                "zh_cn.json": {**EN_BASE, LANGUAGE_NAME_KEY: "简体中文", "app.title": "QualityBound"},
                 "de.json": {**EN_BASE, LANGUAGE_NAME_KEY: "Deutsch", "app.title": "Kompressor"},
             }
         )
@@ -83,7 +83,7 @@ class TranslationCatalogTestCase(unittest.TestCase):
         catalog = TranslationCatalog(bundle_dir=bundle)
         tr = catalog.translator("xx")
         self.assertEqual("en", tr.language)
-        self.assertEqual("Video Compressor", tr.t("app.title"))
+        self.assertEqual("QualityBound", tr.t("app.title"))
 
     def test_override_unknown_key_is_skipped_with_diagnostic(self) -> None:
         bundle = self._bundle({"en.json": EN_BASE})

@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QWidget
 def apply_theme(widget: QWidget) -> None:
     widget.setStyleSheet(
         """
-        /* VideoCompressorTheme */
+        /* QualityBoundTheme */
         QMainWindow, QDialog {
             background: #F6F8FB;
             color: #0F172A;

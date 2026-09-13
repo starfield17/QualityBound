@@ -139,7 +139,7 @@ class ActivityLogWindow(QMainWindow):
         path, _ = QFileDialog.getSaveFileName(
             self,
             self.tr.t("gui.dialog.export_log"),
-            str(Path.home() / "video-compressor.log"),
+            str(Path.home() / "qualitybound.log"),
             "Log Files (*.log *.txt);;All Files (*)",
         )
         if not path:

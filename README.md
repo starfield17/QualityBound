@@ -1,113 +1,102 @@
-# Video Compressor
+# QualityBound
 
-This project refactors the original single-file compressor into a modular layout with:
+**Perceptual video compression under explicit quality and size constraints.**
 
-- a thin `main.py`
-- reusable core planning and execution layers
-- preset save/load support
-- VMAF-guided smart compression with final-size enforcement
-- configurable concurrent full-file encoding
-- CLI and PySide6 GUI entrypoints
-- configurable English and Simplified Chinese language packs
-- optional copy of matching external subtitle sidecars such as `.srt`, `.ass`, `.ssa`, `.vtt`, `.sub`, `.idx`, and `.sup`
+[![CI](https://github.com/starfield17/QualityBound/actions/workflows/ci.yml/badge.svg)](https://github.com/starfield17/QualityBound/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/starfield17/QualityBound)](https://github.com/starfield17/QualityBound/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-315276.svg)](LICENSE)
 
-## Layout
+QualityBound analyzes a video before encoding, searches for an operating point
+that satisfies a perceptual-quality target, and verifies the result on content
+that was not used during the search.
+
+Instead of guessing a CRF value, specify the constraints:
 
 ```text
-main.py
-core/
-  config/      application paths, configuration and presets
-  media/       media-domain paths, files, subtitles and validation
-  ffmpeg/      FFmpeg discovery, probing, capabilities and commands
-  smart/       Smart/VMAF analysis and sampling
-  encoding/    planning, Smart analysis, execution and concurrent scheduling
-cli/
-gui/
-FFmpeg/
-config/
-workdir/
+VMAF >= 90
+output <= 50% of source
 ```
 
-## CLI examples
+QualityBound then searches for a viable AV1 or HEVC encode and checks the final
+file before publishing it.
+
+![QualityBound main window](docs/assets/qualitybound-main-window.png)
+
+## Download
+
+[Download the latest release](https://github.com/starfield17/QualityBound/releases/latest)
+for Windows x86-64/ARM64, Linux x86-64/ARM64, or macOS Apple Silicon. Tagged
+packages include a compatible FFmpeg and FFprobe build. Assets published before
+the QualityBound rename retain their original filenames.
+
+The macOS release is ad-hoc signed rather than notarized. Gatekeeper may require
+right-clicking the application and choosing **Open**. Linux packages require a
+reasonably recent glibc distribution.
+
+## Why QualityBound exists
+
+CRF is an encoder setting, not a perceptual-quality measurement. The same CRF
+can produce very different quality and file sizes on different sources. A fixed
+bitrate makes size more predictable, but does not guarantee quality. Repeated
+whole-file trial encodes can answer both questions, but at high cost.
+
+QualityBound treats the desired perceptual quality and file size as constraints:
+
+1. Scout scans the timeline for spatial complexity, temporal complexity, and
+   scene boundaries.
+2. Search windows combine difficult content with coverage across the timeline.
+3. Candidate encodes are measured with Netflix VMAF.
+4. Separate holdout windows validate the selected bitrate.
+5. A failed holdout becomes a search constraint and the search resumes upward.
+6. The completed encode is published only after its actual size is validated.
+
+Search and validation windows do not overlap. The samples used to choose a
+bitrate are not the same samples used to validate it.
+
+Read [How QualityBound works](docs/algorithm.md) for the measurement and
+decision flow, and [Smart evaluation](docs/smart-evaluation.md) for what the
+current evidence does and does not establish.
+
+## This is not a general-purpose FFmpeg GUI
+
+QualityBound deliberately does not expose every FFmpeg option. It is designed
+around a narrower problem: finding a compact encode that satisfies an explicit
+perceptual-quality target.
+
+It does not aim to be a media editor, format-conversion toolbox, or exhaustive
+encoder-parameter frontend. Its evidence and validation flow is the product:
+
+- Scout selects windows from scene boundaries, spatial complexity, temporal
+  complexity, and timeline strata.
+- Search and validation windows are kept separate.
+- Failed holdouts are promoted into the search constraints together.
+- Size prediction uses measured sample output rather than requested bitrate.
+- A completed size miss becomes an explicit decision and cannot overwrite the
+  requested output silently.
+
+The desktop GUI makes that workflow accessible, but the constraint and
+verification model is the central feature.
+
+## Quick start
+
+Run from a source checkout:
 
 ```bash
-python main.py --cli plan workdir/test.mp4
-python main.py --cli encode workdir/test.mp4 --backend qsv --overwrite
-python main.py --cli encode workdir/test.mp4 --backend cpu --overwrite
-python main.py --cli encode workdir/test.mp4 --jobs 3 --overwrite
-python main.py --cli encode workdir/test.mp4 --copy-external-subtitles
-python main.py --cli preset list
+python -m pip install -r requirements.txt
+python main.py
 ```
 
-Language can be selected with `--lang en` or `--lang zh_cn`.
-Supported backend values are `auto`, `cpu`, `nvenc`, `qsv`, `amf`, and
-`videotoolbox`. When `auto` is selected, the planner prefers smoke-tested
-runtime encoders in this order: `nvenc`, `qsv`, `amf`, `videotoolbox`, then
-`cpu`.
+Plan or encode from the CLI:
 
-### Smart compression
+```bash
+python main.py --cli plan input.mp4
+python main.py --cli encode input.mp4 --backend auto --overwrite
+```
 
-New jobs and the built-in HEVC/AV1 presets use smart compression. The default
-policy requires VMAF v1 90 and limits the final file to 70% of the source for
-HEVC or 50% for AV1.
-
-Smart mode requires an FFmpeg build whose `libvmaf`, `siti`, and `scdet`
-filters can actually run. Short videos are analyzed whole. Longer videos first
-run a low-resolution SI/TI and scene-boundary Scout across the timeline, then
-select a non-overlapping mix of difficult and time-stratified windows. Fast,
-Balance, and Precise increase Scout coverage, independent search windows,
-holdout verification, and search precision; their algorithm settings are
-versioned factory defaults rather than editable per-field profiles. Just above
-the whole-video threshold, the planner preserves the profile's independent
-holdout budget and reduces search-window count only when the timeline cannot
-fit both sets without overlap.
-
-The selected bitrate is verified on Scout windows that did not participate in
-the search. Failed holdouts are promoted into the search constraints together,
-then exact search continues upward from the current bitrate. A profile's VMAF
-margin is only a preference when size permits: meeting the user's configured
-VMAF target remains valid.
-
-Smart pins Netflix VMAF v1.0.16 and selects its normal/HFR 1080p or 4K model
-from the source geometry and frame rate (HFR starts at 50 fps). At the scoring
-boundary, reference and distorted samples are bicubic fit-and-padded to the
-model's display canvas and normalized to 10-bit `yuv420p10le`; this does not
-change the production output pixel format. CAMBI receives the candidate's
-pre-normalization encode geometry and bit depth when known.
-
-The reported value is the lowest mean VMAF among the sampled windows, not a
-whole-video average or the lowest individual-frame score. The default target
-is 90. VMAF extraction is CPU-only in this release, while source decoding and
-candidate encoding may still use supported hardware acceleration independently.
-
-If quality and final-size constraints cannot both be met, the configured Smart
-policy is applied. The default size-blocked policy relaxes the size limit, and
-the default quality-unreachable policy skips the file; `ask` leaves the item in
-a **Needs decision** state. CLI exit code `3` means a decision is required,
-exit code `2` means analysis or encoding failed, and intentional skips remain a
-successful batch outcome.
-The skipped-output policy applies only to automatic quality-unreachable skips
-and Skip choices made after Smart analysis. Planning, probe, validation, and
-discarded actual-size-miss outcomes are not copied by that policy.
-Candidate sizes are estimated from the largest measured encoded sample
-bitrate (including the existing container safety factor) plus the audio
-budget; the requested video bitrate is not treated as an observed size. Full
-smart encodes are written to a temporary file beside the target and are
-published only after the actual size passes validation. A complete encode that
-misses the limit is preserved beside the target as `*.size-miss-<id>.*` for an
-explicit accept, corrected-bitrate retry, or delete decision.
-A corrected-bitrate retry invalidates the old Smart selection and re-runs the
-search under the lower video-bitrate ceiling before encoding again.
-The size-blocked policy applies to this measured prediction stage; an actual
-full encode that exceeds the limit always remains an explicit decision so it
-cannot silently replace the requested output.
-
-Smart candidate measurements are cached as versioned JSON receipts under
-`workdir/analysis/receipts/`. Changing only VMAF, size, audio, or bitrate policy
-re-evaluates those measurements locally; changing the source, FFmpeg binary,
-encoder, measurement settings, or sample scheme creates a different receipt.
-
-Use the legacy fixed bitrate policy explicitly when VMAF is unavailable:
+The built-in HEVC and AV1 presets use Smart compression by default. The default
+minimum is VMAF 90; the default maximum output ratio is 70% for HEVC and 50% for
+AV1. Use fixed-bitrate mode explicitly when compatible VMAF filters are not
+available:
 
 ```bash
 python main.py --cli encode input.mp4 \
@@ -115,302 +104,37 @@ python main.py --cli encode input.mp4 \
   --ratio 0.76
 ```
 
-Presets created by older versions do not opt into smart mode automatically;
-they continue to load as fixed bitrate presets.
-
-### macOS VideoToolbox acceleration
-
-On supported macOS FFmpeg builds, the project can use `hevc_videotoolbox` for
-HEVC hardware encoding and optionally request hardware decoding with
-`-hwaccel videotoolbox`. VideoToolbox support depends on the selected FFmpeg
-build. The project performs a real one-frame encoder smoke test, and uses
-`-allow_sw 0` so an unavailable hardware encoder cannot silently fall back to
-software. Hardware decoding is optional and defaults to software decoding.
-
-This version does not implement zero-copy hardware frames or
-`-hwaccel_output_format videotoolbox`, and VideoToolbox does not provide AV1
-support in this project.
-
-Concurrent VideoToolbox encode/decode jobs may contend for shared Apple media
-hardware. Concurrency defaults to one job and can be raised with CLI `--jobs`
-or the GUI's global concurrent-encode setting.
-
-VideoToolbox CLI examples:
-
-```bash
-python main.py --cli encode input.mp4 \
-  --codec hevc \
-  --backend videotoolbox \
-  --overwrite
-```
-
-```bash
-python main.py --cli encode input.mp4 \
-  --codec hevc \
-  --backend videotoolbox \
-  --decode-acceleration videotoolbox \
-  --overwrite
-```
-
-Diagnostic commands:
-
-```bash
-ffmpeg -hide_banner -encoders | grep videotoolbox
-ffmpeg -hide_banner -hwaccels
-ffmpeg -hide_banner -h encoder=hevc_videotoolbox
-```
-
-## GUI
-
-Run the GUI with:
-
-```bash
-python main.py
-```
-
-Quick launch from the repo root:
-
-```bash
-./launch.sh
-```
-
-```bat
-launch.bat
-```
-
-On Windows, `launch.bat` now prefers the active Conda environment's
-`python.exe` when started from an activated PowerShell or Conda shell.
-
-Or explicitly:
-
-```bash
-python main.py --gui --lang zh_cn
-```
-
-The GUI now includes:
-
-- a project-specific light video-file application icon
-- explicit source file and source directory pickers
-- editable output, workdir, ffmpeg, and ffprobe paths
-- preset load/save/delete controls
-- plan summary and encode result panels
-- a detailed plan/result table with resolution, duration, bitrate, note, and status columns
-- smart-analysis stages, selected bitrate, SMART temporal quality score, and predicted size
-- language switching across English, Simplified Chinese, and any user-provided language packs
-
-### Translations / language packs
-
-- Built-in language packs live in the read-only `config/i18n/` directory and are shipped
-  with the app. English is the complete baseline; every built-in pack covers the same keys.
-- Explicit user language packs go in the writable runtime `translations/` directory. In a
-  source checkout that is `<repo>/translations/`; in the macOS app it is
-  `~/Library/Application Support/Video Compressor/translations/`. The file name stem is
-  the locale, e.g. `de.json` for German.
-- A pack is a flat JSON object of translation keys and must include a `language.name`
-  value, which is the display name shown in Settings. Unknown keys, non-string values,
-  and entries whose placeholders do not match English are skipped individually; a
-  corrupt file or one without a valid `language.name` is skipped entirely. Skipped
-  entries are reported as startup diagnostics (CLI: stderr; GUI: Activity Log).
-- Overrides are partial: keys you do not provide fall back to the English baseline, so
-  a new language only needs the keys you actually translate.
-- The CLI `--lang` accepts any discovered locale, and the GUI Settings language list is
-  populated from the same catalog.
-- Files left behind in the writable `config/i18n/` by older versions are preserved but
-  no longer used.
-
-## Notes
-
-- Explicit GUI/CLI `ffmpeg` / `ffprobe` paths take priority; otherwise the app checks the project-root `FFmpeg/` directory before falling back to system-installed tools.
-- Supported bundled layouts are `FFmpeg/ffmpeg(.exe)` + `FFmpeg/ffprobe(.exe)` and `FFmpeg/bin/ffmpeg(.exe)` + `FFmpeg/bin/ffprobe(.exe)`.
-- Intel QSV requires an FFmpeg build that exposes `hevc_qsv` and/or `av1_qsv`, plus supported Intel graphics hardware/drivers.
-- Presets are stored in `config/presets/`.
-- Logs and temporary encode files are written into `workdir/`.
-- The GUI is PySide6-only.
-
-## Packaging
-
-Install the build dependencies from the repo root:
-
-```bash
-python -m pip install -r requirements-build.txt
-```
-
-Build a standalone package locally:
-
-```bash
-python scripts/build_nuitka.py --clean
-```
-
-Build with a release version:
-
-```bash
-python scripts/build_nuitka.py --clean --version 1.2.3
-```
-
-Generate or verify the platform icon assets from the canonical SVG:
-
-```bash
-python scripts/build_icons.py
-python scripts/build_icons.py --check
-```
-
-Release builds prepare a pinned native FFmpeg 9.0.1 pair under the ignored
-project `workdir/` and require it during packaging:
-
-```bash
-python scripts/prepare_ffmpeg.py \
-  --target macos-arm64 \
-  --output workdir/ffmpeg/macos-arm64
-
-python scripts/build_nuitka.py \
-  --clean \
-  --version 1.2.3 \
-  --ffmpeg-dir workdir/ffmpeg/macos-arm64 \
-  --require-ffmpeg
-```
-
-The FFmpeg manifest pins URLs and SHA-256 values for Windows and Linux on
-x86-64 and ARM64, plus macOS on ARM64. Prepared bundles include FFmpeg,
-FFprobe, both FFmpeg license files, the Netflix VMAF license, and exact
-source/build provenance. Downloads, extraction, signing material, and
-project-owned temporary files stay under `workdir/`.
-The five archives are published by the repository-owned
-[FFmpeg VMAF v1 builds](https://github.com/starfield17/ffmpeg-vmaf-v1-builds)
-pipeline only after native architecture, multi-frame normal/HFR VMAF probes,
-SAR-aware normalization, exact `libvmaf`/`siti`/`scdet` discovery, and a
-synthetic Scout metadata smoke pass. The macOS ARM64 binary is built from source
-there; Windows and Linux are checksum-pinned BtbN trusted mirrors that retain
-their exact upstream recipe and release provenance.
-
-On Windows, the default build uses Nuitka-managed MinGW64:
-
-```bash
-python scripts/build_nuitka.py --clean
-```
-
-Nuitka downloads its supported MinGW64 compiler automatically, so Visual
-Studio Build Tools are not required. To use MSVC explicitly:
-
-```powershell
-python scripts/build_nuitka.py `
-  --clean `
-  --windows-compiler msvc
-```
-
-MSVC mode requires Visual Studio 2022 C++ Build Tools or later. MinGW64
-packaging must use Python 3.12 or older. CI and Release use Python 3.13, so
-Windows x86-64 packaging selects MSVC instead of MinGW64.
-
-Windows ARM64 packaging is native and uses the LLVM/Clang backend:
-
-```powershell
-python scripts/build_nuitka.py `
-  --clean `
-  --windows-compiler clang
-```
-
-The wrapper's `auto` compiler choice selects Clang on ARM64, MSVC on Python
-3.13+ x86-64, and MinGW64 on older x86-64 interpreters. It never
-cross-compiles a Windows ARM64 package from an x86 runner.
-
-Build a native macOS application bundle and DMG on the matching Mac:
-
-```bash
-python scripts/build_nuitka.py \
-  --clean \
-  --version 0.2.0 \
-  --macos-app-bundle \
-  --target-arch arm64
-```
-
-The app build uses Nuitka `app-dist` mode and produces:
-
-```text
-dist/Video Compressor.app/
-dist/video-compressor.dmg
-```
-
-The DMG presents `Video Compressor.app` beside an `Applications` shortcut so
-the app can be installed with the standard drag-to-Applications gesture.
-
-The app's read-only resources are under `Contents/Resources`. Configuration,
-logs and temporary files are written to
-`~/Library/Application Support/Video Compressor`, outside the app bundle.
-The standalone package continues to use the executable-adjacent layout:
-
-```text
-dist/video-compressor/
-```
-
-Convenience scripts:
-
-```bat
-scripts\build_windows.bat
-```
-
-```bash
-./scripts/build_linux.sh
-```
-
-The normalized output is:
-
-```text
-dist/video-compressor/
-```
-
-Packaging uses Nuitka standalone directory mode. Builds run natively on each
-target platform; this is multi-platform release automation, not single-host
-cross-compilation.
-
-The package includes `config/`, the runtime SVG icon, `README.md`, and `LICENSE`.
-`workdir/` is created at runtime and is not bundled. Local builds bundle a
-complete compatible pair from `--ffmpeg-dir` or `FFmpeg/` when available.
-Tagged releases require and verify the pinned native FFmpeg/FFprobe pair.
-
-Windows tagged releases also produce a per-user `Setup.exe` (Inno Setup). It
-installs without administrator privileges, adds a Start menu shortcut, includes
-the same FFmpeg bundle as the portable ZIP, and migrates a legacy v1.6.0 MSI
-installation through Windows Installer before installing the new version.
-Optional Authenticode signing uses the paired `WINDOWS_CERTIFICATE_BASE64` and
-`WINDOWS_CERTIFICATE_PASSWORD` repository secrets; when neither is configured,
-the Windows executable and Setup.exe are published unsigned.
-
-### Native release matrix
-
-A tag such as `v1.2.3` produces five native builds:
-
-| Target | Runner/package |
-| --- | --- |
-| Windows x86-64 | Native Windows x86-64 standalone package |
-| Windows ARM64 | Native Windows ARM64 standalone package |
-| Linux x86-64 | Native Ubuntu x86-64 standalone package |
-| Linux ARM64 | Native Ubuntu ARM64 standalone package |
-| macOS Apple Silicon | Native arm64 `.app` bundle |
-
-Intel macOS is not supported. Each tagged release publishes exactly eight
-platform packages:
-
-```text
-video-compressor-v1.2.3-windows-x86_64.zip
-video-compressor-v1.2.3-windows-x86_64-setup.exe
-video-compressor-v1.2.3-windows-arm64.zip
-video-compressor-v1.2.3-windows-arm64-setup.exe
-video-compressor-v1.2.3-linux-x86_64.tar.gz
-video-compressor-v1.2.3-linux-arm64.tar.gz
-video-compressor-v1.2.3-macos-arm64.tar.gz
-video-compressor-v1.2.3-macos-arm64.dmg
-```
-
-The macOS tarball and DMG contain a native Apple Silicon `.app` bundle, not a
-universal binary. Releases are ad-hoc signed; they are not Developer ID signed or
-notarized, so Gatekeeper may require using **Open** or right-clicking the app
-and choosing **Open**. Linux ARM64 requires a sufficiently recent glibc
-distribution. Windows ARM64 is a native ARM package rather than an x86
-executable relying on emulation. Every tagged package includes FFmpeg 9.0.1
-and FFprobe for its exact operating system and CPU architecture.
+Supported encoding backends are CPU, NVIDIA NVENC, Intel QSV, AMD AMF, and
+Apple VideoToolbox where the selected FFmpeg build and hardware expose them.
+QualityBound performs runtime encoder smoke tests rather than assuming support
+from an encoder name alone.
+
+## Constraint outcomes
+
+QualityBound does not silently publish a result that missed its constraints.
+
+- A predicted quality/size conflict follows the configured Smart policy.
+- `ask` leaves the item in **Needs decision** rather than reporting success.
+- A completed file that exceeds the size limit is preserved as a size-miss file
+  for explicit accept, retry, or delete action; it does not overwrite the target.
+- CLI exit code `3` means a decision is required, `2` means analysis or encoding
+  failed, and intentional skips remain a successful batch outcome.
+
+Smart measurements are cached as versioned receipts. Quality and size policy
+changes may reuse measured candidates; source, FFmpeg, encoder, measurement, or
+sample-scheme changes produce a different receipt identity.
+
+## Documentation
+
+- [Algorithm and constraint flow](docs/algorithm.md)
+- [Architecture](docs/architecture.md)
+- [Development, translations, and packaging](docs/development.md)
+- [Evaluation scope and limitations](docs/smart-evaluation.md)
+- [Synthetic Smart corpus](docs/smart-corpus.md)
+- [CI and release workflows](docs/ci-workflows.md)
+- [Release contract map](docs/release-map.md)
 
 ## License
 
-Video Compressor is released under the [MIT License](LICENSE). Bundled FFmpeg
-and Netflix VMAF artifacts keep their own license and source/build provenance
-alongside the binary distribution.
+QualityBound is released under the [MIT License](LICENSE). Bundled FFmpeg and
+Netflix VMAF artifacts retain their own licenses and source/build provenance.

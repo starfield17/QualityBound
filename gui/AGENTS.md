@@ -1,4 +1,4 @@
-# Video Compressor GUI layer guide
+# QualityBound GUI layer guide
 
 `gui/` is the PySide6 UI layer. It may import `core` and the standard library, and
 other `gui` modules — never `cli`, and nothing above it in the dependency graph

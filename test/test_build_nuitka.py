@@ -39,7 +39,7 @@ class NuitkaBuildCommandTestCase(unittest.TestCase):
             self.assertIn("--include-package=cli", command)
             self.assertIn("--include-package=core", command)
             self.assertIn("--include-package=gui", command)
-            self.assertIn("--output-filename=video-compressor", command)
+            self.assertIn("--output-filename=qualitybound", command)
             self.assertTrue(
                 any(option.startswith("--report=") for option in command)
             )
@@ -68,8 +68,8 @@ class NuitkaBuildCommandTestCase(unittest.TestCase):
             self.assertIn("--mingw64", command)
             self.assertNotIn("--msvc=latest", command)
             self.assertIn("--windows-console-mode=attach", command)
-            self.assertIn("--product-name=Video Compressor", command)
-            self.assertIn("--file-description=Video Compressor", command)
+            self.assertIn("--product-name=QualityBound", command)
+            self.assertIn("--file-description=QualityBound", command)
             self.assertIn("--company-name=starfield17", command)
             self.assertIn("--product-version=1.2.3.0", command)
             self.assertIn("--file-version=1.2.3.0", command)
@@ -203,19 +203,20 @@ class NuitkaBuildCommandTestCase(unittest.TestCase):
 
         self.assertIn("--mode=app-dist", command)
         self.assertNotIn("--mode=standalone", command)
-        self.assertIn("--macos-app-name=Video Compressor", command)
+        self.assertIn("--macos-app-name=QualityBound", command)
+        self.assertIn("--macos-signed-app-name=com.starfield17.QualityBound", command)
         self.assertIn("--macos-app-mode=gui", command)
         self.assertIn("--macos-app-version=1.2.3", command)
         self.assertIn("--macos-target-arch=arm64", command)
         self.assertIn("--macos-app-create-dmg", command)
         self.assertIn(f"--macos-app-icon={icon}", command)
-        self.assertEqual(paths.package_dir, root / "dist" / "Video Compressor.app")
+        self.assertEqual(paths.package_dir, root / "dist" / "QualityBound.app")
         self.assertEqual(
             paths.executable_path,
-            root / "dist" / "Video Compressor.app" / "Contents" / "MacOS" / "video-compressor",
+            root / "dist" / "QualityBound.app" / "Contents" / "MacOS" / "qualitybound",
         )
         self.assertEqual(paths.resources_dir, paths.package_dir / "Contents" / "Resources")
-        self.assertEqual(paths.dmg_path, root / "dist" / "video-compressor.dmg")
+        self.assertEqual(paths.dmg_path, root / "dist" / "qualitybound.dmg")
         self.assertEqual(paths.target_arch, "arm64")
 
     def test_macos_app_build_rejects_non_macos_platform_and_cross_architecture(self) -> None:
@@ -259,7 +260,7 @@ class NuitkaStagingTestCase(unittest.TestCase):
         (assets / "app.svg").write_text("<svg/>", encoding="utf-8")
         (root / "workdir").mkdir()
         (root / "workdir" / "runtime-only.txt").write_text("not bundled", encoding="utf-8")
-        package_dir = root / "dist" / "video-compressor"
+        package_dir = root / "dist" / "qualitybound"
         package_dir.mkdir(parents=True)
         return temp_dir, root, package_dir
 
@@ -340,7 +341,7 @@ class NuitkaStagingTestCase(unittest.TestCase):
             (root / "FFmpeg").mkdir()
             (root / "FFmpeg" / "ffmpeg").write_text("ffmpeg", encoding="utf-8")
             (root / "FFmpeg" / "ffprobe").write_text("ffprobe", encoding="utf-8")
-            app_dir = root / "dist" / "Video Compressor.app"
+            app_dir = root / "dist" / "QualityBound.app"
             resource_dir = app_dir / "Contents" / "Resources"
             with patch(
                 "scripts.build_nuitka.binary_architectures",
@@ -359,7 +360,7 @@ class NuitkaStagingTestCase(unittest.TestCase):
     def test_default_public_package_directory_is_normalized(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir).resolve()
-            expected = root / "dist" / "video-compressor"
+            expected = root / "dist" / "qualitybound"
 
             self.assertEqual(
                 final_package_dir(root=root),
@@ -373,7 +374,7 @@ class NuitkaStagingTestCase(unittest.TestCase):
     def test_app_staging_uses_contents_resources(self) -> None:
         temp_dir, root, _ = self._make_root()
         with temp_dir:
-            app_dir = root / "dist" / "Video Compressor.app"
+            app_dir = root / "dist" / "QualityBound.app"
             app_dir.mkdir(parents=True)
             stage_release_resources(
                 app_dir,
@@ -395,9 +396,9 @@ class NuitkaOutputDiscoveryTestCase(unittest.TestCase):
     def test_refresh_macos_dmg_uses_repository_layout_helper(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir).resolve()
-            app = root / "dist" / "Video Compressor.app"
+            app = root / "dist" / "QualityBound.app"
             app.mkdir(parents=True)
-            dmg = root / "dist" / "video-compressor.dmg"
+            dmg = root / "dist" / "qualitybound.dmg"
 
             with patch("scripts.build_nuitka.subprocess.run") as run:
                 refresh_macos_dmg(app, dmg)
@@ -418,14 +419,14 @@ class NuitkaOutputDiscoveryTestCase(unittest.TestCase):
             build_dir.mkdir()
             with self.assertRaisesRegex(RuntimeError, "exactly one macOS app"):
                 locate_app_bundle(build_dir)
-            app = build_dir / "Video Compressor.app"
+            app = build_dir / "QualityBound.app"
             app.mkdir()
             self.assertEqual(locate_app_bundle(build_dir), app.resolve())
             (build_dir / "Other.app").mkdir()
             with self.assertRaisesRegex(RuntimeError, "exactly one macOS app"):
                 locate_app_bundle(build_dir)
 
-            dmg = build_dir / "Video Compressor.dmg"
+            dmg = build_dir / "QualityBound.dmg"
             dmg.write_bytes(b"dmg")
             self.assertEqual(locate_dmg(build_dir), dmg.resolve())
             (build_dir / "Other.dmg").write_bytes(b"dmg")
@@ -436,16 +437,16 @@ class NuitkaOutputDiscoveryTestCase(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir).resolve()
             dist = root / "dist"
-            app = dist / "Video Compressor.app"
+            app = dist / "QualityBound.app"
             app.mkdir(parents=True)
-            (dist / "video-compressor.dmg").write_bytes(b"dmg")
+            (dist / "qualitybound.dmg").write_bytes(b"dmg")
             keep = dist / "keep.txt"
             keep.write_text("keep", encoding="utf-8")
 
             clean_generated_paths(root, app, output_dir=dist)
 
             self.assertFalse(app.exists())
-            self.assertFalse((dist / "video-compressor.dmg").exists())
+            self.assertFalse((dist / "qualitybound.dmg").exists())
             self.assertTrue(keep.is_file())
 
 

@@ -11,11 +11,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-DEFAULT_NAME = "video-compressor"
+DEFAULT_NAME = "qualitybound"
 DEFAULT_OUTPUT_DIR = "dist"
 DEFAULT_VERSION = "0.0.0"
-MACOS_APP_NAME = "Video Compressor"
-MACOS_SIGNED_APP_NAME = "com.starfield17.VideoCompressor"
+MACOS_APP_NAME = "QualityBound"
+MACOS_SIGNED_APP_NAME = "com.starfield17.QualityBound"
 _VERSION_PATTERN = re.compile(r"^\d+(?:\.\d+){2,3}$")
 _WINDOWS_COMPILERS = {"auto", "mingw64", "msvc", "clang"}
 _TARGET_ARCHITECTURES = {"native", "x86_64", "arm64"}
@@ -296,8 +296,8 @@ def build_nuitka_command(
         command.extend(
             [
                 "--windows-console-mode=attach",
-                "--product-name=Video Compressor",
-                "--file-description=Video Compressor",
+                "--product-name=QualityBound",
+                "--file-description=QualityBound",
                 "--company-name=starfield17",
                 f"--product-version={normalized_version}",
                 f"--file-version={normalized_version}",

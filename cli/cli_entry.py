@@ -315,7 +315,7 @@ def _validate_encoder_preset(options: EncodeOptions, args: argparse.Namespace) -
 def _build_parser(catalog: TranslationCatalog | None = None) -> argparse.ArgumentParser:
     if catalog is None:
         catalog = _default_catalog()
-    parser = argparse.ArgumentParser(description="Video compressor CLI")
+    parser = argparse.ArgumentParser(description="QualityBound CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     plan_parser = subparsers.add_parser("plan", help="Inspect the encode plan")
