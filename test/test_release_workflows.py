@@ -302,6 +302,8 @@ class InstallerContractWorkflowTestCase(unittest.TestCase):
         self.assertGreaterEqual(self.workflow.count("scripts\\build_setup.py"), 1)
         self.assertIn('--iscc "$env:INNO_ISCC"', self.workflow)
         self.assertIn("installer-contract-source", self.workflow)
+        self.assertIn('Copy-Item ".\\config" (Join-Path $source "config") -Recurse -Force', self.workflow)
+        self.assertIn('Copy-Item ".\\README.md", ".\\LICENSE" $source -Force', self.workflow)
         self.assertIn("runs-on: windows-2022", self.workflow)
 
     def test_contract_normalizes_a_v_prefixed_release_tag(self) -> None:
