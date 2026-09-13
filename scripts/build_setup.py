@@ -73,6 +73,10 @@ def build_iscc_command(
 def validate_source(source_dir: Path, icon_path: Path) -> None:
     required = (
         source_dir / "qualitybound.exe",
+        source_dir / "config" / "i18n" / "en.json",
+        source_dir / "config" / "i18n" / "zh_cn.json",
+        source_dir / "README.md",
+        source_dir / "LICENSE",
         source_dir / "FFmpeg" / "bin" / "ffmpeg.exe",
         source_dir / "FFmpeg" / "bin" / "ffprobe.exe",
         icon_path,

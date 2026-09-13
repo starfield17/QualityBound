@@ -277,9 +277,10 @@ jobs:
             }
           if ("${{ inputs.mode }}" -eq "smoke") {
               $source = ".\workdir\setup-${{ inputs.mode }}-source"
+              New-Item -ItemType Directory -Force -Path $source | Out-Null
+              Copy-Item ".\dist\qualitybound\*" $source -Recurse -Force
               $ffmpeg = Join-Path $source "FFmpeg\bin"
               New-Item -ItemType Directory -Force -Path $ffmpeg | Out-Null
-              Copy-Item ".\dist\qualitybound\qualitybound.exe" $source
               Set-Content -Path (Join-Path $ffmpeg "ffmpeg.exe") -Value "${{ inputs.mode }}"
               Set-Content -Path (Join-Path $ffmpeg "ffprobe.exe") -Value "${{ inputs.mode }}"
             } else {
@@ -321,9 +322,14 @@ jobs:
               throw "Setup silent install failed with exit code $($install.ExitCode)"
           }
 
-          & (Join-Path $installed "qualitybound.exe") --cli --help
-          if ($LASTEXITCODE -ne 0) {
-              exit $LASTEXITCODE
+          $cliHelp = (& (Join-Path $installed "qualitybound.exe") --cli --help 2>&1 | Out-String)
+          $cliExitCode = $LASTEXITCODE
+          Write-Host $cliHelp
+          if ($cliExitCode -ne 0) {
+              exit $cliExitCode
+          }
+          if ($cliHelp -notmatch "QualityBound CLI") {
+              throw "Installed CLI smoke test did not produce the expected help output"
           }
           if ("${{ inputs.mode }}" -ne "smoke") {
               & (Join-Path $installed "FFmpeg\bin\ffmpeg.exe") -hide_banner -version
