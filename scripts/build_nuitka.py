@@ -285,6 +285,12 @@ def build_nuitka_command(
         # builds usable without adding a Conda-only package requirement.
         command.append("--static-libpython=no")
 
+    if _is_macos(platform_name) and normalized_machine(machine) == "arm64":
+        # Nuitka 4.2.1's automatic macOS ccache download is x86_64-only. When
+        # it wraps Clang on Apple Silicon, the compiler process inherits the
+        # wrong architecture and cannot load the arm64 Command Line Tools.
+        command.append("--disable-cache=ccache")
+
     if _is_windows(platform_name):
         resolved_compiler = resolve_windows_compiler(windows_compiler, machine=machine)
         compiler_flag = {
