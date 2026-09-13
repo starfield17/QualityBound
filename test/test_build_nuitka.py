@@ -219,6 +219,24 @@ class NuitkaBuildCommandTestCase(unittest.TestCase):
         self.assertEqual(paths.dmg_path, root / "dist" / "qualitybound.dmg")
         self.assertEqual(paths.target_arch, "arm64")
 
+    def test_apple_silicon_command_disables_nuitka_downloaded_x86_ccache(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            arm64_command = build_nuitka_command(
+                "1.2.3",
+                root=Path(temp_dir).resolve(),
+                platform_name="darwin",
+                machine="arm64",
+            )
+            intel_command = build_nuitka_command(
+                "1.2.3",
+                root=Path(temp_dir).resolve(),
+                platform_name="darwin",
+                machine="x86_64",
+            )
+
+        self.assertIn("--disable-cache=ccache", arm64_command)
+        self.assertNotIn("--disable-cache=ccache", intel_command)
+
     def test_macos_app_build_rejects_non_macos_platform_and_cross_architecture(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir).resolve()
