@@ -108,11 +108,15 @@ or `test/`:
 Deleting them is a live-code decision rather than a lint fix: `EncodeWorker` still
 carries a single-file cancel-and-terminate path (`threading.Event` plus the recorded
 `Popen`) that the queue runner has no equivalent of, so the question is whether that
-capability is worth keeping around unused. `ScanWorker` has no such argument. The
-mechanical part is: delete the classes, drop the import, and narrow the
-`_start_worker` annotation to `PlanWorker`. Note that `_start_worker` guards `log`, `progress` and
-`cancelled` with `hasattr`, so a future worker without those signals still type-checks
-while `reportUnknown*` stays off.
+capability is worth keeping around unused. `ScanWorker` has no such argument.
+
+The mechanical part is: delete the classes, drop the import, and narrow the
+`_start_worker` annotation to `PlanWorker`. `PlanWorker` declares the same five
+signals as `EncodeWorker` (`completed`, `failed`, `cancelled`, `log`, `progress`),
+so once the union collapses the `hasattr(worker, "log")`,
+`hasattr(worker, "progress")` and `hasattr(worker, "cancelled")` guards in
+`_start_worker` become always-true and should be replaced by direct connections in
+the same change.
 
 ### `scripts/` is outside the type-check scope
 
@@ -128,8 +132,10 @@ analyses 8 files and reports 9 findings in basic mode over 3 of them:
   passed to non-optional parameters.
 
 These are development and packaging tools, not application payload, so the scope
-choice is a cost decision rather than a safety one. CI still executes them on every
-quality gate.
+choice is a cost decision rather than a safety one. They are not unchecked, only
+untyped: `build_icons.py` runs in the quality gate, `prepare_ffmpeg.py` runs in the
+packaging workflow, and `run_smart_case.py` is exercised by `test/test_smart_case.py`
+and `test/test_smart_corpus.py`.
 
 ## Packaging
 
