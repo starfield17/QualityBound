@@ -40,6 +40,7 @@ mkdir -p "$temporary_root"
 temporary_dir="$(mktemp -d "$temporary_root/qualitybound-dmg.XXXXXXXX")"
 temporary_path="$temporary_dir/image.dmg"
 staging_dir="$temporary_dir/root"
+hdiutil_stderr="$temporary_dir/hdiutil.stderr"
 cleanup() {
     rm -rf "$temporary_dir"
 }
@@ -49,12 +50,29 @@ mkdir "$staging_dir"
 /usr/bin/ditto "$source_path" "$staging_dir/$(basename "$source_path")"
 /bin/ln -s /Applications "$staging_dir/Applications"
 
+set +e
 /usr/bin/hdiutil create \
     -volname "$(basename "$source_path" .app)" \
     -srcfolder "$staging_dir" \
     -ov \
     -format UDZO \
-    "$temporary_path"
+    "$temporary_path" 2>"$hdiutil_stderr"
+hdiutil_status=$?
+set -e
+
+if [[ "$hdiutil_status" -ne 0 ]]; then
+    cat "$hdiutil_stderr" >&2
+    exit "$hdiutil_status"
+fi
+
+# macOS 26 deprecates this hdiutil form and prints that notice even though the
+# image was created. Nuitka escalates any create-dmg stderr into a fatal build
+# error, so the notice stays visible in stdout while genuine diagnostics keep the
+# error stream and a non-zero exit.
+if [[ -s "$hdiutil_stderr" ]]; then
+    grep -v "is deprecated" "$hdiutil_stderr" >&2 || true
+    grep "is deprecated" "$hdiutil_stderr" || true
+fi
 
 rm -f "$output_path"
 mv "$temporary_path" "$output_path"
