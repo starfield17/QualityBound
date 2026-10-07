@@ -43,6 +43,14 @@ pyright
 python -m unittest discover -s test -p "test_*.py" -v
 ```
 
+`pyright` runs in `strict` mode over `core`, `cli`, `main.py` and `gui`. Six
+inference-precision rules (`reportMissingTypeArgument` and the five
+`reportUnknown*`) stay off in `pyproject.toml` because capability snapshots,
+presets and analysis receipts cross those boundaries as `dict[str, object]` and
+JSON-decoded values; closing them is its own reviewed change. `ruff` gates the
+bug-finding subset (`E4`, `E7`, `E9`, `F`, `B023`) and deliberately not the style
+families.
+
 Run architecture checks alone with
 `python -m unittest discover -s test -p "test_architecture.py" -v`.
 

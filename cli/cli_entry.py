@@ -64,10 +64,6 @@ def _bool_action_kwargs() -> _BoolActionKwargs:
     return {"action": argparse.BooleanOptionalAction, "default": None}
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parent.parent
-
-
 def _config_dir() -> Path:
     return app_config_dir()
 

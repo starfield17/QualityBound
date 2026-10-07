@@ -4,10 +4,26 @@ line-length = 120
 exclude = ["FFmpeg", "build", "dist", "workdir"]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F"]
+# Bug-finding subset: pyflakes plus the pycodestyle error families, and B023
+# because closures that read a variable rebound in an enclosing loop are a real
+# defect class here (worker callbacks, holdout scoring). Other Bugbear rules are
+# deliberately not enabled: they add style findings without changing behaviour.
+select = ["E4", "E7", "E9", "F", "B023"]
 
 [tool.pyright]
 pythonVersion = "3.13"
-typeCheckingMode = "basic"
+# Strict is the project baseline. Six inference-precision rules are off because
+# capability snapshots, presets and analysis receipts cross the FFmpeg/config/receipt
+# boundaries as dict[str, object] and JSON-decoded values; making them known would
+# require re-typing that boundary in core, which is its own reviewed change.
+# Everything strict checks beyond those six -- argument types, optional access,
+# private/cross-module contracts, overrides, dead comparisons -- is an error here.
+typeCheckingMode = "strict"
+reportMissingTypeArgument = "none"
+reportUnknownArgumentType = "none"
+reportUnknownLambdaType = "none"
+reportUnknownMemberType = "none"
+reportUnknownParameterType = "none"
+reportUnknownVariableType = "none"
 include = ["core", "cli", "gui", "main.py"]
 exclude = ["build", "dist", "workdir", "translations"]

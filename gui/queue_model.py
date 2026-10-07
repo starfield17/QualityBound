@@ -1,16 +1,25 @@
 from __future__ import annotations
 
 import copy
+from collections.abc import Callable
 from enum import IntEnum
 from pathlib import Path
+from typing import cast
 
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
+from PySide6.QtCore import (
+    QAbstractTableModel,
+    QModelIndex,
+    QPersistentModelIndex,
+    QObject,
+    Qt,
+    Signal,
+)
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication, QStyle
 
 from core.i18n import Translator
 from core.media import human_kbps, validate_unique_output_paths
-from core.models import DecisionOption, EncodeOptions
+from core.models import DecisionOption, EncodeOptions, EncodeResult
 from core.progress_events import ProgressEvent
 from gui.queue_actions import (
     accept_size_miss as accept_size_miss_action,
@@ -40,6 +49,7 @@ from gui.queue_state import (
     reset_for_retry,
     status_key,
 )
+from gui.qt_optionals import maybe_none
 
 
 def format_duration(seconds: float | None) -> str:
@@ -103,21 +113,36 @@ FLEX_COLUMN_SPECS: dict[QueueColumn, tuple[int, int]] = {
 }
 
 
+def _transient_index(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
+    """Reduce the index union accepted by the base model to a QModelIndex.
+
+    Qt hands QModelIndex to every model callback, while the PySide6 signatures
+    declare the union because QPersistentModelIndex converts implicitly in C++.
+    Normalising at the override boundary keeps the helpers and the Qt calls below
+    them on a single index type.
+    """
+    if isinstance(index, QPersistentModelIndex):
+        return QModelIndex(cast("QModelIndex", index))
+    return index
+
+
 class QueueTableModel(QAbstractTableModel):
     metricsChanged = Signal(object)
 
-    def __init__(self, tr: Translator, parent=None) -> None:
+    def __init__(self, tr: Translator, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self.translator = tr
         self._records: list[QueueItemRecord] = []
         self._metrics = QueueMetrics()
 
-    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:
+        parent = _transient_index(parent)
         if parent.isValid():
             return 0
         return len(self._records)
 
-    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
+    def columnCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:
+        parent = _transient_index(parent)
         if parent.isValid():
             return 0
         return COLUMN_COUNT
@@ -143,7 +168,12 @@ class QueueTableModel(QAbstractTableModel):
         }
         return labels.get(QueueColumn(section), "")
 
-    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole):
+    def data(
+        self,
+        index: QModelIndex | QPersistentModelIndex,
+        role: int = Qt.ItemDataRole.DisplayRole,
+    ):
+        index = _transient_index(index)
         if not index.isValid():
             return None
         record = self._records[index.row()]
@@ -234,7 +264,7 @@ class QueueTableModel(QAbstractTableModel):
             }
             return palette.get(record.status)
         elif role == Qt.ItemDataRole.DecorationRole and column == QueueColumn.STATUS:
-            style = QApplication.style()
+            style = maybe_none(QApplication.style())
             if style is None:
                 return None
             if record.status in ACTIVE_ITEM_STATUSES:
@@ -255,7 +285,8 @@ class QueueTableModel(QAbstractTableModel):
             return record.item_id
         return None
 
-    def flags(self, index: QModelIndex) -> Qt.ItemFlag:
+    def flags(self, index: QModelIndex | QPersistentModelIndex) -> Qt.ItemFlag:
+        index = _transient_index(index)
         default_flags = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
         if not index.isValid():
             return default_flags | Qt.ItemFlag.ItemIsDropEnabled
@@ -269,12 +300,14 @@ class QueueTableModel(QAbstractTableModel):
 
     def moveRows(
         self,
-        source_parent: QModelIndex,
+        source_parent: QModelIndex | QPersistentModelIndex,
         source_row: int,
         count: int,
-        destination_parent: QModelIndex,
+        destination_parent: QModelIndex | QPersistentModelIndex,
         destination_child: int,
     ) -> bool:
+        source_parent = _transient_index(source_parent)
+        destination_parent = _transient_index(destination_parent)
         if count <= 0:
             return False
         if source_parent.isValid() or destination_parent.isValid():
@@ -485,7 +518,7 @@ class QueueTableModel(QAbstractTableModel):
         apply_record_progress_event(record, event)
         self._emit_rows_changed([row])
 
-    def apply_result(self, item_id: str, result) -> None:
+    def apply_result(self, item_id: str, result: EncodeResult) -> None:
         row, record = self.record_for_id(item_id)
         if row is None or record is None:
             return
@@ -525,7 +558,7 @@ class QueueTableModel(QAbstractTableModel):
     def _atomic_edit_rows(
         self,
         rows: list[int],
-        edit,
+        edit: Callable[[QueueItemRecord], bool],
     ) -> int:
         targets = sorted(set(rows))
         if not targets or not self.can_edit_rows(targets):

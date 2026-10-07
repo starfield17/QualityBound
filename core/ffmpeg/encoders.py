@@ -85,9 +85,7 @@ def list_available_hwaccels(ffmpeg_path: Path) -> set[str]:
         errors="replace",
         **noninteractive_run_kwargs(),
     )
-    output = "\n".join(
-        part for part in (proc.stdout, proc.stderr) if isinstance(part, str) and part
-    )
+    output = "\n".join(part for part in (proc.stdout, proc.stderr) if part)
     return parse_hwaccels(output)
 
 

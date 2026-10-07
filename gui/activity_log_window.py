@@ -20,7 +20,7 @@ from gui.window_geometry import clamped_window_size
 
 
 class ActivityLogWindow(QMainWindow):
-    def __init__(self, tr: Translator, parent=None) -> None:
+    def __init__(self, tr: Translator, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.translator = tr
         self.entries: list[tuple[str, str]] = []

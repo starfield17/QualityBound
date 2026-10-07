@@ -63,14 +63,26 @@ interaction and platform notification delivery. QueueManager decides when a run
 has completed; MainWindow resolves that run's IDs and delegates completion work
 to QueueCompletionHandler. UI construction remains in same-class builder methods.
 
-Pyright covers `core`, `cli`, `main.py` and every module under `gui`; the scope
-lives in `pyproject.toml`. Two GUI conventions exist because Pyright rejects the
-alternatives: each widget stores its application translator as
-`self.translator` (`QObject.tr()` is Qt's own translation method, so assigning to
-`self.tr` shadows it and leaves the attribute untyped), and PySide6 enums are
-accessed through their scoped enum (`Qt.ContextMenuPolicy.CustomContextMenu`,
-`QMessageBox.StandardButton.Yes`, `QStyle.StandardPixmap.SP_FileIcon`), which is
-the form the PySide6 stubs declare.
+Pyright runs `strict` over `core`, `cli`, `main.py` and every module under `gui`;
+the scope and the six disabled inference-precision rules live in `pyproject.toml`
+(those rules cover the `dict[str, object]` and JSON boundaries, and closing them
+means re-typing that boundary in `core`). Four GUI conventions exist because
+Pyright rejects the alternatives:
+
+- each widget stores its application translator as `self.translator`
+  (`QObject.tr()` is Qt's own translation method, so assigning to `self.tr`
+  shadows it and leaves the attribute untyped);
+- PySide6 enums are accessed through their scoped enum
+  (`Qt.ContextMenuPolicy.CustomContextMenu`, `QMessageBox.StandardButton.Yes`,
+  `QStyle.StandardPixmap.SP_FileIcon`), which is the form the stubs declare;
+- a value that PySide6 declares non-nullable but Qt can return as `None`
+  (`QMenu.exec()`, `QListWidget.currentItem()`, `QAbstractItemView.model()`,
+  `QApplication.style()`, `QStandardItemModel.item()`,
+  `QGuiApplication.primaryScreen()`) passes through `gui.qt_optionals.maybe_none`
+  so its `None` guard stays instead of being flagged as dead code;
+- model overrides that accept the `QModelIndex | QPersistentModelIndex` union the
+  base class declares normalise it once with `_transient_index`, because Qt itself
+  always delivers a `QModelIndex`.
 
 ## Canonical checks
 

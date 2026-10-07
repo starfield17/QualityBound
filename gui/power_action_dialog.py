@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from core.i18n import Translator
@@ -21,7 +22,7 @@ class PowerActionCountdownDialog(QDialog):
         tr: Translator,
         action: PostEncodeAction,
         timeout_sec: int = 30,
-        parent=None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.translator = tr

@@ -203,7 +203,7 @@ def detect_encoder_capabilities(
     available_hwaccels = {
         item.strip().lower()
         for item in available_hwaccels
-        if isinstance(item, str) and item.strip()
+        if item.strip()
     }
 
     capabilities: dict[str, object] = {

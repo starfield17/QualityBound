@@ -557,8 +557,11 @@ def _select_holdouts(
     while available and len(holdouts) < count:
         anchors = [window.center_sec for window in (*search, *holdouts)]
 
-        def score(item: RankedScoutObservation) -> tuple[float, float, float, str]:
-            distance = min((abs(item.observation.window.center_sec - anchor) for anchor in anchors), default=duration_sec)
+        def score(
+            item: RankedScoutObservation,
+            occupied: tuple[float, ...] = tuple(anchors),
+        ) -> tuple[float, float, float, str]:
+            distance = min((abs(item.observation.window.center_sec - anchor) for anchor in occupied), default=duration_sec)
             diversity = min(1.0, distance / max(duration_sec / max(count + len(search), 1), 1.0))
             return (
                 0.70 * item.difficulty + 0.30 * diversity,

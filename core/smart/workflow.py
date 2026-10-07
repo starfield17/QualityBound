@@ -395,7 +395,7 @@ def analyze_quality(
 
     search.candidates = _refresh_candidate_predictions(search.candidates, budget, item.media_info.duration)
     persistable = complete_candidates(search.candidates, len(session.windows))
-    search_min_vmaf = search.selection.min_vmaf if search.selection is not None else None
+    search_min_vmaf = search.selection.min_vmaf
     completed_fingerprint = (
         fingerprint if search.terminal_result is None and search.selection.success else ""
     )

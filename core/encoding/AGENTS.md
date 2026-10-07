@@ -25,6 +25,11 @@ written beside its destination under a temporary name and published only after
 size validation. A size miss remains a `NEEDS_DECISION` result and its preserved
 file must not overwrite the requested output.
 
+Helpers shared between modules of this package keep their leading underscore
+because they are not public core API, and the providing module lists them in
+`__all__` so the cross-module contract is checked rather than assumed
+(`process.py`, `item_results.py`).
+
 Run Encoding checks with:
 
 ```text

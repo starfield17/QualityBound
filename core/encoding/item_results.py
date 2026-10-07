@@ -13,6 +13,18 @@ from core.progress_events import ProgressCallback
 
 from .process import _emit, _emit_progress
 
+# Shared inside core/encoding only; the underscore stays because these are not
+# part of the public core interface. Listing them makes that contract explicit
+# so sibling-module imports are checked rather than assumed.
+__all__ = (
+    "_size_miss_output_path",
+    "_assert_quality_encoder_matches_item",
+    "_encode_progress_context",
+    "_skipped_encode_result",
+    "_copy_external_subtitles_for_result",
+    "_write_command_failure_log",
+)
+
 
 def _size_miss_output_path(output_path: Path) -> Path:
     return output_path.with_name(
@@ -41,7 +53,7 @@ def _encode_progress_context(
     queue_total: int,
     extra_progress_context: dict[str, object] | None,
 ) -> dict[str, object]:
-    base_context = {
+    base_context: dict[str, object] = {
         "stage": "encode",
         "file_name": item.source_path.name,
         "file_path": str(item.source_path),

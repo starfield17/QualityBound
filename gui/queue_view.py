@@ -1,10 +1,11 @@
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent
-from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableView
+from PySide6.QtCore import QAbstractItemModel, QEvent, QObject, Qt, QTimer, Signal
+from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent, QResizeEvent, QShowEvent
+from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableView, QWidget
 
 from gui.queue_model import FLEX_COLUMN_SPECS, FIXED_COLUMN_WIDTHS, QueueColumn
+from gui.qt_optionals import maybe_none
 
 
 class ResponsiveQueueTableView(QTableView):
@@ -17,7 +18,7 @@ class ResponsiveQueueTableView(QTableView):
         QEvent.Type.LayoutRequest,
     }
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._reflow_scheduled = False
         self._applying_reflow = False
@@ -32,8 +33,10 @@ class ResponsiveQueueTableView(QTableView):
         header.sectionMoved.connect(self.schedule_reflow)
         header.sectionResized.connect(self._on_header_section_resized)
 
-    def setModel(self, model) -> None:
-        previous_model = self.model()
+    def setModel(self, model: QAbstractItemModel | None) -> None:
+        # QAbstractItemView.model() is declared as non-null but returns None before
+        # the first setModel call, so keep the guard.
+        previous_model = maybe_none(self.model())
         if previous_model is not None:
             self._disconnect_model_signals(previous_model)
         super().setModel(model)
@@ -42,15 +45,15 @@ class ResponsiveQueueTableView(QTableView):
             self._connect_model_signals(model)
         self.schedule_reflow()
 
-    def showEvent(self, event) -> None:
+    def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
         self.schedule_reflow()
 
-    def resizeEvent(self, event) -> None:
+    def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         self.schedule_reflow()
 
-    def event(self, event):
+    def event(self, event: QEvent) -> bool:
         result = super().event(event)
         if event.type() in {QEvent.Type.LayoutRequest, QEvent.Type.Polish}:
             self.schedule_reflow()
@@ -90,7 +93,7 @@ class ResponsiveQueueTableView(QTableView):
                 return
         super().dropEvent(event)
 
-    def eventFilter(self, watched: QObject, event) -> bool:
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         result = super().eventFilter(watched, event)
         if watched in {self.viewport(), self.verticalScrollBar(), self.horizontalScrollBar()}:
             if event.type() in self._RELEVANT_EVENT_TYPES:
@@ -110,14 +113,14 @@ class ResponsiveQueueTableView(QTableView):
     def reflow_columns(self) -> None:
         self.schedule_reflow()
 
-    def _connect_model_signals(self, model) -> None:
+    def _connect_model_signals(self, model: QAbstractItemModel) -> None:
         model.modelReset.connect(self.schedule_reflow)
         model.layoutChanged.connect(self.schedule_reflow)
         model.rowsInserted.connect(self._on_rows_changed)
         model.rowsRemoved.connect(self._on_rows_changed)
         self._watched_model = model
 
-    def _disconnect_model_signals(self, model) -> None:
+    def _disconnect_model_signals(self, model: QAbstractItemModel) -> None:
         for signal, slot in [
             (model.modelReset, self.schedule_reflow),
             (model.layoutChanged, self.schedule_reflow),
@@ -131,7 +134,7 @@ class ResponsiveQueueTableView(QTableView):
         if self._watched_model is model:
             self._watched_model = None
 
-    def _on_rows_changed(self, *_args) -> None:
+    def _on_rows_changed(self, *_args: object) -> None:
         self.schedule_reflow()
 
     def _on_header_section_resized(self, _logical_index: int, _old_size: int, _new_size: int) -> None:
@@ -145,7 +148,7 @@ class ResponsiveQueueTableView(QTableView):
         self._reflow_scheduled = False
         if self._applying_reflow:
             return
-        header = self.horizontalHeader()
+        header = maybe_none(self.horizontalHeader())
         if header is None:
             return
 
@@ -251,7 +254,7 @@ def configure_header_resize_modes(header: QHeaderView) -> None:
             header.setSectionResizeMode(int(column), QHeaderView.ResizeMode.Interactive)
 
 
-def create_queue_view(parent=None) -> ResponsiveQueueTableView:
+def create_queue_view(parent: QWidget | None = None) -> ResponsiveQueueTableView:
     view = ResponsiveQueueTableView(parent)
     view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
     view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)

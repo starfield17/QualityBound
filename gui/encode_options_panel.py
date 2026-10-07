@@ -38,6 +38,7 @@ from core.models import (
     VmafViewingContext,
 )
 from core.smart import analysis_profiles_from_config, parse_analysis_profile_name, resolve_max_output_ratio
+from gui.qt_optionals import maybe_none
 
 
 EXPLICIT_BACKEND_ORDER: tuple[BackendChoice, ...] = (
@@ -107,12 +108,12 @@ class EncodeOptionsPanel(QWidget):
         self.decode_acceleration_combo.currentIndexChanged.connect(self.sync_dependent_controls)
         self.analysis_profile_combo.currentIndexChanged.connect(self._on_analysis_profile_changed)
 
-    def _on_compression_mode_changed(self, *_args) -> None:
+    def _on_compression_mode_changed(self, *_args: object) -> None:
         self.sync_dependent_controls()
         value = self.compression_mode_combo.currentData() or self.compression_mode_combo.currentText()
         self.compression_mode_changed.emit(CompressionMode(value))
 
-    def _on_analysis_profile_changed(self, *_args) -> None:
+    def _on_analysis_profile_changed(self, *_args: object) -> None:
         self.analysis_profile_changed.emit(self.current_analysis_profile_name())
 
     # ------------------------------------------------------------------ building
@@ -513,7 +514,7 @@ class EncodeOptionsPanel(QWidget):
 
     # ---------------------------------------------------- backend/preset logic
 
-    def _on_codec_changed(self, *_args) -> None:
+    def _on_codec_changed(self, *_args: object) -> None:
         current_codec = self._current_codec()
         previous_default = resolve_max_output_ratio(self._last_codec_for_ratio, None) * 100.0
         if abs(self.max_output_ratio_spin.value() - previous_default) < 0.05:
@@ -561,7 +562,9 @@ class EncodeOptionsPanel(QWidget):
         videotoolbox_index = self.decode_acceleration_combo.findData(DecodeAcceleration.VIDEOTOOLBOX.value)
         model = self.decode_acceleration_combo.model()
         if videotoolbox_index >= 0 and isinstance(model, QStandardItemModel):
-            item = model.item(videotoolbox_index)
+            # QStandardItemModel.item() is declared as non-null but returns None for a
+            # row the model does not hold yet.
+            item = maybe_none(model.item(videotoolbox_index))
             if item is not None:
                 item.setEnabled(videotoolbox_available)
         if runtime_known and not videotoolbox_available:
@@ -616,21 +619,19 @@ class EncodeOptionsPanel(QWidget):
         if desired_backend in choices:
             selected_backend = desired_backend
         else:
+            # ``choices`` always contains AUTO, so a desired backend that reaches this
+            # branch is never AUTO; the redundant identity checks were dropped.
             selected_backend = BackendChoice.AUTO
-            if self._runtime_capabilities() is None and desired_backend != BackendChoice.AUTO:
+            if self._runtime_capabilities() is None:
                 self._pending_backend = desired_backend
-            if log_reset and desired_backend != BackendChoice.AUTO:
-                if not (
-                    self._runtime_capabilities() is None
-                    and desired_backend != BackendChoice.AUTO
-                ):
-                    self._append_log(
-                        self.translator.t(
-                            "gui.log.backend_reset",
-                            backend=desired_backend.value,
-                            fallback=selected_backend.value,
-                        )
+            if log_reset and self._runtime_capabilities() is not None:
+                self._append_log(
+                    self.translator.t(
+                        "gui.log.backend_reset",
+                        backend=desired_backend.value,
+                        fallback=selected_backend.value,
                     )
+                )
 
         self.backend_combo.blockSignals(True)
         self.backend_combo.clear()
@@ -663,7 +664,7 @@ class EncodeOptionsPanel(QWidget):
         index = self.compression_mode_combo.findData(CompressionMode.SMART.value)
         model = self.compression_mode_combo.model()
         if index >= 0 and isinstance(model, QStandardItemModel):
-            item = model.item(index)
+            item = maybe_none(model.item(index))
             if item is not None:
                 item.setEnabled(not known or available)
         if known and not available:
@@ -710,7 +711,7 @@ class EncodeOptionsPanel(QWidget):
 
     def refresh_encoder_preset_choices(
         self,
-        *_args,
+        *_args: object,
         preset: str | None | _PresetUnset = _PRESET_UNSET,
         log_invalid: bool = False,
     ) -> None:

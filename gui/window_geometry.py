@@ -3,6 +3,8 @@ from __future__ import annotations
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QGuiApplication
 
+from gui.qt_optionals import maybe_none
+
 
 def clamped_window_size(
     desired_width: int,
@@ -17,7 +19,9 @@ def clamped_window_size(
     min_width = max(0, minimum_width)
     min_height = max(0, minimum_height)
 
-    screen = QGuiApplication.primaryScreen()
+    # primaryScreen() is declared non-null but returns None on a headless display;
+    # sizing then falls back to the requested minimum instead of clamping.
+    screen = maybe_none(QGuiApplication.primaryScreen())
     if screen is not None:
         available = screen.availableGeometry()
         max_width = max(1, int(available.width() * screen_ratio))

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
-from typing import Callable
+from typing import Callable, TypedDict
 
 from core.models import (
     AudioMode,
+    BackendChoice,
     CodecChoice,
     ConstraintFailureKind,
     EncodePlanItem,
@@ -295,6 +296,16 @@ def refresh_candidate_predictions(
     return refreshed
 
 
+class _SharedSearchResultFields(TypedDict):
+    """Encoder identity and budget carried by every outcome of this selection."""
+
+    encoder_name: str
+    backend: BackendChoice
+    max_output_bytes: int
+    measurement_fingerprint: str
+    fingerprint: str
+
+
 def reselect_from_candidates(
     candidates: list[QualityCandidateResult],
     item: EncodePlanItem,
@@ -305,7 +316,7 @@ def reselect_from_candidates(
     if item.media_info is None or item.encoder_info is None:
         raise ValueError("Smart candidate selection requires probed media and a bound encoder.")
     budget = calculate_smart_bitrate_budget(item)
-    base = {
+    base: _SharedSearchResultFields = {
         "encoder_name": item.encoder_info.encoder_name,
         "backend": item.encoder_info.backend,
         "measurement_fingerprint": measurement_fingerprint,

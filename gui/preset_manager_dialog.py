@@ -8,13 +8,21 @@ from PySide6.QtWidgets import (
     QListWidget,
     QPushButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from core.i18n import Translator
+from gui.qt_optionals import maybe_none
 
 
 class PresetManagerDialog(QDialog):
-    def __init__(self, tr: Translator, preset_names: list[str], default_preset_name: str, parent=None) -> None:
+    def __init__(
+        self,
+        tr: Translator,
+        preset_names: list[str],
+        default_preset_name: str,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self.translator = tr
         self.default_preset_name = default_preset_name
@@ -79,7 +87,9 @@ class PresetManagerDialog(QDialog):
         self._update_info_label()
 
     def _selected_preset_name(self) -> str:
-        item = self.list_widget.currentItem()
+        # QListWidget.currentItem() is declared as non-null but returns None while the
+        # list is empty, which is the state this guard protects.
+        item = maybe_none(self.list_widget.currentItem())
         if item is None:
             return ""
         text = item.text()

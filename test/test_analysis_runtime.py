@@ -246,7 +246,15 @@ class AnalysisSessionTestCase(unittest.TestCase):
                 holdout = _sampling_with_holdout().plan.holdout_windows[0]
                 expected = QualityCandidateResult(video_bitrate_bps=900_000, min_vmaf=97, segment_vmaf=[97])
 
-                def evaluate(_bitrate, _plan):
+                def evaluate(
+                    _bitrate,
+                    _plan,
+                    *,
+                    session=session,
+                    holdout=holdout,
+                    cancelled=cancelled,
+                    expected=expected,
+                ):
                     self.assertEqual(len(session.windows), 1)
                     self.assertEqual(session.windows[0].start_sec, holdout.start_sec)
                     self.assertEqual(session.references, [])
@@ -314,7 +322,7 @@ class AnalysisSessionTestCase(unittest.TestCase):
                 def plan_for(**kwargs):
                     return replace(build_analysis_execution_plan(**kwargs), vmaf_backend=VmafBackend.CUDA)
 
-                def score(*args, **kwargs):
+                def score(*args, backends=backends, **kwargs):
                     backends.append(kwargs["plan"].vmaf_backend)
                     if len(backends) == 1:
                         raise SmartCommandError(1, ["ffmpeg"], "VMAF", "CUDA unavailable")

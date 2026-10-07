@@ -37,7 +37,7 @@ class SettingsDialog(QDialog):
         self,
         tr: Translator,
         settings: dict[str, object],
-        parent=None,
+        parent: QWidget | None = None,
         languages: list[LanguageInfo] | None = None,
     ) -> None:
         super().__init__(parent)

@@ -5,6 +5,7 @@ from enum import Enum
 from PySide6.QtWidgets import QAbstractButton, QMessageBox, QWidget
 
 from core.i18n import Translator
+from gui.qt_optionals import maybe_none
 from core.models import DecisionActionCode, DecisionOption
 from gui.queue_state import QueueItemRecord
 
@@ -49,7 +50,9 @@ def choose_quality_decision(
     }
     cancel_button = box.addButton(QMessageBox.StandardButton.Cancel)
     box.exec()
-    clicked = box.clickedButton()
+    # QMessageBox.clickedButton() is declared as always returning a button, but Qt
+    # returns None when the box is closed without choosing one.
+    clicked = maybe_none(box.clickedButton())
     if clicked is None or clicked is cancel_button:
         return None
     return buttons.get(clicked)
@@ -84,7 +87,9 @@ def choose_size_miss_decision(
     }
     cancel_button = box.addButton(QMessageBox.StandardButton.Cancel)
     box.exec()
-    clicked = box.clickedButton()
+    # QMessageBox.clickedButton() is declared as always returning a button, but Qt
+    # returns None when the box is closed without choosing one.
+    clicked = maybe_none(box.clickedButton())
     if clicked is None or clicked is cancel_button:
         return None
     return buttons.get(clicked)

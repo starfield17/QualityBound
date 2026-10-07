@@ -1,9 +1,17 @@
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QPoint, QSignalBlocker, Qt, QTimer, QUrl
-from PySide6.QtGui import QAction, QDesktopServices, QDragEnterEvent, QDragMoveEvent, QDropEvent
+from PySide6.QtGui import (
+    QAction,
+    QCloseEvent,
+    QDesktopServices,
+    QDragEnterEvent,
+    QDragMoveEvent,
+    QDropEvent,
+    QShowEvent,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QAbstractItemView,
@@ -37,6 +45,7 @@ from core.models import (
     CodecChoice,
     DecisionActionCode,
     EncodeOptions,
+    EncodePlan,
     VideoFileItem,
 )
 from core.config import (
@@ -62,13 +71,14 @@ from gui.constraint_decision_dialog import (
     choose_size_miss_decision,
 )
 from gui.encode_options_panel import EncodeOptionsPanel
-from gui.gui_workers import EncoderCapabilityDetectWorker, PlanWorker
+from gui.gui_workers import EncodeWorker, EncoderCapabilityDetectWorker, PlanWorker
 from gui.preset_manager_dialog import PresetManagerDialog
+from gui.qt_optionals import maybe_none
 from gui.queue_completion import QueueCompletionHandler
 from gui.queue_manager import QueueManager, QueueRunCompletion
-from gui.queue_state import QueueItemRecord
+from gui.queue_state import QueueItemRecord, QueueMetrics
 from gui.queue_model import QueueTableModel, format_duration, format_size
-from gui.queue_view import create_queue_view
+from gui.queue_view import ResponsiveQueueTableView, create_queue_view
 from gui.queue_window import QueueWindow
 from gui.settings_dialog import SettingsDialog
 from gui.theme import apply_theme
@@ -108,8 +118,6 @@ RUNTIME_CONFIG_KEYS = frozenset(
 
 
 class MainWindow(QMainWindow):
-    _PRESET_UNSET = object()
-
     def __init__(
         self,
         repo_root: Path,
@@ -168,7 +176,7 @@ class MainWindow(QMainWindow):
         self._refresh_action_state()
         self._log_catalog_diagnostics()
 
-    def closeEvent(self, event) -> None:
+    def closeEvent(self, event: QCloseEvent) -> None:
         if not self._has_running_task():
             event.accept()
             return
@@ -193,7 +201,7 @@ class MainWindow(QMainWindow):
         self._maybe_close_after_running_task()
         event.ignore()
 
-    def showEvent(self, event) -> None:
+    def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
         if self._startup_encoder_detection_started:
             return
@@ -741,7 +749,7 @@ class MainWindow(QMainWindow):
             self.status_current_progress_label.setText(self.translator.t("gui.statusbar.current_progress", value=f"{bounded:.1f}%"))
             self.current_progress_bar.setValue(int(round(bounded * 10)))
 
-    def _update_queue_metrics(self, metrics) -> None:
+    def _update_queue_metrics(self, metrics: QueueMetrics) -> None:
         self.total_items_value.setText(str(metrics.total_items))
         self.states_value.setText(
             self.translator.t(
@@ -984,7 +992,11 @@ class MainWindow(QMainWindow):
         self._refresh_action_state()
         self._maybe_close_after_running_task()
 
-    def _start_worker(self, worker, completed_slot) -> None:
+    def _start_worker(
+        self,
+        worker: PlanWorker | EncodeWorker,
+        completed_slot: Callable[..., object],
+    ) -> None:
         self.active_worker = worker
         self._refresh_action_state()
         if hasattr(worker, "log"):
@@ -1178,7 +1190,7 @@ class MainWindow(QMainWindow):
         self.activity_log_window.raise_()
         self.activity_log_window.activateWindow()
 
-    def _on_plan_ready(self, plan, workdir: Path) -> None:
+    def _on_plan_ready(self, plan: EncodePlan, workdir: Path) -> None:
         try:
             added = self.queue_manager.add_plan(plan, workdir)
         except Exception as exc:
@@ -1196,10 +1208,10 @@ class MainWindow(QMainWindow):
         )
         self._set_status_snapshot(self.translator.t("gui.status.done"), "-", "-", "-", 100.0)
 
-    def _selected_rows_from_view(self, view) -> list[int]:
+    def _selected_rows_from_view(self, view: ResponsiveQueueTableView) -> list[int]:
         return sorted(index.row() for index in view.selectionModel().selectedRows())
 
-    def _show_queue_context_menu(self, view, pos: QPoint) -> None:
+    def _show_queue_context_menu(self, view: ResponsiveQueueTableView, pos: QPoint) -> None:
         menu = QMenu(self)
         rows = self._selected_rows_from_view(view)
         selected_record = self.queue_model.record_for_row(rows[0]) if rows else None
@@ -1249,7 +1261,7 @@ class MainWindow(QMainWindow):
         )
         clear_completed_action.setEnabled(not self.queue_busy)
 
-        action = menu.exec(view.viewport().mapToGlobal(pos))
+        action = maybe_none(menu.exec(view.viewport().mapToGlobal(pos)))
         if action is None:
             return
         if action == open_source_action and selected_record is not None:
@@ -1365,7 +1377,7 @@ class MainWindow(QMainWindow):
             else:
                 self.queue_manager.reconcile_after_decision()
 
-    def _show_header_context_menu(self, view, pos: QPoint) -> None:
+    def _show_header_context_menu(self, view: ResponsiveQueueTableView, pos: QPoint) -> None:
         menu = QMenu(self)
         header = view.horizontalHeader()
         for column in range(self.queue_model.columnCount()):
@@ -1374,7 +1386,7 @@ class MainWindow(QMainWindow):
             action.setCheckable(True)
             action.setChecked(not view.isColumnHidden(column))
             action.setData(column)
-        chosen = menu.exec(header.mapToGlobal(pos))
+        chosen = maybe_none(menu.exec(header.mapToGlobal(pos)))
         if chosen is None:
             return
         column = int(chosen.data())
@@ -1388,11 +1400,11 @@ class MainWindow(QMainWindow):
             if callable(reflow):
                 reflow()
 
-    def _persist_header_state(self, source_view) -> None:
+    def _persist_header_state(self, source_view: ResponsiveQueueTableView) -> None:
         if self._header_sync_guard:
             return
         state = source_view.horizontalHeader().saveState()
-        self.app_config["queue_table_header_state"] = bytes(state.toBase64()).decode("ascii")
+        self.app_config["queue_table_header_state"] = bytes(state.toBase64().data()).decode("ascii")
         self._save_app_config_preserving_capabilities()
 
         self._header_sync_guard = True

@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 import os
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 
 from core.models import OperationCancelledError
 
@@ -40,7 +40,7 @@ def acquire_analysis_slot(cancel_check: Callable[[], bool] | None) -> None:
 
 
 @contextmanager
-def analysis_slot(cancel_check: Callable[[], bool] | None) -> Iterator[None]:
+def analysis_slot(cancel_check: Callable[[], bool] | None) -> Generator[None, None, None]:
     """Acquire a cancellable analysis slot and always release it."""
     acquire_analysis_slot(cancel_check)
     try:

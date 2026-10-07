@@ -11,6 +11,16 @@ from core.ffmpeg.subprocess import hidden_popen_kwargs
 from core.models import OperationCancelledError
 from core.progress_events import ProgressCallback, ProgressEvent
 
+# Shared inside core/encoding only; the underscore stays because these are not
+# part of the public core interface. Listing them makes that contract explicit
+# so sibling-module imports are checked rather than assumed.
+__all__ = (
+    "_emit",
+    "_emit_progress",
+    "_run_logged_command",
+    "_cleanup_passlog",
+)
+
 
 def _emit(log_callback: Callable[[str], None] | None, message: str) -> None:
     if log_callback is not None:

@@ -29,7 +29,7 @@ ItemStartedCallback = Callable[[int, str, str], None]
 ItemResultCallback = Callable[[int, EncodeResult], None]
 
 
-def _validated_worker_count(max_workers: int) -> int:
+def _validated_worker_count(max_workers: object) -> int:
     if isinstance(max_workers, bool) or not isinstance(max_workers, int) or not 1 <= max_workers <= 8:
         raise ValueError("Concurrent encode workers must be an integer from 1 to 8.")
     return max_workers
@@ -139,13 +139,14 @@ def execute_plan_concurrent(
                     started(index)
                 callback = None
                 if process_callback is not None:
-                    active_process_callback = process_callback
+                    bound_process_callback: ProcessCallback = process_callback
 
                     def slot_process(
                         proc: subprocess.Popen[str] | None,
                         worker_slot: str = slot,
+                        callback_sink: ProcessCallback = bound_process_callback,
                     ) -> None:
-                        active_process_callback(worker_slot, proc)
+                        callback_sink(worker_slot, proc)
 
                     callback = slot_process
                 result = execute_plan_item(

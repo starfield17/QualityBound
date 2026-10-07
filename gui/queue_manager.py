@@ -5,6 +5,7 @@ import threading
 import subprocess
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 
 from PySide6.QtCore import QObject, QThread, Signal
 
@@ -37,7 +38,12 @@ class QueueExecuteWorker(QThread):
     failed = Signal(str)
     queue_finished = Signal()
 
-    def __init__(self, items: list[QueueExecutionItem], max_workers: int, parent=None) -> None:
+    def __init__(
+        self,
+        items: list[QueueExecutionItem],
+        max_workers: int,
+        parent: QObject | None = None,
+    ) -> None:
         super().__init__(parent)
         self.items = items
         self.max_workers = max_workers
@@ -151,7 +157,7 @@ class QueueManager(QObject):
     workerFinished = Signal()
     runCompleted = Signal(object)
 
-    def __init__(self, model: QueueTableModel, parent=None) -> None:
+    def __init__(self, model: QueueTableModel, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self.model = model
         self._worker: QueueExecuteWorker | None = None
@@ -164,7 +170,7 @@ class QueueManager(QObject):
     def is_busy(self) -> bool:
         return self._worker is not None
 
-    def add_plan(self, plan, workdir) -> int:
+    def add_plan(self, plan: EncodePlan, workdir: Path) -> int:
         records = create_queue_records(plan, workdir)
         self.model.add_records(records)
         return len(records)

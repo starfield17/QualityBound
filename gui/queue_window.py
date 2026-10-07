@@ -4,12 +4,13 @@ from PySide6.QtWidgets import QLabel, QMainWindow, QProgressBar, QVBoxLayout, QW
 
 from core.i18n import Translator
 from gui.queue_model import QueueTableModel, format_duration
+from gui.queue_state import QueueMetrics
 from gui.queue_view import create_queue_view
 from gui.window_geometry import clamped_window_size
 
 
 class QueueWindow(QMainWindow):
-    def __init__(self, tr: Translator, model: QueueTableModel, parent=None) -> None:
+    def __init__(self, tr: Translator, model: QueueTableModel, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.translator = tr
         self.model = model
@@ -42,7 +43,7 @@ class QueueWindow(QMainWindow):
         self.setWindowTitle(self.translator.t("gui.window.queue"))
         self.model.set_translator(tr)
 
-    def update_metrics(self, metrics) -> None:
+    def update_metrics(self, metrics: QueueMetrics) -> None:
         states_text = self.translator.t(
             "gui.summary.queue_states",
             ready=metrics.ready_items,
