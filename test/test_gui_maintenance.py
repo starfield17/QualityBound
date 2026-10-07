@@ -214,7 +214,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                 with patch.object(window.queue_completion_handler, "handle") as finish:
                     window._on_queue_run_completed(completion)
 
-                finish.assert_called_once_with([current], window.tr, window.app_config)
+                finish.assert_called_once_with([current], window.translator, window.app_config)
         finally:
             window.close()
 
@@ -243,7 +243,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                     patch("gui.queue_completion.QMessageBox.critical") as critical,
                     patch.object(window.queue_completion_handler, "_append_log") as append_log,
                 ):
-                    window.queue_completion_handler.handle([record], window.tr, window.app_config)
+                    window.queue_completion_handler.handle([record], window.translator, window.app_config)
 
                 critical.assert_called_once()
                 self.assertIn("permission denied", critical.call_args.args[2])

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from PySide6.QtWidgets import QMessageBox, QWidget
+from PySide6.QtWidgets import QAbstractButton, QMessageBox, QWidget
 
 from core.i18n import Translator
 from core.models import DecisionActionCode, DecisionOption
@@ -36,21 +36,21 @@ def choose_quality_decision(
 ) -> DecisionOption | None:
     quality = record.plan_item.quality_search_result
     box = QMessageBox(parent)
-    box.setIcon(QMessageBox.Warning)
+    box.setIcon(QMessageBox.Icon.Warning)
     box.setWindowTitle(tr.t("gui.decision.title"))
     box.setText(tr.t("gui.decision.quality_intro", file=record.source_path.name))
     box.setInformativeText(
         (quality.reason if quality is not None and quality.reason else record.error_summary)
         or tr.t("gui.decision.no_detail")
     )
-    buttons = {
-        box.addButton(_quality_action_text(tr, option), QMessageBox.ActionRole): option
+    buttons: dict[QAbstractButton, DecisionOption] = {
+        box.addButton(_quality_action_text(tr, option), QMessageBox.ButtonRole.ActionRole): option
         for option in options
     }
-    cancel_button = box.addButton(QMessageBox.Cancel)
+    cancel_button = box.addButton(QMessageBox.StandardButton.Cancel)
     box.exec()
     clicked = box.clickedButton()
-    if clicked is cancel_button:
+    if clicked is None or clicked is cancel_button:
         return None
     return buttons.get(clicked)
 
@@ -66,7 +66,7 @@ def choose_size_miss_decision(
     actual = result.actual_output_bytes or 0
     allowed = result.allowed_output_bytes or 0
     box = QMessageBox(parent)
-    box.setIcon(QMessageBox.Warning)
+    box.setIcon(QMessageBox.Icon.Warning)
     box.setWindowTitle(tr.t("gui.decision.size_miss_title"))
     box.setText(tr.t("gui.decision.size_miss_intro", file=record.source_path.name))
     box.setInformativeText(
@@ -77,14 +77,14 @@ def choose_size_miss_decision(
             path=str(result.rejected_output_path),
         )
     )
-    buttons = {
-        box.addButton(tr.t("gui.decision.accept_size_miss"), QMessageBox.AcceptRole): SizeMissDecision.ACCEPT,
-        box.addButton(tr.t("gui.decision.retry_size_miss"), QMessageBox.ActionRole): SizeMissDecision.RETRY,
-        box.addButton(tr.t("gui.decision.discard_size_miss"), QMessageBox.DestructiveRole): SizeMissDecision.DISCARD,
+    buttons: dict[QAbstractButton, SizeMissDecision] = {
+        box.addButton(tr.t("gui.decision.accept_size_miss"), QMessageBox.ButtonRole.AcceptRole): SizeMissDecision.ACCEPT,
+        box.addButton(tr.t("gui.decision.retry_size_miss"), QMessageBox.ButtonRole.ActionRole): SizeMissDecision.RETRY,
+        box.addButton(tr.t("gui.decision.discard_size_miss"), QMessageBox.ButtonRole.DestructiveRole): SizeMissDecision.DISCARD,
     }
-    cancel_button = box.addButton(QMessageBox.Cancel)
+    cancel_button = box.addButton(QMessageBox.StandardButton.Cancel)
     box.exec()
     clicked = box.clickedButton()
-    if clicked is cancel_button:
+    if clicked is None or clicked is cancel_button:
         return None
     return buttons.get(clicked)

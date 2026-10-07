@@ -11,10 +11,10 @@ class ResponsiveQueueTableView(QTableView):
     filesDropped = Signal(list)
 
     _RELEVANT_EVENT_TYPES = {
-        QEvent.Show,
-        QEvent.Hide,
-        QEvent.Resize,
-        QEvent.LayoutRequest,
+        QEvent.Type.Show,
+        QEvent.Type.Hide,
+        QEvent.Type.Resize,
+        QEvent.Type.LayoutRequest,
     }
 
     def __init__(self, parent=None) -> None:
@@ -52,7 +52,7 @@ class ResponsiveQueueTableView(QTableView):
 
     def event(self, event):
         result = super().event(event)
-        if event.type() in {QEvent.LayoutRequest, QEvent.Polish}:
+        if event.type() in {QEvent.Type.LayoutRequest, QEvent.Type.Polish}:
             self.schedule_reflow()
         return result
 
@@ -246,26 +246,26 @@ def flex_minimum_width(logical_index: int) -> int:
 def configure_header_resize_modes(header: QHeaderView) -> None:
     for column in QueueColumn:
         if column in FIXED_COLUMN_WIDTHS:
-            header.setSectionResizeMode(int(column), QHeaderView.Fixed)
+            header.setSectionResizeMode(int(column), QHeaderView.ResizeMode.Fixed)
         else:
-            header.setSectionResizeMode(int(column), QHeaderView.Interactive)
+            header.setSectionResizeMode(int(column), QHeaderView.ResizeMode.Interactive)
 
 
-def create_queue_view(parent=None) -> QTableView:
+def create_queue_view(parent=None) -> ResponsiveQueueTableView:
     view = ResponsiveQueueTableView(parent)
-    view.setSelectionBehavior(QAbstractItemView.SelectRows)
-    view.setSelectionMode(QAbstractItemView.ExtendedSelection)
+    view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+    view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
     view.setAlternatingRowColors(True)
     view.setSortingEnabled(False)
     view.setWordWrap(False)
-    view.setTextElideMode(Qt.ElideMiddle)
-    view.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
-    view.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    view.setTextElideMode(Qt.TextElideMode.ElideMiddle)
+    view.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+    view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
     view.setDragEnabled(True)
     view.setAcceptDrops(True)
     view.setDropIndicatorShown(True)
-    view.setDragDropMode(QAbstractItemView.InternalMove)
-    view.setDefaultDropAction(Qt.MoveAction)
+    view.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+    view.setDefaultDropAction(Qt.DropAction.MoveAction)
 
     header = view.horizontalHeader()
     header.setStretchLastSection(False)

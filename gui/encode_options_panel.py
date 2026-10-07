@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from enum import Enum
+from typing import Final
 
 from PySide6.QtCore import Signal
+from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -46,6 +49,15 @@ EXPLICIT_BACKEND_ORDER: tuple[BackendChoice, ...] = (
 )
 
 
+class _PresetUnset(Enum):
+    """Sentinel distinguishing an unsupplied preset from an explicit ``None``."""
+
+    UNSET = "unset"
+
+
+_PRESET_UNSET: Final = _PresetUnset.UNSET
+
+
 class EncodeOptionsPanel(QWidget):
     """The Basic/Video/Audio-Subtitles options region.
 
@@ -59,8 +71,6 @@ class EncodeOptionsPanel(QWidget):
     analysis_profile_changed = Signal(object)
     options_changed = Signal()
 
-    _PRESET_UNSET = object()
-
     def __init__(
         self,
         tr: Translator,
@@ -69,7 +79,7 @@ class EncodeOptionsPanel(QWidget):
         append_log: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__(parent)
-        self.tr = tr
+        self.translator = tr
         self.app_config = app_config
         self._append_log = append_log if append_log is not None else (lambda message: None)
         self._encoder_capabilities_ready = False
@@ -420,83 +430,83 @@ class EncodeOptionsPanel(QWidget):
         self.options_tabs.setEnabled(not busy)
 
     def set_translator(self, translator: Translator) -> None:
-        self.tr = translator
-        self.codec_label.setText(self.tr.t("gui.label.codec"))
-        self.compression_mode_label.setText(self.tr.t("gui.label.compression_mode"))
+        self.translator = translator
+        self.codec_label.setText(self.translator.t("gui.label.codec"))
+        self.compression_mode_label.setText(self.translator.t("gui.label.compression_mode"))
         smart_mode_index = self.compression_mode_combo.findData(CompressionMode.SMART.value)
         fixed_mode_index = self.compression_mode_combo.findData(CompressionMode.FIXED_BITRATE.value)
         if smart_mode_index >= 0:
             self.compression_mode_combo.setItemText(
                 smart_mode_index,
-                self.tr.t("gui.value.compression_smart"),
+                self.translator.t("gui.value.compression_smart"),
             )
         if fixed_mode_index >= 0:
             self.compression_mode_combo.setItemText(
                 fixed_mode_index,
-                self.tr.t("gui.value.compression_fixed"),
+                self.translator.t("gui.value.compression_fixed"),
             )
-        self.backend_label.setText(self.tr.t("gui.label.backend"))
-        self.container_label.setText(self.tr.t("gui.label.container"))
-        self.ratio_label.setText(self.tr.t("gui.label.ratio"))
-        self.min_vmaf_label.setText(self.tr.t("gui.label.min_vmaf"))
-        self.min_vmaf_label.setToolTip(self.tr.t("gui.tooltip.min_vmaf"))
-        self.min_vmaf_spin.setToolTip(self.tr.t("gui.tooltip.min_vmaf"))
-        self.max_output_ratio_label.setText(self.tr.t("gui.label.max_output_ratio"))
-        self.analysis_profile_label.setText(self.tr.t("gui.label.analysis_profile"))
+        self.backend_label.setText(self.translator.t("gui.label.backend"))
+        self.container_label.setText(self.translator.t("gui.label.container"))
+        self.ratio_label.setText(self.translator.t("gui.label.ratio"))
+        self.min_vmaf_label.setText(self.translator.t("gui.label.min_vmaf"))
+        self.min_vmaf_label.setToolTip(self.translator.t("gui.tooltip.min_vmaf"))
+        self.min_vmaf_spin.setToolTip(self.translator.t("gui.tooltip.min_vmaf"))
+        self.max_output_ratio_label.setText(self.translator.t("gui.label.max_output_ratio"))
+        self.analysis_profile_label.setText(self.translator.t("gui.label.analysis_profile"))
         self.analysis_profile_combo.setItemText(
             self.analysis_profile_combo.findData(AnalysisProfileName.FAST.value),
-            self.tr.t("gui.value.analysis_fast"),
+            self.translator.t("gui.value.analysis_fast"),
         )
         self.analysis_profile_combo.setItemText(
             self.analysis_profile_combo.findData(AnalysisProfileName.BALANCE.value),
-            self.tr.t("gui.value.analysis_balance"),
+            self.translator.t("gui.value.analysis_balance"),
         )
         self.analysis_profile_combo.setItemText(
             self.analysis_profile_combo.findData(AnalysisProfileName.PRECISE.value),
-            self.tr.t("gui.value.analysis_precise"),
+            self.translator.t("gui.value.analysis_precise"),
         )
-        self.analysis_profile_combo.setToolTip(self.tr.t("gui.tooltip.analysis_profile"))
-        self.viewing_context_label.setText(self.tr.t("gui.label.viewing_context"))
+        self.analysis_profile_combo.setToolTip(self.translator.t("gui.tooltip.analysis_profile"))
+        self.viewing_context_label.setText(self.translator.t("gui.label.viewing_context"))
         self.viewing_context_combo.setItemText(
             self.viewing_context_combo.findData(VmafViewingContext.HIGH_FIDELITY.value),
-            self.tr.t("gui.value.viewing_high_fidelity"),
+            self.translator.t("gui.value.viewing_high_fidelity"),
         )
         self.viewing_context_combo.setItemText(
             self.viewing_context_combo.findData(VmafViewingContext.STANDARD_DISPLAY.value),
-            self.tr.t("gui.value.viewing_standard_display"),
+            self.translator.t("gui.value.viewing_standard_display"),
         )
-        viewing_tooltip = self.tr.t("gui.tooltip.viewing_context")
+        viewing_tooltip = self.translator.t("gui.tooltip.viewing_context")
         self.viewing_context_label.setToolTip(viewing_tooltip)
         self.viewing_context_combo.setToolTip(viewing_tooltip)
-        self.overwrite_check.setText(self.tr.t("gui.checkbox.overwrite"))
-        self.recursive_check.setText(self.tr.t("gui.checkbox.recursive"))
-        self.encoder_preset_label.setText(self.tr.t("gui.label.encoder_preset"))
-        self.decode_acceleration_label.setText(self.tr.t("gui.label.decode_acceleration"))
+        self.overwrite_check.setText(self.translator.t("gui.checkbox.overwrite"))
+        self.recursive_check.setText(self.translator.t("gui.checkbox.recursive"))
+        self.encoder_preset_label.setText(self.translator.t("gui.label.encoder_preset"))
+        self.decode_acceleration_label.setText(self.translator.t("gui.label.decode_acceleration"))
         self.decode_acceleration_combo.setItemText(
             self.decode_acceleration_combo.findData(DecodeAcceleration.SOFTWARE.value),
-            self.tr.t("gui.value.decode_software"),
+            self.translator.t("gui.value.decode_software"),
         )
         self.decode_acceleration_combo.setItemText(
             self.decode_acceleration_combo.findData(DecodeAcceleration.VIDEOTOOLBOX.value),
-            self.tr.t("gui.value.decode_videotoolbox"),
+            self.translator.t("gui.value.decode_videotoolbox"),
         )
-        self.pix_fmt_label.setText(self.tr.t("gui.label.pix_fmt"))
-        self.min_bitrate_label.setText(self.tr.t("gui.label.min_video_kbps"))
-        self.max_bitrate_label.setText(self.tr.t("gui.label.max_video_kbps"))
-        self.maxrate_factor_label.setText(self.tr.t("gui.label.maxrate_factor"))
-        self.bufsize_factor_label.setText(self.tr.t("gui.label.bufsize_factor"))
-        self.two_pass_check.setText(self.tr.t("gui.checkbox.two_pass"))
-        self.audio_mode_label.setText(self.tr.t("gui.label.audio_mode"))
-        self.audio_bitrate_label.setText(self.tr.t("gui.label.audio_bitrate"))
-        self.copy_subtitles_check.setText(self.tr.t("gui.checkbox.copy_subtitles"))
-        self.copy_external_subtitles_check.setText(self.tr.t("gui.checkbox.copy_external_subtitles"))
-        self.ratio_edit.setPlaceholderText(self.tr.t("gui.placeholder.auto_ratio"))
+        self.pix_fmt_label.setText(self.translator.t("gui.label.pix_fmt"))
+        self.min_bitrate_label.setText(self.translator.t("gui.label.min_video_kbps"))
+        self.max_bitrate_label.setText(self.translator.t("gui.label.max_video_kbps"))
+        self.maxrate_factor_label.setText(self.translator.t("gui.label.maxrate_factor"))
+        self.bufsize_factor_label.setText(self.translator.t("gui.label.bufsize_factor"))
+        self.two_pass_check.setText(self.translator.t("gui.checkbox.two_pass"))
+        self.audio_mode_label.setText(self.translator.t("gui.label.audio_mode"))
+        self.audio_bitrate_label.setText(self.translator.t("gui.label.audio_bitrate"))
+        self.copy_subtitles_check.setText(self.translator.t("gui.checkbox.copy_subtitles"))
+        self.copy_external_subtitles_check.setText(self.translator.t("gui.checkbox.copy_external_subtitles"))
+        self.ratio_edit.setPlaceholderText(self.translator.t("gui.placeholder.auto_ratio"))
         self.pix_fmt_edit.setPlaceholderText("yuv420p")
         self.audio_bitrate_edit.setPlaceholderText("128k")
 
-        self.options_tabs.setTabText(self.options_tabs.indexOf(self.basic_tab), self.tr.t("gui.tab.basic"))
-        self.options_tabs.setTabText(self.options_tabs.indexOf(self.video_tab), self.tr.t("gui.tab.video"))
-        self.options_tabs.setTabText(self.options_tabs.indexOf(self.audio_tab), self.tr.t("gui.tab.audio_subtitles"))
+        self.options_tabs.setTabText(self.options_tabs.indexOf(self.basic_tab), self.translator.t("gui.tab.basic"))
+        self.options_tabs.setTabText(self.options_tabs.indexOf(self.video_tab), self.translator.t("gui.tab.video"))
+        self.options_tabs.setTabText(self.options_tabs.indexOf(self.audio_tab), self.translator.t("gui.tab.audio_subtitles"))
 
         self._rebuild_backend_controls()
         self.refresh_encoder_preset_choices()
@@ -528,12 +538,12 @@ class EncodeOptionsPanel(QWidget):
     def _refresh_decode_acceleration_choices(
         self,
         *,
-        preferred=_PRESET_UNSET,
+        preferred: object = _PRESET_UNSET,
         log_reset: bool = False,
         force_unavailable: bool = False,
     ) -> None:
         current_value = self.decode_acceleration_combo.currentData()
-        desired_value = current_value if preferred is self._PRESET_UNSET else preferred
+        desired_value = current_value if preferred is _PRESET_UNSET else preferred
         try:
             desired = DecodeAcceleration(desired_value)
         except ValueError:
@@ -550,14 +560,13 @@ class EncodeOptionsPanel(QWidget):
 
         videotoolbox_index = self.decode_acceleration_combo.findData(DecodeAcceleration.VIDEOTOOLBOX.value)
         model = self.decode_acceleration_combo.model()
-        item_getter = getattr(model, "item", None)
-        if videotoolbox_index >= 0 and callable(item_getter):
-            item = item_getter(videotoolbox_index)
+        if videotoolbox_index >= 0 and isinstance(model, QStandardItemModel):
+            item = model.item(videotoolbox_index)
             if item is not None:
                 item.setEnabled(videotoolbox_available)
         if runtime_known and not videotoolbox_available:
             self.decode_acceleration_combo.setToolTip(
-                self.tr.t("gui.tooltip.decode_acceleration_unavailable")
+                self.translator.t("gui.tooltip.decode_acceleration_unavailable")
             )
         else:
             self.decode_acceleration_combo.setToolTip("")
@@ -565,7 +574,7 @@ class EncodeOptionsPanel(QWidget):
         if desired == DecodeAcceleration.VIDEOTOOLBOX and runtime_known and not videotoolbox_available:
             desired = DecodeAcceleration.SOFTWARE
             if log_reset:
-                self._append_log(self.tr.t("gui.log.decode_acceleration_reset"))
+                self._append_log(self.translator.t("gui.log.decode_acceleration_reset"))
 
         selected_index = self.decode_acceleration_combo.findData(desired.value)
         if selected_index < 0:
@@ -616,7 +625,7 @@ class EncodeOptionsPanel(QWidget):
                     and desired_backend != BackendChoice.AUTO
                 ):
                     self._append_log(
-                        self.tr.t(
+                        self.translator.t(
                             "gui.log.backend_reset",
                             backend=desired_backend.value,
                             fallback=selected_backend.value,
@@ -630,7 +639,7 @@ class EncodeOptionsPanel(QWidget):
         self.backend_combo.setCurrentText(selected_backend.value)
         self.backend_combo.blockSignals(False)
         tooltip_key = "gui.tooltip.backend_filtered" if self._runtime_capabilities() is not None else "gui.tooltip.backend_detecting"
-        self.backend_combo.setToolTip(self.tr.t(tooltip_key))
+        self.backend_combo.setToolTip(self.translator.t(tooltip_key))
 
         self.sync_dependent_controls()
 
@@ -652,8 +661,9 @@ class EncodeOptionsPanel(QWidget):
         known = force_unavailable or isinstance(vmaf, dict)
         available = bool(isinstance(vmaf, dict) and vmaf.get("runnable"))
         index = self.compression_mode_combo.findData(CompressionMode.SMART.value)
-        if index >= 0:
-            item = self.compression_mode_combo.model().item(index)
+        model = self.compression_mode_combo.model()
+        if index >= 0 and isinstance(model, QStandardItemModel):
+            item = model.item(index)
             if item is not None:
                 item.setEnabled(not known or available)
         if known and not available:
@@ -665,14 +675,14 @@ class EncodeOptionsPanel(QWidget):
             if isinstance(vmaf, dict):
                 message = str(vmaf.get("error_message") or "")
             self.compression_mode_combo.setToolTip(
-                message or self.tr.t("gui.tooltip.smart_unavailable")
+                message or self.translator.t("gui.tooltip.smart_unavailable")
             )
         else:
             self.compression_mode_combo.setToolTip("")
         self.sync_dependent_controls()
 
     def _default_preset_text(self) -> str:
-        return self.tr.t("gui.value.encoder_preset_default")
+        return self.translator.t("gui.value.encoder_preset_default")
 
     def _current_encoder_preset(self) -> str | None:
         value = self.encoder_preset_combo.currentData()
@@ -696,15 +706,15 @@ class EncodeOptionsPanel(QWidget):
             return
         self.encoder_preset_combo.setCurrentIndex(0)
         if log_invalid:
-            self._append_log(self.tr.t("gui.log.encoder_preset_reset"))
+            self._append_log(self.translator.t("gui.log.encoder_preset_reset"))
 
     def refresh_encoder_preset_choices(
         self,
         *_args,
-        preset=_PRESET_UNSET,
+        preset: str | None | _PresetUnset = _PRESET_UNSET,
         log_invalid: bool = False,
     ) -> None:
-        desired_preset = self._current_encoder_preset() if preset is self._PRESET_UNSET else preset
+        desired_preset = self._current_encoder_preset() if preset is _PRESET_UNSET else preset
         if self.backend_combo.currentText() == BackendChoice.AUTO.value:
             # ``apply_options`` may request an explicit backend before the
             # worker has produced a snapshot.  Keep its preset alongside the
@@ -715,7 +725,7 @@ class EncodeOptionsPanel(QWidget):
                 self._pending_encoder_preset = None
             self._set_encoder_preset_items([])
             self.encoder_preset_combo.setEnabled(False)
-            self.encoder_preset_combo.setToolTip(self.tr.t("gui.tooltip.encoder_preset_auto"))
+            self.encoder_preset_combo.setToolTip(self.translator.t("gui.tooltip.encoder_preset_auto"))
             self._select_encoder_preset(None, log_invalid=False)
             return
         capabilities = self._runtime_capabilities()
@@ -726,7 +736,7 @@ class EncodeOptionsPanel(QWidget):
                 self._pending_encoder_preset = None
             self._set_encoder_preset_items([])
             self.encoder_preset_combo.setEnabled(False)
-            self.encoder_preset_combo.setToolTip(self.tr.t("gui.tooltip.encoder_preset_unavailable"))
+            self.encoder_preset_combo.setToolTip(self.translator.t("gui.tooltip.encoder_preset_unavailable"))
             self._select_encoder_preset(None, log_invalid=log_invalid and desired_preset is not None)
             return
         self._pending_encoder_preset = None
@@ -738,5 +748,5 @@ class EncodeOptionsPanel(QWidget):
         self._set_encoder_preset_items(choices)
         self.encoder_preset_combo.setEnabled(bool(choices))
         tooltip_key = "gui.tooltip.encoder_preset_unavailable" if not choices else ""
-        self.encoder_preset_combo.setToolTip(self.tr.t(tooltip_key) if tooltip_key else "")
+        self.encoder_preset_combo.setToolTip(self.translator.t(tooltip_key) if tooltip_key else "")
         self._select_encoder_preset(desired_preset, log_invalid=log_invalid)

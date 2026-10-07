@@ -16,7 +16,7 @@ from core.i18n import Translator
 class PresetManagerDialog(QDialog):
     def __init__(self, tr: Translator, preset_names: list[str], default_preset_name: str, parent=None) -> None:
         super().__init__(parent)
-        self.tr = tr
+        self.translator = tr
         self.default_preset_name = default_preset_name
         self.selected_action: dict[str, str] | None = None
 
@@ -57,13 +57,13 @@ class PresetManagerDialog(QDialog):
         self.close_button.clicked.connect(self.reject)
 
     def apply_translations(self, tr: Translator) -> None:
-        self.tr = tr
-        self.setWindowTitle(self.tr.t("gui.window.presets"))
-        self.load_button.setText(self.tr.t("gui.button.load_preset"))
-        self.save_current_button.setText(self.tr.t("gui.button.save_current_as_preset"))
-        self.delete_button.setText(self.tr.t("gui.button.delete_preset"))
-        self.default_button.setText(self.tr.t("gui.button.set_default_preset"))
-        self.close_button.setText(self.tr.t("gui.button.close"))
+        self.translator = tr
+        self.setWindowTitle(self.translator.t("gui.window.presets"))
+        self.load_button.setText(self.translator.t("gui.button.load_preset"))
+        self.save_current_button.setText(self.translator.t("gui.button.save_current_as_preset"))
+        self.delete_button.setText(self.translator.t("gui.button.delete_preset"))
+        self.default_button.setText(self.translator.t("gui.button.set_default_preset"))
+        self.close_button.setText(self.translator.t("gui.button.close"))
         self._update_info_label()
 
     def set_preset_names(self, preset_names: list[str], default_preset_name: str) -> None:
@@ -72,7 +72,7 @@ class PresetManagerDialog(QDialog):
         for name in preset_names:
             label = name
             if name == default_preset_name:
-                label = f"{name} ({self.tr.t('gui.label.default_preset_marker')})"
+                label = f"{name} ({self.translator.t('gui.label.default_preset_marker')})"
             self.list_widget.addItem(label)
         if preset_names:
             self.list_widget.setCurrentRow(0)
@@ -83,14 +83,14 @@ class PresetManagerDialog(QDialog):
         if item is None:
             return ""
         text = item.text()
-        suffix = f" ({self.tr.t('gui.label.default_preset_marker')})"
+        suffix = f" ({self.translator.t('gui.label.default_preset_marker')})"
         if text.endswith(suffix):
             return text[: -len(suffix)]
         return text
 
     def _update_info_label(self) -> None:
-        default_text = self.default_preset_name or self.tr.t("gui.label.none")
-        self.info_label.setText(self.tr.t("gui.label.default_preset", name=default_text))
+        default_text = self.default_preset_name or self.translator.t("gui.label.none")
+        self.info_label.setText(self.translator.t("gui.label.default_preset", name=default_text))
 
     def _request_load(self) -> None:
         name = self._selected_preset_name()
@@ -102,8 +102,8 @@ class PresetManagerDialog(QDialog):
     def _request_save(self) -> None:
         name, ok = QInputDialog.getText(
             self,
-            self.tr.t("gui.button.save_current_as_preset"),
-            self.tr.t("gui.message.enter_preset_name"),
+            self.translator.t("gui.button.save_current_as_preset"),
+            self.translator.t("gui.message.enter_preset_name"),
         )
         if not ok or not name.strip():
             return

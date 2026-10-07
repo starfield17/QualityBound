@@ -24,13 +24,13 @@ class PowerActionCountdownDialog(QDialog):
         parent=None,
     ) -> None:
         super().__init__(parent)
-        self.tr = tr
+        self.translator = tr
         self.action = action
         self.remaining_sec = timeout_sec
         self.total_sec = timeout_sec
 
-        self.setWindowTitle(self.tr.t("gui.power.title"))
-        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        self.setWindowTitle(self.translator.t("gui.power.title"))
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
         self.setModal(True)
         self.resize(440, 180)
 
@@ -49,7 +49,7 @@ class PowerActionCountdownDialog(QDialog):
         layout.setSpacing(14)
 
         self.message_label = QLabel()
-        self.message_label.setAlignment(Qt.AlignCenter)
+        self.message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.message_label.setWordWrap(True)
         font = self.message_label.font()
         font.setPointSize(font.pointSize() + 1)
@@ -64,9 +64,9 @@ class PowerActionCountdownDialog(QDialog):
         button_layout = QHBoxLayout()
         button_layout.setSpacing(12)
 
-        self.cancel_button = QPushButton(self.tr.t("gui.button.cancel"))
+        self.cancel_button = QPushButton(self.translator.t("gui.button.cancel"))
         self.cancel_button.setDefault(True)
-        self.execute_button = QPushButton(self.tr.t("gui.power.execute_now"))
+        self.execute_button = QPushButton(self.translator.t("gui.power.execute_now"))
 
         button_layout.addStretch(1)
         button_layout.addWidget(self.cancel_button)
@@ -82,9 +82,9 @@ class PowerActionCountdownDialog(QDialog):
         self._update_text()
 
     def _update_text(self) -> None:
-        action_name = self.tr.t(post_encode_action_key(self.action))
+        action_name = self.translator.t(post_encode_action_key(self.action))
         self.message_label.setText(
-            self.tr.t("gui.power.countdown_message", action=action_name, seconds=self.remaining_sec)
+            self.translator.t("gui.power.countdown_message", action=action_name, seconds=self.remaining_sec)
         )
         self.progress_bar.setValue(self.remaining_sec)
 

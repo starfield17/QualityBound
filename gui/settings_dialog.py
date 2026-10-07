@@ -41,7 +41,7 @@ class SettingsDialog(QDialog):
         languages: list[LanguageInfo] | None = None,
     ) -> None:
         super().__init__(parent)
-        self.tr = tr
+        self.translator = tr
         self.redetect_requested = False
         self._languages = languages or [
             LanguageInfo("en", "English"),
@@ -158,7 +158,7 @@ class SettingsDialog(QDialog):
         scroll.setWidget(body)
         root.addWidget(scroll)
 
-        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons = QHBoxLayout()
         buttons.setContentsMargins(12, 0, 12, 12)
         buttons.addWidget(self.button_box)
@@ -215,88 +215,88 @@ class SettingsDialog(QDialog):
         self.desktop_notifications_check.setChecked(bool(settings.get("desktop_notifications", True)))
 
     def apply_translations(self, tr: Translator) -> None:
-        self.tr = tr
-        self.setWindowTitle(self.tr.t("gui.window.settings"))
-        self.language_label.setText(self.tr.t("gui.label.language"))
-        self.workdir_label.setText(self.tr.t("gui.label.workdir"))
-        self.ffmpeg_label.setText(self.tr.t("gui.label.ffmpeg"))
-        self.ffprobe_label.setText(self.tr.t("gui.label.ffprobe"))
-        self.log_level_label.setText(self.tr.t("gui.label.log_level"))
-        self.encode_workers_label.setText(self.tr.t("gui.label.encode_workers"))
-        encode_workers_tooltip = self.tr.t("gui.tooltip.encode_workers")
+        self.translator = tr
+        self.setWindowTitle(self.translator.t("gui.window.settings"))
+        self.language_label.setText(self.translator.t("gui.label.language"))
+        self.workdir_label.setText(self.translator.t("gui.label.workdir"))
+        self.ffmpeg_label.setText(self.translator.t("gui.label.ffmpeg"))
+        self.ffprobe_label.setText(self.translator.t("gui.label.ffprobe"))
+        self.log_level_label.setText(self.translator.t("gui.label.log_level"))
+        self.encode_workers_label.setText(self.translator.t("gui.label.encode_workers"))
+        encode_workers_tooltip = self.translator.t("gui.tooltip.encode_workers")
         self.encode_workers_label.setToolTip(encode_workers_tooltip)
         self.encode_workers_spin.setToolTip(encode_workers_tooltip)
-        self.post_encode_label.setText(self.tr.t("gui.label.post_encode_action"))
-        self.desktop_notifications_check.setText(self.tr.t("gui.label.desktop_notifications"))
+        self.post_encode_label.setText(self.translator.t("gui.label.post_encode_action"))
+        self.desktop_notifications_check.setText(self.translator.t("gui.label.desktop_notifications"))
         for action in PostEncodeAction:
             idx = self.post_encode_combo.findData(action.value)
             if idx >= 0:
-                self.post_encode_combo.setItemText(idx, self.tr.t(post_encode_action_key(action)))
-        self.policy_group.setTitle(self.tr.t("gui.group.smart_policies"))
-        self.size_blocked_policy_label.setText(self.tr.t("gui.label.size_blocked_policy"))
-        self.quality_unreachable_policy_label.setText(self.tr.t("gui.label.quality_unreachable_policy"))
+                self.post_encode_combo.setItemText(idx, self.translator.t(post_encode_action_key(action)))
+        self.policy_group.setTitle(self.translator.t("gui.group.smart_policies"))
+        self.size_blocked_policy_label.setText(self.translator.t("gui.label.size_blocked_policy"))
+        self.quality_unreachable_policy_label.setText(self.translator.t("gui.label.quality_unreachable_policy"))
         self.size_blocked_policy_combo.setItemText(
             self.size_blocked_policy_combo.findData(SizeBlockedPolicy.RELAX_SIZE.value),
-            self.tr.t("gui.value.size_blocked_relax_size"),
+            self.translator.t("gui.value.size_blocked_relax_size"),
         )
         self.size_blocked_policy_combo.setItemText(
             self.size_blocked_policy_combo.findData(SizeBlockedPolicy.RELAX_QUALITY.value),
-            self.tr.t("gui.value.size_blocked_relax_quality"),
+            self.translator.t("gui.value.size_blocked_relax_quality"),
         )
         self.size_blocked_policy_combo.setItemText(
             self.size_blocked_policy_combo.findData(SizeBlockedPolicy.ASK.value),
-            self.tr.t("gui.value.size_blocked_ask"),
+            self.translator.t("gui.value.size_blocked_ask"),
         )
         self.quality_unreachable_policy_combo.setItemText(
             self.quality_unreachable_policy_combo.findData(QualityUnreachablePolicy.SKIP.value),
-            self.tr.t("gui.value.quality_unreachable_skip"),
+            self.translator.t("gui.value.quality_unreachable_skip"),
         )
         self.quality_unreachable_policy_combo.setItemText(
             self.quality_unreachable_policy_combo.findData(QualityUnreachablePolicy.ASK.value),
-            self.tr.t("gui.value.quality_unreachable_ask"),
+            self.translator.t("gui.value.quality_unreachable_ask"),
         )
-        self.skipped_output_policy_label.setText(self.tr.t("gui.label.skipped_output_policy"))
+        self.skipped_output_policy_label.setText(self.translator.t("gui.label.skipped_output_policy"))
         self.skipped_output_policy_combo.setItemText(
             self.skipped_output_policy_combo.findData(SkippedOutputPolicy.COPY.value),
-            self.tr.t("gui.value.skipped_output_copy"),
+            self.translator.t("gui.value.skipped_output_copy"),
         )
         self.skipped_output_policy_combo.setItemText(
             self.skipped_output_policy_combo.findData(SkippedOutputPolicy.ASK.value),
-            self.tr.t("gui.value.skipped_output_ask"),
+            self.translator.t("gui.value.skipped_output_ask"),
         )
         self.skipped_output_policy_combo.setItemText(
             self.skipped_output_policy_combo.findData(SkippedOutputPolicy.IGNORE.value),
-            self.tr.t("gui.value.skipped_output_ignore"),
+            self.translator.t("gui.value.skipped_output_ignore"),
         )
-        self.analysis_group.setTitle(self.tr.t("gui.group.analysis_scan"))
-        self.analysis_profile_label.setText(self.tr.t("gui.label.analysis_active_profile"))
+        self.analysis_group.setTitle(self.translator.t("gui.group.analysis_scan"))
+        self.analysis_profile_label.setText(self.translator.t("gui.label.analysis_active_profile"))
         self.analysis_profile_combo.setItemText(
             self.analysis_profile_combo.findData(AnalysisProfileName.FAST.value),
-            self.tr.t("gui.value.analysis_fast"),
+            self.translator.t("gui.value.analysis_fast"),
         )
         self.analysis_profile_combo.setItemText(
             self.analysis_profile_combo.findData(AnalysisProfileName.BALANCE.value),
-            self.tr.t("gui.value.analysis_balance"),
+            self.translator.t("gui.value.analysis_balance"),
         )
         self.analysis_profile_combo.setItemText(
             self.analysis_profile_combo.findData(AnalysisProfileName.PRECISE.value),
-            self.tr.t("gui.value.analysis_precise"),
+            self.translator.t("gui.value.analysis_precise"),
         )
-        self.workdir_button.setText(self.tr.t("gui.button.browse_dir"))
-        self.ffmpeg_button.setText(self.tr.t("gui.button.browse_exe"))
-        self.ffprobe_button.setText(self.tr.t("gui.button.browse_exe"))
-        self.redetect_button.setText(self.tr.t("gui.button.redetect_encoders"))
-        self.ffmpeg_edit.setPlaceholderText(self.tr.t("gui.placeholder.ffmpeg"))
-        self.ffprobe_edit.setPlaceholderText(self.tr.t("gui.placeholder.ffprobe"))
-        self.ffmpeg_edit.setToolTip(self.tr.t("gui.placeholder.ffmpeg"))
-        self.ffprobe_edit.setToolTip(self.tr.t("gui.placeholder.ffprobe"))
-        size_policy_tooltip = self.tr.t("gui.tooltip.size_blocked_policy")
+        self.workdir_button.setText(self.translator.t("gui.button.browse_dir"))
+        self.ffmpeg_button.setText(self.translator.t("gui.button.browse_exe"))
+        self.ffprobe_button.setText(self.translator.t("gui.button.browse_exe"))
+        self.redetect_button.setText(self.translator.t("gui.button.redetect_encoders"))
+        self.ffmpeg_edit.setPlaceholderText(self.translator.t("gui.placeholder.ffmpeg"))
+        self.ffprobe_edit.setPlaceholderText(self.translator.t("gui.placeholder.ffprobe"))
+        self.ffmpeg_edit.setToolTip(self.translator.t("gui.placeholder.ffmpeg"))
+        self.ffprobe_edit.setToolTip(self.translator.t("gui.placeholder.ffprobe"))
+        size_policy_tooltip = self.translator.t("gui.tooltip.size_blocked_policy")
         self.size_blocked_policy_label.setToolTip(size_policy_tooltip)
         self.size_blocked_policy_combo.setToolTip(size_policy_tooltip)
-        skipped_policy_tooltip = self.tr.t("gui.tooltip.skipped_output_policy")
+        skipped_policy_tooltip = self.translator.t("gui.tooltip.skipped_output_policy")
         self.skipped_output_policy_label.setToolTip(skipped_policy_tooltip)
         self.skipped_output_policy_combo.setToolTip(skipped_policy_tooltip)
-        self.analysis_profile_combo.setToolTip(self.tr.t("gui.tooltip.analysis_profile"))
+        self.analysis_profile_combo.setToolTip(self.translator.t("gui.tooltip.analysis_profile"))
 
     def values(self) -> dict[str, object]:
         return {
@@ -320,17 +320,17 @@ class SettingsDialog(QDialog):
         }
 
     def _browse_workdir(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, self.tr.t("gui.dialog.select_workdir"))
+        path = QFileDialog.getExistingDirectory(self, self.translator.t("gui.dialog.select_workdir"))
         if path:
             self.workdir_edit.setText(path)
 
     def _browse_ffmpeg(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, self.tr.t("gui.dialog.select_ffmpeg"))
+        path, _ = QFileDialog.getOpenFileName(self, self.translator.t("gui.dialog.select_ffmpeg"))
         if path:
             self.ffmpeg_edit.setText(path)
 
     def _browse_ffprobe(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, self.tr.t("gui.dialog.select_ffprobe"))
+        path, _ = QFileDialog.getOpenFileName(self, self.translator.t("gui.dialog.select_ffprobe"))
         if path:
             self.ffprobe_edit.setText(path)
 

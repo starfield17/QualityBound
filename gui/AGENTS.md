@@ -63,9 +63,14 @@ interaction and platform notification delivery. QueueManager decides when a run
 has completed; MainWindow resolves that run's IDs and delegates completion work
 to QueueCompletionHandler. UI construction remains in same-class builder methods.
 
-Pyright covers queue state/actions/model/manager, GUI workers and completion
-handling. QueueTableModel stores its application translator as `translator`,
-leaving Qt's `tr()` method intact.
+Pyright covers `core`, `cli`, `main.py` and every module under `gui`; the scope
+lives in `pyproject.toml`. Two GUI conventions exist because Pyright rejects the
+alternatives: each widget stores its application translator as
+`self.translator` (`QObject.tr()` is Qt's own translation method, so assigning to
+`self.tr` shadows it and leaves the attribute untyped), and PySide6 enums are
+accessed through their scoped enum (`Qt.ContextMenuPolicy.CustomContextMenu`,
+`QMessageBox.StandardButton.Yes`, `QStyle.StandardPixmap.SP_FileIcon`), which is
+the form the PySide6 stubs declare.
 
 ## Canonical checks
 

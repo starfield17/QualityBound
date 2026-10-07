@@ -22,7 +22,7 @@ from gui.window_geometry import clamped_window_size
 class ActivityLogWindow(QMainWindow):
     def __init__(self, tr: Translator, parent=None) -> None:
         super().__init__(parent)
-        self.tr = tr
+        self.translator = tr
         self.entries: list[tuple[str, str]] = []
         self._pending_entries: list[tuple[str, str]] = []
         self._flush_interval_ms = 75
@@ -70,15 +70,15 @@ class ActivityLogWindow(QMainWindow):
         self.export_button.clicked.connect(self._export_logs)
 
     def apply_translations(self, tr: Translator) -> None:
-        self.tr = tr
-        self.setWindowTitle(self.tr.t("gui.window.activity_log"))
-        self.filter_label.setText(self.tr.t("gui.label.log_filter"))
-        self.filter_combo.setItemText(0, self.tr.t("gui.filter.all"))
-        self.filter_combo.setItemText(1, self.tr.t("gui.filter.command"))
-        self.filter_combo.setItemText(2, self.tr.t("gui.filter.process"))
-        self.filter_combo.setItemText(3, self.tr.t("gui.filter.error"))
-        self.export_button.setText(self.tr.t("gui.button.export_log"))
-        self.clear_button.setText(self.tr.t("gui.button.clear_log"))
+        self.translator = tr
+        self.setWindowTitle(self.translator.t("gui.window.activity_log"))
+        self.filter_label.setText(self.translator.t("gui.label.log_filter"))
+        self.filter_combo.setItemText(0, self.translator.t("gui.filter.all"))
+        self.filter_combo.setItemText(1, self.translator.t("gui.filter.command"))
+        self.filter_combo.setItemText(2, self.translator.t("gui.filter.process"))
+        self.filter_combo.setItemText(3, self.translator.t("gui.filter.error"))
+        self.export_button.setText(self.translator.t("gui.button.export_log"))
+        self.clear_button.setText(self.translator.t("gui.button.clear_log"))
 
     def _classify_message(self, message: str) -> str:
         if message.startswith("$ "):
@@ -138,7 +138,7 @@ class ActivityLogWindow(QMainWindow):
     def _export_logs(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self,
-            self.tr.t("gui.dialog.export_log"),
+            self.translator.t("gui.dialog.export_log"),
             str(Path.home() / "qualitybound.log"),
             "Log Files (*.log *.txt);;All Files (*)",
         )
