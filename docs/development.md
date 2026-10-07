@@ -57,13 +57,87 @@ Architecture checks can be run separately:
 python -m unittest discover -s test -p "test_architecture.py" -v
 ```
 
+## Deferred check work
+
+Three known gaps are left open on purpose. None of them blocks a release. Each is
+recorded with the measurement that produced it, so it can be picked up without
+re-running the audit.
+
+### Strict-mode inference debt at the dict and JSON boundaries
+
+`pyproject.toml` turns off six strict rules: `reportMissingTypeArgument`,
+`reportUnknownArgumentType`, `reportUnknownLambdaType`, `reportUnknownMemberType`,
+`reportUnknownParameterType`, `reportUnknownVariableType`. Measured over the current
+scope (`core`, `cli`, `gui`, `main.py`) they hold back 434 diagnostics: 312 in
+`core`, 112 in `gui`, 10 in `cli`. The dominant pattern is capability snapshots,
+preset documents and analysis receipts travelling as `dict[str, object]` or
+JSON-decoded mappings, so the checker cannot name the types that flow through them.
+
+Closing it means naming those boundaries inside `core` — a `TypedDict` or dataclass
+per receipt kind, capability snapshot and preset document — and letting the adapters
+build them. A restructuring of that size needs its own diff and independent review,
+so it was not folded into the strict-mode adoption.
+
+Re-measure the residue with a throwaway config that copies the `include`/`exclude`
+lists from `pyproject.toml` and sets those six rules to `"warning"`, then read the
+summary:
+
+```bash
+python -m pyright -p .debt-probe.json --outputjson \
+  | python -c "import json,sys; print(json.load(sys.stdin)['summary'])"
+```
+
+The annotations added for the strict adoption (`gui/qt_optionals.maybe_none`,
+`QueueTableModel._transient_index`, `core.smart.bitrate._SharedSearchResultFields`,
+the `__all__` lists in `core/encoding`) are not suppressions. They stay checked by
+the remaining strict rules, and the `__all__` lists keep working after the six rules
+come back on.
+
+### Unreferenced worker classes in `gui/gui_workers.py`
+
+Two of the four are never instantiated anywhere in `gui/`, `cli/`, `core/`, `scripts/`
+or `test/`:
+
+- `EncodeWorker` — full-queue encoding is driven by `gui/queue_manager.py` calling
+  `core.encoding.execute_plan_concurrent`. The class survives only in the import at
+  `gui/gui_mainwindow.py:74` and in the `PlanWorker | EncodeWorker` annotation of
+  `_start_worker` (`gui/gui_mainwindow.py:997`), which is called only with
+  `PlanWorker`.
+- `ScanWorker` — no references at all.
+
+Deleting them is a live-code decision rather than a lint fix: `EncodeWorker` still
+carries a single-file cancel-and-terminate path (`threading.Event` plus the recorded
+`Popen`) that the queue runner has no equivalent of, so the question is whether that
+capability is worth keeping around unused. `ScanWorker` has no such argument. The
+mechanical part is: delete the classes, drop the import, and narrow the
+`_start_worker` annotation to `PlanWorker`. Note that `_start_worker` guards `log`, `progress` and
+`cancelled` with `hasattr`, so a future worker without those signals still type-checks
+while `reportUnknown*` stays off.
+
+### `scripts/` is outside the type-check scope
+
+`pyproject.toml` includes `core`, `cli`, `gui` and `main.py`. Adding `scripts`
+analyses 8 files and reports 9 findings in basic mode over 3 of them:
+
+- `scripts/build_icons.py` — the Pillow `save(format=...)` overload rejects
+  `Literal["PNG"]`, and a `QByteArray` is passed where `Iterable[SupportsRead]`
+  is expected (the Qt form is `bytes(state.toBase64().data())`);
+- `scripts/prepare_ffmpeg.py` — two `IO[bytes]` arguments against `BinaryIO`
+  parameters, and one iteration over a value typed `object`;
+- `scripts/run_smart_case.py` — two optional values (`bool | None`, `int | None`)
+  passed to non-optional parameters.
+
+These are development and packaging tools, not application payload, so the scope
+choice is a cost decision rather than a safety one. CI still executes them on every
+quality gate.
+
 ## Packaging
 
 Install build requirements and create a native package on the current platform:
 
 ```bash
 python -m pip install -r requirements-build.txt
-python scripts/build_nuitka.py --clean --version 4.0.0
+python scripts/build_nuitka.py --clean --version 3.1.1
 ```
 
 The normalized standalone directory is `dist/qualitybound/`. A native macOS app

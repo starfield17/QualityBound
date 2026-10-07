@@ -31,7 +31,7 @@ and Smart/Fixed control syncing.
   `analysis_profile_changed`, `options_changed`.
 - `MainWindow` must not reach into the panel's raw widgets; tests that need widget
   state access them via `window.options_panel.<widget>`.
-- The panel renders the capability snapshot produced by `CapabilityWorker`.
+- The panel renders the capability snapshot produced by `EncoderCapabilityDetectWorker`.
   Encoder entries include `preset_choices`; never run FFmpeg discovery or encoder
   probing synchronously from a widget refresh path.
 
@@ -46,6 +46,10 @@ and Smart/Fixed control syncing.
 - `gui.queue_view` — `ResponsiveQueueTableView`, header resize modes, reflow, and the
   `create_queue_view()` factory. May use `gui.queue_model`'s column definitions.
 - `gui.queue_manager` — Qt worker/thread orchestration over the model.
+- `gui.gui_workers` — the one-shot threads `MainWindow` starts directly: `PlanWorker`
+  and `EncoderCapabilityDetectWorker`. `ScanWorker` and `EncodeWorker` are not
+  instantiated anywhere; see `docs/development.md` (Deferred check work) before
+  removing or re-wiring them.
 - `gui.queue_completion` — skipped-source publishing, reports, notifications and
   confirmed post-run actions. `QueueCompletionHandler.handle(records, translator,
   config)` receives only the completed run's records and current settings.
