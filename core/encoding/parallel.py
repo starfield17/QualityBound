@@ -115,6 +115,12 @@ def execute_plan_concurrent(
         constraint_policy=constraint_policy,
     )
     if pause_check is not None and pause_check():
+        if log_callback is not None:
+            log_callback("Concurrent encode execution paused after analysis.")
+        if progress_callback is not None:
+            progress_callback(
+                {"stage": "encode", "state": "paused", "parallel": False, "percent": None}
+            )
         return [result for result in results if result is not None]
 
     pending = deque((index, item) for index, item in enumerate(items) if results[index] is None)
@@ -172,18 +178,21 @@ def execute_plan_concurrent(
                 stop_event.set()
                 return
 
-    if log_callback is not None:
-        log_callback(f"Encode phase started with {worker_count} concurrent worker(s).")
-    if progress_callback is not None:
-        progress_callback(
-            {
-                "stage": "encode",
-                "state": "started",
-                "parallel": worker_count > 1,
-                "worker_count": worker_count,
-                "percent": 0.0,
-            }
-        )
+    if worker_count > 0:
+        if log_callback is not None:
+            log_callback(f"Encode phase started with {worker_count} concurrent worker(s).")
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "stage": "encode",
+                    "state": "started",
+                    "parallel": worker_count > 1,
+                    "worker_count": worker_count,
+                    "percent": 0.0,
+                }
+            )
+    elif log_callback is not None:
+        log_callback("Encode phase has no pending items left to encode.")
 
     threads = [
         threading.Thread(target=worker, args=(f"encode-{index + 1}",), daemon=True)

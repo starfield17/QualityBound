@@ -298,6 +298,8 @@ def execute_plan(
         constraint_policy=constraint_policy,
     )
     if pause_check is not None and pause_check():
+        _emit(log_callback, "Encode execution paused after analysis.")
+        _emit_progress(progress_callback, stage="encode", state="paused", percent=None)
         return [result for result in results if result is not None]
 
     _emit(log_callback, "Encode phase started.")

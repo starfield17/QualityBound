@@ -27,6 +27,8 @@ def build_input_acceleration_args(plan_item: EncodePlanItem) -> list[str]:
 def build_video_args(
     plan_item: EncodePlanItem,
     extra_args: Sequence[str] = (),
+    *,
+    muxing_to_null: bool = False,
 ) -> list[str]:
     if plan_item.encoder_info is None:
         raise ValueError("Encoding requires a bound encoder.")
@@ -54,8 +56,9 @@ def build_video_args(
     if plan_item.options.encoder_preset:
         args += ["-preset", str(plan_item.options.encoder_preset)]
 
-    if encoder in {"libx265", "hevc_videotoolbox"}:
-        # hvc1 tag is required for Apple QuickTime / macOS Finder playback.
+    if encoder in {"libx265", "hevc_videotoolbox"} and not muxing_to_null:
+        # hvc1 tag is required for Apple QuickTime / macOS Finder playback, and
+        # is only meaningful on the muxed output (not the null-muxer pass 1).
         args += ["-tag:v", "hvc1"]
 
     if encoder == "libx265":
@@ -129,10 +132,15 @@ def build_encode_commands(
 
     if plan_item.options.two_pass and plan_item.encoder_info.supports_two_pass:
         passlog = passlog_prefix(workdir, plan_item.source_path, stage)
+        pass1_video_args = build_video_args(
+            plan_item,
+            extra_args=extra_video_args,
+            muxing_to_null=True,
+        )
         pass1 = (
             base_input
             + ["-map", "0:v:0"]
-            + video_args
+            + pass1_video_args
             + ["-an", "-sn", "-dn", "-pass", "1", "-passlogfile", str(passlog), "-f", "null", _null_sink()]
         )
         pass2 = (

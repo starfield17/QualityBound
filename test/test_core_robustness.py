@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from core.config.store import app_config_path, load_app_config, update_app_config
 from core.encoding.executor import execute_plan_item
+from core.ffmpeg.commands import build_encode_commands
 from core.ffmpeg.probe import _run_command
 from core.media.discovery import collect_video_files
 from core.media.subtitles import discover_external_subtitles
@@ -20,7 +21,9 @@ from core.models import (
     CodecChoice,
     CompressionMode,
     EncodeOptions,
+    EncodePlan,
     EncodePlanItem,
+    EncodeResult,
     EncoderInfo,
     MediaInfo,
     OperationCancelledError,
@@ -281,6 +284,119 @@ class SystemPowerCommandTestCase(unittest.TestCase):
 
             _run_single_command(["cmd"])
         self.assertEqual(run.call_args.kwargs.get("stdin"), subprocess.DEVNULL)
+
+
+class ProcessPipeCleanupTestCase(unittest.TestCase):
+    def test_cancelled_run_closes_child_pipes(self) -> None:
+        from core.encoding.process import _run_logged_command
+
+        captured: list[object] = []
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "log.txt"
+            with self.assertRaises(OperationCancelledError):
+                _run_logged_command(
+                    [sys.executable, "-c", "print('line', flush=True); import time; time.sleep(30)"],
+                    log_path,
+                    cancel_check=lambda: True,
+                    process_callback=captured.append,
+                )
+        proc = captured[0]
+        assert isinstance(proc, subprocess.Popen)
+        self.assertTrue(proc.stdout.closed)
+        self.assertTrue(proc.stdin.closed)
+
+
+class TwoPassCommandTestCase(unittest.TestCase):
+    def test_null_muxer_pass_omits_the_hvc1_tag(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source.mov"
+            source.write_bytes(b"v")
+            item = EncodePlanItem(
+                source_path=source,
+                output_path=root / "out.mp4",
+                media_info=None,
+                encoder_info=EncoderInfo(
+                    codec=CodecChoice.HEVC,
+                    backend=BackendChoice.CPU,
+                    encoder_name="libx265",
+                    supports_two_pass=True,
+                    default_preset="slow",
+                ),
+                options=EncodeOptions(two_pass=True, overwrite=True),
+                target_video_bitrate_bps=1_000_000,
+            )
+
+            commands, _ = build_encode_commands(Path("ffmpeg"), item, root)
+
+            self.assertEqual(len(commands), 2)
+            self.assertNotIn("-tag:v", commands[0])
+            self.assertIn("-tag:v", commands[1])
+            self.assertIn("null", commands[0])
+
+
+class EncodePhaseEventTestCase(unittest.TestCase):
+    def _plan(self, folder: Path) -> EncodePlan:
+        source = folder / "clip.mkv"
+        source.write_bytes(b"v")
+        item = EncodePlanItem(
+            source_path=source,
+            output_path=folder / "clip.mp4",
+            media_info=None,
+            encoder_info=None,
+            options=EncodeOptions(),
+            skip_reason="planned skip",
+        )
+        return EncodePlan(
+            items=[item],
+            ffmpeg_path=Path("ffmpeg"),
+            ffprobe_path=Path("ffprobe"),
+            input_root=folder,
+            output_root=folder,
+        )
+
+    def test_serial_pause_after_analysis_emits_a_paused_event(self) -> None:
+        from core.encoding.executor import execute_plan
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            events: list[dict[str, object]] = []
+            with patch("core.encoding.executor.run_analysis_phase", return_value=[None]):
+                results = execute_plan(
+                    self._plan(folder),
+                    folder,
+                    progress_callback=events.append,
+                    pause_check=lambda: True,
+                )
+            self.assertEqual(results, [])
+            self.assertTrue(any(event.get("state") == "paused" for event in events))
+
+    def test_concurrent_with_no_pending_items_omits_zero_worker_start(self) -> None:
+        from core.encoding.parallel import execute_plan_concurrent
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            plan = self._plan(folder)
+            item = plan.items[0]
+            finished = EncodeResult(
+                source_path=item.source_path,
+                output_path=item.output_path,
+                success=True,
+            )
+            logs: list[str] = []
+            events: list[dict[str, object]] = []
+            with patch("core.encoding.parallel.run_analysis_phase", return_value=[finished]):
+                results = execute_plan_concurrent(
+                    plan,
+                    folder,
+                    max_workers=2,
+                    log_callback=logs.append,
+                    progress_callback=events.append,
+                )
+            self.assertEqual(len(results), 1)
+            self.assertFalse(any(event.get("state") == "started" for event in events))
+            self.assertTrue(any("no pending items" in message for message in logs))
+            self.assertTrue(any(event.get("state") == "finished" for event in events))
 
 
 if __name__ == "__main__":

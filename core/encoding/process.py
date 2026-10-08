@@ -66,6 +66,18 @@ def _cancel_process(proc: subprocess.Popen[str]) -> None:
     terminate_process(proc)
 
 
+def _close_process_pipes(proc: subprocess.Popen[str]) -> None:
+    # Close the streams we opened so long sessions do not accumulate handles
+    # when a run was cancelled before Python's GC got to them.
+    for stream in (proc.stdout, proc.stdin):
+        if stream is None:
+            continue
+        try:
+            stream.close()
+        except OSError:
+            pass
+
+
 def _cancel_requested(cancel_check: Callable[[], bool] | None) -> bool:
     return cancel_check is not None and cancel_check()
 
@@ -207,6 +219,7 @@ def _run_logged_command(
         finally:
             if process_callback is not None:
                 process_callback(None)
+            _close_process_pipes(proc)
     stdout_text = "".join(output_chunks)
     if _cancel_requested(cancel_check):
         raise OperationCancelledError("Operation cancelled.")
