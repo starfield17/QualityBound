@@ -31,8 +31,13 @@ def discover_external_subtitles(source_path: Path) -> list[Path]:
     # (movie.en.srt for movie.mkv). Sorted case-insensitively for stable order.
     source_path = source_path.resolve()
     prefix = source_path.stem
+    try:
+        entries = sorted(source_path.parent.iterdir(), key=lambda item: item.name.lower())
+    except OSError:
+        # An unreadable source directory must not fail an otherwise good encode.
+        return []
     matches: list[Path] = []
-    for candidate in sorted(source_path.parent.iterdir(), key=lambda item: item.name.lower()):
+    for candidate in entries:
         if not is_external_subtitle_file(candidate):
             continue
         if candidate.stem == prefix or candidate.name.startswith(prefix + "."):

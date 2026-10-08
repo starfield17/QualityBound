@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import uuid
 from pathlib import Path
 from threading import RLock
 from typing import Any, Callable
@@ -176,11 +178,26 @@ def load_preset(name: str, config_dir: Path) -> EncodeOptions:
     return preset_data_to_encode_options(data)
 
 
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Write ``text`` so a crash never leaves a half-written file behind."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with temporary.open("w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def save_preset(name: str, options: EncodeOptions, config_dir: Path) -> Path:
     path = _preset_path(name, config_dir)
     data = encode_options_to_preset_data(options)
     validate_preset_schema(data)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    _atomic_write_text(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
     return path
 
 
@@ -253,7 +270,18 @@ def smart_policies_from_config(
 
 def _load_app_config_unlocked(config_dir: Path) -> dict[str, Any]:
     path = app_config_path(config_dir)
-    data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    data: Any = {}
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            # A truncated or hand-edited config must not brick startup. Keep
+            # the unreadable file for inspection and fall back to defaults.
+            try:
+                path.replace(path.with_name(path.name + ".corrupt"))
+            except OSError:
+                pass
+            data = {}
     if not isinstance(data, dict):
         data = {}
     defaults = _default_app_config()
@@ -264,7 +292,7 @@ def _load_app_config_unlocked(config_dir: Path) -> dict[str, Any]:
 
 def _save_app_config_unlocked(config_dir: Path, data: dict[str, Any]) -> Path:
     path = app_config_path(config_dir)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    _atomic_write_text(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
     return path
 
 

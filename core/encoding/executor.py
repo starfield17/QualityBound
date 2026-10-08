@@ -78,8 +78,9 @@ def execute_plan_item(
     commands: list[list[str]] = []
     total_passes = 1
     current_pass_index = 1
+    smart_mode = item.options.compression_mode == CompressionMode.SMART
     try:
-        if item.options.compression_mode == CompressionMode.SMART:
+        if smart_mode:
             if smart_analysis_validated:
                 quality_result = item.quality_search_result
                 if quality_result is None or not quality_result.success:
@@ -108,11 +109,14 @@ def execute_plan_item(
                 item.options.codec,
                 item.options.max_output_ratio,
             )
-            temporary_output = item.output_path.parent / (
-                f".{item.output_path.stem}.smart-{uuid.uuid4().hex}{item.output_path.suffix}"
-            )
 
         item.output_path.parent.mkdir(parents=True, exist_ok=True)
+        # Every mode encodes into a temporary file and publishes it only after
+        # the command succeeds, so a failed or cancelled run never leaves a
+        # partial file at the destination (and cannot block a retry).
+        temporary_output = item.output_path.parent / (
+            f".{item.output_path.stem}.partial-{uuid.uuid4().hex}{item.output_path.suffix}"
+        )
         commands, passlog = build_encode_commands(
             ffmpeg_path,
             item,
@@ -158,7 +162,7 @@ def execute_plan_item(
                     "total_passes": total_passes,
                 },
             )
-        if temporary_output is not None:
+        if smart_mode:
             if result.quality_search_result is not None:
                 _assert_quality_encoder_matches_item(item, result.quality_search_result)
             _emit_progress(
@@ -197,12 +201,12 @@ def execute_plan_item(
                     **base_context,
                 )
                 return result
-            if item.output_path.exists() and not item.options.overwrite:
-                raise FileExistsError(
-                    f"Output appeared during encoding and overwrite is disabled: {item.output_path}"
-                )
-            os.replace(temporary_output, item.output_path)
-            temporary_output = None
+        if item.output_path.exists() and not item.options.overwrite:
+            raise FileExistsError(
+                f"Output appeared during encoding and overwrite is disabled: {item.output_path}"
+            )
+        os.replace(temporary_output, item.output_path)
+        temporary_output = None
         _copy_external_subtitles_for_result(item, result, queue_index, queue_total, log_callback)
         _emit(log_callback, f"[{queue_index}/{queue_total}] Finished {item.source_path.name}")
         _emit_progress(

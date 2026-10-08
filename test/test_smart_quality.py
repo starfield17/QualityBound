@@ -774,7 +774,7 @@ class SmartExecutionSafetyTestCase(unittest.TestCase):
             self.assertEqual(result.effective_min_vmaf, options.min_vmaf)
             self.assertEqual(result.effective_max_output_ratio, 0.70)
             self.assertEqual(output.read_bytes(), b"original")
-            self.assertFalse(list(root.glob(".*.smart-*")))
+            self.assertFalse(list(root.glob(".*.partial-*")))
 
     def test_late_existing_target_is_preserved_without_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -801,7 +801,7 @@ class SmartExecutionSafetyTestCase(unittest.TestCase):
             self.assertFalse(result.success)
             self.assertFalse(result.skipped)
             self.assertEqual(output.read_bytes(), b"existing")
-            self.assertFalse(list(root.glob(".*.smart-*")))
+            self.assertFalse(list(root.glob(".*.partial-*")))
 
 
 class SmartParallelExecutionTestCase(unittest.TestCase):
@@ -1025,7 +1025,7 @@ class SmartParallelExecutionTestCase(unittest.TestCase):
                 self.assertRaises(OperationCancelledError),
             ):
                 execute_plan_item(Path("ffmpeg"), item, root)
-            self.assertFalse(list(root.glob(".*.smart-*")))
+            self.assertFalse(list(root.glob(".*.partial-*")))
 
 
 class SmartGuiTestCase(unittest.TestCase):
