@@ -373,6 +373,84 @@ class QueueTableModel(QAbstractTableModel):
         self.endInsertRows()
         self._emit_metrics_changed()
 
+    def can_sort(self) -> bool:
+        """Return whether reordering the records is safe right now.
+
+        Workers update records by item id, but the run order for not-yet-started
+        items follows the record order, so a sort is only allowed while no item
+        is active.
+        """
+
+        return not any(record.status in ACTIVE_ITEM_STATUSES for record in self._records)
+
+    def sort(self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder) -> None:
+        if not self._records or not self.can_sort():
+            return
+        try:
+            queue_column = QueueColumn(column)
+        except ValueError:
+            return
+        self.beginResetModel()
+        self._records.sort(
+            key=self._sort_key(queue_column),
+            reverse=order == Qt.SortOrder.DescendingOrder,
+        )
+        self.endResetModel()
+
+    def _sort_key(self, column: QueueColumn) -> Callable[[QueueItemRecord], tuple[object, ...]]:
+        if column == QueueColumn.NAME:
+            return lambda record: (record.source_path.name.casefold(),)
+        if column == QueueColumn.FOLDER:
+            return lambda record: (str(record.source_path.parent).casefold(),)
+        if column == QueueColumn.RESOLUTION:
+            return lambda record: (
+                (record.media_info.width or 0, record.media_info.height or 0)
+                if record.media_info is not None
+                else (0, 0)
+            )
+        if column == QueueColumn.DURATION:
+            return lambda record: (record.duration_sec,)
+        if column == QueueColumn.SOURCE_BITRATE:
+            return lambda record: (
+                record.media_info.format_bitrate_bps if record.media_info is not None else 0,
+            )
+        if column == QueueColumn.TARGET_BITRATE:
+            return lambda record: (record.plan_item.target_video_bitrate_bps,)
+        if column == QueueColumn.QUALITY:
+            def quality_key(record: QueueItemRecord) -> tuple[object, ...]:
+                segmented = record.plan_item.segmented_analysis_result
+                if segmented is not None:
+                    mean = (
+                        segmented.final_mean_vmaf
+                        if segmented.final_mean_vmaf is not None
+                        else segmented.predicted_mean_vmaf
+                    )
+                    if mean is not None:
+                        return (float(mean),)
+                quality = record.plan_item.quality_search_result
+                if quality is not None and quality.min_vmaf is not None:
+                    return (float(quality.min_vmaf),)
+                return (-1.0,)
+
+            return quality_key
+        if column == QueueColumn.ENCODER:
+            return lambda record: (
+                record.plan_item.encoder_info.encoder_name.casefold()
+                if record.plan_item.encoder_info is not None
+                else "",
+            )
+        if column == QueueColumn.OUTPUT:
+            return lambda record: (record.output_path.name.casefold(),)
+        if column == QueueColumn.TAGS:
+            return lambda record: (
+                " ".join(build_tags(record, self.translator)).casefold(),
+            )
+        if column == QueueColumn.STATUS:
+            return lambda record: (record.status.value,)
+        if column == QueueColumn.PROGRESS:
+            return lambda record: (record.file_progress,)
+        return lambda record: (0,)
+
     def remove_rows_by_index(self, rows: list[int]) -> int:
         targets = sorted({row for row in rows if 0 <= row < len(self._records)}, reverse=True)
         removed = 0

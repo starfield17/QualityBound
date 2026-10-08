@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from core.i18n import TranslationCatalog
@@ -26,8 +27,9 @@ from gui.queue_actions import (
     apply_output_dir_to_record,
     can_edit_record,
 )
-from gui.queue_model import QueueTableModel
+from gui.queue_model import QueueColumn, QueueTableModel
 from gui.queue_state import QueueItemRecord, QueueItemStatus, QueueJobSnapshot
+from gui.queue_view import create_queue_view
 
 
 def _get_qapp():
@@ -248,6 +250,43 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
         colliding.plan_item.output_path = planned.output_path
         with self.assertRaisesRegex(RuntimeError, "collision"):
             model.add_records([colliding])
+
+    def test_sort_reorders_by_column_and_toggles_direction(self) -> None:
+        model = QueueTableModel(self.tr)
+        model.add_records([self._record("b"), self._record("a"), self._record("c")])
+        self.assertTrue(model.can_sort())
+
+        model.sort(int(QueueColumn.NAME), Qt.SortOrder.AscendingOrder)
+        self.assertEqual(
+            [model.record_for_row(row).source_path.name for row in range(3)],
+            ["a.mov", "b.mov", "c.mov"],
+        )
+
+        model.sort(int(QueueColumn.NAME), Qt.SortOrder.DescendingOrder)
+        self.assertEqual(
+            [model.record_for_row(row).source_path.name for row in range(3)],
+            ["c.mov", "b.mov", "a.mov"],
+        )
+
+    def test_sort_is_ignored_while_an_item_is_active(self) -> None:
+        model = QueueTableModel(self.tr)
+        model.add_records([self._record("b"), self._record("a", QueueItemStatus.ENCODING)])
+        self.assertFalse(model.can_sort())
+
+        model.sort(int(QueueColumn.NAME), Qt.SortOrder.AscendingOrder)
+        self.assertEqual(model.record_for_row(0).source_path.name, "b.mov")
+
+    def test_header_click_sorts_the_model(self) -> None:
+        model = QueueTableModel(self.tr)
+        model.add_records([self._record("b"), self._record("a")])
+        view = create_queue_view()
+        self.addCleanup(view.deleteLater)
+        view.setModel(model)
+
+        view.horizontalHeader().sectionClicked.emit(int(QueueColumn.NAME))
+
+        self.assertEqual(model.record_for_row(0).source_path.name, "a.mov")
+        self.assertEqual(view.horizontalHeader().sortIndicatorSection(), int(QueueColumn.NAME))
 
     def test_codec_change_rebinds_encoder_and_clears_smart_result(self) -> None:
         rec = self._record("switch", QueueItemStatus.WAITING_ANALYSIS)

@@ -71,7 +71,7 @@ from gui.constraint_decision_dialog import (
     choose_size_miss_decision,
 )
 from gui.encode_options_panel import EncodeOptionsPanel
-from gui.gui_workers import EncodeWorker, EncoderCapabilityDetectWorker, PlanWorker
+from gui.gui_workers import EncoderCapabilityDetectWorker, PlanWorker
 from gui.preset_manager_dialog import PresetManagerDialog
 from gui.qt_optionals import maybe_none
 from gui.queue_completion import QueueCompletionHandler
@@ -1055,19 +1055,16 @@ class MainWindow(QMainWindow):
 
     def _start_worker(
         self,
-        worker: PlanWorker | EncodeWorker,
+        worker: PlanWorker,
         completed_slot: Callable[..., object],
     ) -> None:
         self.active_worker = worker
         self._refresh_action_state()
-        if hasattr(worker, "log"):
-            worker.log.connect(self._append_log)
-        if hasattr(worker, "progress"):
-            worker.progress.connect(self._update_progress)
+        worker.log.connect(self._append_log)
+        worker.progress.connect(self._update_progress)
         worker.finished.connect(lambda: self._set_worker_busy(False))
         worker.failed.connect(self._on_worker_failed)
-        if hasattr(worker, "cancelled"):
-            worker.cancelled.connect(self._on_worker_cancelled)
+        worker.cancelled.connect(self._on_worker_cancelled)
         worker.completed.connect(completed_slot)
         worker.start()
 

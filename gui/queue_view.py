@@ -4,7 +4,7 @@ from PySide6.QtCore import QAbstractItemModel, QEvent, QObject, Qt, QTimer, Sign
 from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent, QResizeEvent, QShowEvent
 from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableView, QWidget
 
-from gui.queue_model import FLEX_COLUMN_SPECS, FIXED_COLUMN_WIDTHS, QueueColumn
+from gui.queue_model import FLEX_COLUMN_SPECS, FIXED_COLUMN_WIDTHS, QueueColumn, QueueTableModel
 from gui.qt_optionals import maybe_none
 
 
@@ -32,6 +32,7 @@ class ResponsiveQueueTableView(QTableView):
         header = self.horizontalHeader()
         header.sectionMoved.connect(self.schedule_reflow)
         header.sectionResized.connect(self._on_header_section_resized)
+        header.sectionClicked.connect(self._on_header_clicked)
 
     def setModel(self, model: QAbstractItemModel | None) -> None:
         # QAbstractItemView.model() is declared as non-null but returns None before
@@ -143,6 +144,25 @@ class ResponsiveQueueTableView(QTableView):
         if _logical_index in {int(column) for column in FLEX_COLUMN_SPECS}:
             self._manual_flex_widths[_logical_index] = max(_new_size, flex_minimum_width(_logical_index))
         self.schedule_reflow()
+
+    def _on_header_clicked(self, section: int) -> None:
+        # Sorting is opt-in: the first click fixes an order, the second reverses
+        # it, and the model refuses to reorder while a run is active.
+        model = maybe_none(self.model())
+        if not isinstance(model, QueueTableModel) or not model.can_sort():
+            return
+        header = maybe_none(self.horizontalHeader())
+        if header is None:
+            return
+        order = Qt.SortOrder.AscendingOrder
+        if (
+            header.sortIndicatorSection() == section
+            and header.sortIndicatorOrder() == Qt.SortOrder.AscendingOrder
+        ):
+            order = Qt.SortOrder.DescendingOrder
+        model.sort(section, order)
+        header.setSortIndicator(section, order)
+        header.setSortIndicatorShown(True)
 
     def _apply_reflow(self) -> None:
         self._reflow_scheduled = False

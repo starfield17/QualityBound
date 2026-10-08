@@ -46,10 +46,8 @@ and Smart/Fixed control syncing.
 - `gui.queue_view` — `ResponsiveQueueTableView`, header resize modes, reflow, and the
   `create_queue_view()` factory. May use `gui.queue_model`'s column definitions.
 - `gui.queue_manager` — Qt worker/thread orchestration over the model.
-- `gui.gui_workers` — the one-shot threads `MainWindow` starts directly: `PlanWorker`
-  and `EncoderCapabilityDetectWorker`. `ScanWorker` and `EncodeWorker` are not
-  instantiated anywhere; see `docs/development.md` (Deferred check work) before
-  removing or re-wiring them.
+- `gui.gui_workers` — the one-shot threads `MainWindow` starts directly:
+  `PlanWorker` and `EncoderCapabilityDetectWorker`.
 - `gui.queue_completion` — skipped-source publishing, reports, notifications and
   confirmed post-run actions. `QueueCompletionHandler.handle(records, translator,
   config)` receives only the completed run's records and current settings.

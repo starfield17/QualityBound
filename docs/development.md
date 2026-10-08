@@ -59,7 +59,7 @@ python -m unittest discover -s test -p "test_architecture.py" -v
 
 ## Deferred check work
 
-Three known gaps are left open on purpose. None of them blocks a release. Each is
+Two known gaps are left open on purpose. None of them blocks a release. Each is
 recorded with the measurement that produced it, so it can be picked up without
 re-running the audit.
 
@@ -92,31 +92,6 @@ The annotations added for the strict adoption (`gui/qt_optionals.maybe_none`,
 the `__all__` lists in `core/encoding`) are not suppressions. They stay checked by
 the remaining strict rules, and the `__all__` lists keep working after the six rules
 come back on.
-
-### Unreferenced worker classes in `gui/gui_workers.py`
-
-Two of the four are never instantiated anywhere in `gui/`, `cli/`, `core/`, `scripts/`
-or `test/`:
-
-- `EncodeWorker` — full-queue encoding is driven by `gui/queue_manager.py` calling
-  `core.encoding.execute_plan_concurrent`. The class survives only in the import at
-  `gui/gui_mainwindow.py:74` and in the `PlanWorker | EncodeWorker` annotation of
-  `_start_worker` (`gui/gui_mainwindow.py:997`), which is called only with
-  `PlanWorker`.
-- `ScanWorker` — no references at all.
-
-Deleting them is a live-code decision rather than a lint fix: `EncodeWorker` still
-carries a single-file cancel-and-terminate path (`threading.Event` plus the recorded
-`Popen`) that the queue runner has no equivalent of, so the question is whether that
-capability is worth keeping around unused. `ScanWorker` has no such argument.
-
-The mechanical part is: delete the classes, drop the import, and narrow the
-`_start_worker` annotation to `PlanWorker`. `PlanWorker` declares the same five
-signals as `EncodeWorker` (`completed`, `failed`, `cancelled`, `log`, `progress`),
-so once the union collapses the `hasattr(worker, "log")`,
-`hasattr(worker, "progress")` and `hasattr(worker, "cancelled")` guards in
-`_start_worker` become always-true and should be replaced by direct connections in
-the same change.
 
 ### `scripts/` is outside the type-check scope
 
