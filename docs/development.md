@@ -112,6 +112,40 @@ untyped: `build_icons.py` runs in the quality gate, `prepare_ffmpeg.py` runs in 
 packaging workflow, and `run_smart_case.py` is exercised by `test/test_smart_case.py`
 and `test/test_smart_corpus.py`.
 
+## Known limitations
+
+### MP4 output cannot carry bitmap subtitles
+
+`core/ffmpeg/commands.py:build_subtitle_args` maps the source's subtitle
+streams into MP4 with `-map 0:s? -c:s mov_text`. `mov_text` is a text codec, so
+it only accepts text subtitle sources (SubRip, ASS, WebVTT, ...). A source whose
+subtitle stream is a bitmap format — PGS (`hdmv_pgs_subtitle`), DVD/VobSub
+(`dvd_subtitle`) or DVB (`dvbsub`) — is rejected by FFmpeg before the output
+file is opened:
+
+```text
+[sost#0:1/mov_text @ ...] Subtitle encoding currently only possible from text to text or bitmap to bitmap
+Error opening output file out.mp4.
+Error opening output files: Invalid argument
+```
+
+The item then fails with that FFmpeg message in `error_message` and no output is
+published. MKV output is unaffected: it copies the stream with `-c:s copy`, so
+bitmap subtitles survive as they are. The behaviour was reproduced with a
+one-display-set PGS stream, and the text path (`.srt` to MP4 `mov_text`) encodes
+successfully.
+
+Nothing in planning probes the subtitle codecs, so the failure is only surfaced
+after the full video encode has run. Deciding what to do needs a product choice,
+because the three candidate behaviours are not equivalent:
+
+- drop the bitmap subtitle stream for MP4 (encode succeeds, subtitles are lost);
+- fail early during planning when a bitmap subtitle would target MP4; or
+- convert MP4 bitmap-subtitle output to MKV, which changes the requested
+  container.
+
+Until one is chosen, users who need bitmap subtitles should select MKV.
+
 ## Packaging
 
 Install build requirements and create a native package on the current platform:

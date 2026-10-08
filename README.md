@@ -132,6 +132,17 @@ Smart measurements are cached as versioned receipts. Quality and size policy
 changes may reuse measured candidates; source, FFmpeg, encoder, measurement, or
 sample-scheme changes produce a different receipt identity.
 
+## Known limitations
+
+- **MP4 output cannot carry bitmap subtitles.** Converting a PGS, VobSub or DVB
+  subtitle stream to MP4's `mov_text` is not possible, so an encode whose source
+  has one fails with FFmpeg's
+  `Subtitle encoding currently only possible from text to text or bitmap to bitmap`
+  and publishes nothing. Choose MKV to keep such subtitles; text subtitles and
+  MKV sources are unaffected. See
+  [Development, translations, and packaging](docs/development.md) (Known limitations)
+  for the reproduced commands.
+
 ## Documentation
 
 - [Algorithm and constraint flow](docs/algorithm.md)
