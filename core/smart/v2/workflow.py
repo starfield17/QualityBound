@@ -16,11 +16,11 @@ from core.models import (
     ShotAnalysis, ShotCandidate, ShotRange,
 )
 from core.progress_events import ProgressCallback
-from core.smart.bitrate import calculate_smart_bitrate_budget
+from core.smart.v1.bitrate import calculate_smart_bitrate_budget
 from core.smart.v2.optimizer import SETTINGS, allocate, sample_windows, worst_one_second
 from core.smart.v2.receipts import file_hash, fingerprint, load, receipt_root, save
 from core.smart.v2.runtime import Runtime, UnsupportedV2
-from core.smart.vmaf import select_vmaf_model, select_vmaf_runtime
+from core.smart.v1.vmaf import select_vmaf_model, select_vmaf_runtime
 
 
 def detect_shots(runtime: Runtime, frames: int) -> list[ShotRange]:

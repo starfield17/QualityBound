@@ -7,7 +7,8 @@ Implementation belongs to one capability package:
 - `config` — application paths, configuration and preset persistence.
 - `media` — media-domain paths, files, subtitles, skipped outputs and validation.
 - `ffmpeg` — discovery, probing, encoder capabilities and command construction.
-- `smart` — sampling, VMAF measurement, cache identity, search and decisions.
+- `smart` — sampling, VMAF measurement, cache identity, search and decisions,
+  split into the default `smart/v1` path and the experimental `smart/v2` path.
 - `encoding` — planning, process execution, analysis and concurrent encode jobs.
 
 CLI and GUI callers use package public APIs (`core.encoding`, `core.ffmpeg`,

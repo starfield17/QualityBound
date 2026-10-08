@@ -13,7 +13,7 @@ import uuid
 
 from core.models import EncodePlanItem, SegmentedAnalysisResult, ShotAnalysis, ShotCandidate, ShotRange
 from core.ffmpeg.segmented import common_hevc_level
-from core.smart.cache import measurement_configuration_payload, path_identity
+from core.smart.v1.cache import measurement_configuration_payload, path_identity
 from core.smart.v2.optimizer import SETTINGS
 
 

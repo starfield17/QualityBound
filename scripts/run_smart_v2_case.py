@@ -25,8 +25,8 @@ from core.models import (  # noqa: E402
     EncodeOptions, EncodePlanItem, QualityUnreachablePolicy, SegmentedAnalysisResult,
     ShotRange, SizeBlockedPolicy, SmartAlgorithm,
 )
-from core.smart.bitrate import calculate_smart_bitrate_budget  # noqa: E402
-from core.smart.profiles import bind_analysis_profile  # noqa: E402
+from core.smart.v1.bitrate import calculate_smart_bitrate_budget  # noqa: E402
+from core.smart.v1.profiles import bind_analysis_profile  # noqa: E402
 from core.smart.v2.runtime import Runtime  # noqa: E402
 
 

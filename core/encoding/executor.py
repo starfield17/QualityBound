@@ -21,7 +21,7 @@ from core.models import (
     SmartAlgorithm,
 )
 from core.progress_events import ProgressCallback
-from core.smart.bitrate import resolve_max_output_ratio
+from core.smart.v1.bitrate import resolve_max_output_ratio
 
 from .analysis import analyze_plan_item, run_analysis_phase
 from .item_results import (

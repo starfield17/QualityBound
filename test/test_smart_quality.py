@@ -41,12 +41,12 @@ from core.models import (
     VmafViewingContext,
 )
 from core.config.store import encode_options_to_preset_data, preset_data_to_encode_options
-from core.smart.measurement import SMART_ERROR_TAIL_CHARS, SmartCommandError
-from core.smart.workflow import analyze_quality, choose_smart_sample_windows
-from core.smart.bitrate import calculate_smart_bitrate_budget, reselect_from_candidates, resolve_max_output_ratio, search_bitrate_candidates
-from core.smart.cache import measurement_configuration_fingerprint, quality_configuration_fingerprint
-from core.smart.measurement import run_logged as _run_logged
-from core.smart.measurement import score_candidate as _score_candidate
+from core.smart.v1.measurement import SMART_ERROR_TAIL_CHARS, SmartCommandError
+from core.smart.v1.workflow import analyze_quality, choose_smart_sample_windows
+from core.smart.v1.bitrate import calculate_smart_bitrate_budget, reselect_from_candidates, resolve_max_output_ratio, search_bitrate_candidates
+from core.smart.v1.cache import measurement_configuration_fingerprint, quality_configuration_fingerprint
+from core.smart.v1.measurement import run_logged as _run_logged
+from core.smart.v1.measurement import score_candidate as _score_candidate
 from gui.gui_mainwindow import MainWindow
 from gui.queue_state import QueueItemStatus, create_queue_records
 
@@ -281,7 +281,7 @@ class SmartSamplingAndBudgetTestCase(unittest.TestCase):
             ffmpeg.write_bytes(b"binary")
             item = _item(source, root / "out.mp4", EncodeOptions())
             with patch(
-                "core.smart.workflow.select_vmaf_runtime",
+                "core.smart.v1.workflow.select_vmaf_runtime",
                 return_value=VmafRuntimeSupport(
                     VmafBackend.CPU, "vmaf_v1.0.16_3d0h", False, "missing libvmaf"
                 ),
@@ -299,7 +299,7 @@ class SmartSamplingAndBudgetTestCase(unittest.TestCase):
             ffmpeg.write_bytes(b"binary")
             item = _item(source, root / "out.mp4", EncodeOptions())
             with patch(
-                "core.smart.workflow.select_vmaf_runtime",
+                "core.smart.v1.workflow.select_vmaf_runtime",
                 return_value=VmafRuntimeSupport(
                     VmafBackend.CPU,
                     "vmaf_v1.0.16_3d0h",
@@ -321,7 +321,7 @@ class SmartSamplingAndBudgetTestCase(unittest.TestCase):
             item = _item(source, root / "out.mp4", EncodeOptions())
             item.media_info.color_transfer = "smpte2084"
             with patch(
-                "core.smart.workflow.select_vmaf_runtime",
+                "core.smart.v1.workflow.select_vmaf_runtime",
                 return_value=VmafRuntimeSupport(VmafBackend.CPU, "vmaf_v1.0.16_3d0h", True),
             ):
                 result = analyze_quality(ffmpeg, item, root, root / "log.txt")
@@ -497,7 +497,7 @@ class SmartSearchTestCase(unittest.TestCase):
             tested.append(bitrate)
             return QualityCandidateResult(video_bitrate_bps=bitrate, min_vmaf=94.0)
 
-        from core.smart.runtime import COARSE_MAX_CANDIDATES, search_tolerance_bps
+        from core.smart.v1.runtime import COARSE_MAX_CANDIDATES, search_tolerance_bps
 
         search_bitrate_candidates(
             evaluate=evaluate,
@@ -527,10 +527,10 @@ class SmartCommandAndMeasurementTestCase(unittest.TestCase):
             log_path = root / "smart.log"
             with (
                 patch(
-                    "core.smart.measurement.hidden_popen_kwargs",
+                    "core.smart.v1.measurement.hidden_popen_kwargs",
                     return_value={"creationflags": 0x08000000},
                 ),
-                patch("core.smart.measurement.subprocess.Popen", return_value=SuccessfulProcess()) as popen,
+                patch("core.smart.v1.measurement.subprocess.Popen", return_value=SuccessfulProcess()) as popen,
                 log_path.open("w", encoding="utf-8") as log_file,
             ):
                 _run_logged(
@@ -560,7 +560,7 @@ class SmartCommandAndMeasurementTestCase(unittest.TestCase):
         os_error = "cannot launch ffmpeg: " + ("x" * (SMART_ERROR_TAIL_CHARS + 100))
         log_file = FlushTrackingLog()
         with (
-            patch("core.smart.measurement.subprocess.Popen", side_effect=OSError(os_error)),
+            patch("core.smart.v1.measurement.subprocess.Popen", side_effect=OSError(os_error)),
             self.assertRaises(RuntimeError) as raised,
         ):
             _run_logged(
@@ -593,7 +593,7 @@ class SmartCommandAndMeasurementTestCase(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             log_path = Path(temp_dir) / "smart.log"
             with (
-                patch("core.smart.measurement.subprocess.Popen", return_value=FailedProcess()),
+                patch("core.smart.v1.measurement.subprocess.Popen", return_value=FailedProcess()),
                 log_path.open("w", encoding="utf-8") as log_file,
                 self.assertRaises(SmartCommandError) as raised,
             ):
@@ -649,7 +649,7 @@ class SmartCommandAndMeasurementTestCase(unittest.TestCase):
                     )
 
             with (
-                patch("core.smart.measurement.run_logged", side_effect=fake_run),
+                patch("core.smart.v1.measurement.run_logged", side_effect=fake_run),
                 log_path.open("a", encoding="utf-8") as smart_log,
             ):
                 result = _score_candidate(
@@ -1001,7 +1001,7 @@ class SmartParallelExecutionTestCase(unittest.TestCase):
             cached.fingerprint = quality_configuration_fingerprint(ffmpeg, item)
             item.quality_search_result = cached
             with patch(
-                "core.smart.workflow.select_vmaf_runtime",
+                "core.smart.v1.workflow.select_vmaf_runtime",
                 return_value=VmafRuntimeSupport(VmafBackend.CPU, "vmaf_v1.0.16_3d0h", True),
             ) as detect:
                 result = analyze_quality(ffmpeg, item, root, root / "log.txt")

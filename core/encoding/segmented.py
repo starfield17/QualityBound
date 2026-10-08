@@ -19,8 +19,8 @@ from core.models import (
     QualityUnreachablePolicy,
 )
 from core.progress_events import ProgressCallback
-from core.smart.decisions import build_decision_options, constraint_policy_from_size_blocked, reselect_after_quality_decision
-from core.smart.concurrency import analysis_concurrency_limit, analysis_slot
+from core.smart.v1.decisions import build_decision_options, constraint_policy_from_size_blocked, reselect_after_quality_decision
+from core.smart.v1.concurrency import analysis_concurrency_limit, analysis_slot
 from core.smart.v2.optimizer import SETTINGS, worst_one_second
 from core.smart.v2.receipts import file_hash, fingerprint, receipt_root, save
 from core.smart.v2.runtime import Runtime, UnsupportedV2

@@ -19,7 +19,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
 import scripts.generate_smart_corpus as generator  # noqa: E402
-from core.smart.evaluation import load_evaluation_manifest  # noqa: E402
+from core.smart.v1.evaluation import load_evaluation_manifest  # noqa: E402
 
 
 def _create_dummy_fixtures(directory: Path) -> tuple[Path, Path, Path]:

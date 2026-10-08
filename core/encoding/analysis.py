@@ -25,14 +25,14 @@ from core.models import (
     SmartAlgorithm,
 )
 from core.progress_events import ProgressCallback, ProgressEvent
-from core.smart.concurrency import analysis_concurrency_limit, analysis_slot
-from core.smart.bitrate import resolve_max_output_ratio
-from core.smart.decisions import (
+from core.smart.v1.concurrency import analysis_concurrency_limit, analysis_slot
+from core.smart.v1.bitrate import resolve_max_output_ratio
+from core.smart.v1.decisions import (
     build_decision_options,
     constraint_policy_from_size_blocked,
     reselect_after_quality_decision,
 )
-from core.smart.workflow import analyze_quality
+from core.smart.v1.workflow import analyze_quality
 
 from .item_results import (
     _assert_quality_encoder_matches_item,

@@ -12,8 +12,8 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from core.smart.runtime import AnalysisCapabilities, format_analysis_capability_report
-from core.smart.vmaf import VMAF_PRODUCTION_MODELS
+from core.smart.v1.runtime import AnalysisCapabilities, format_analysis_capability_report
+from core.smart.v1.vmaf import VMAF_PRODUCTION_MODELS
 from scripts.prepare_ffmpeg import (
     binary_architecture,
     load_manifest,

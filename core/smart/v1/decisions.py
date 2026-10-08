@@ -117,7 +117,7 @@ def reselect_after_quality_decision(
         raise ValueError(f"{decision.action_code.value} is a queue action, not a local candidate selection.")
     item.options = apply_decision_to_options(item.options, decision)
     if isinstance(quality, SegmentedAnalysisResult):
-        from .v2.workflow import reselect
+        from core.smart.v2.workflow import reselect
         if decision.action_code == DecisionActionCode.RELAX_SIZE:
             item.segmented_video_budget_bytes = None
         return reselect(quality, item)

@@ -11,7 +11,7 @@ main.py
     ├── config/    paths, settings, presets, and translations
     ├── media/     source discovery, subtitles, and file validation
     ├── ffmpeg/    discovery, probes, capabilities, and commands
-    ├── smart/     Scout, VMAF measurement, search, and decisions
+    ├── smart/     Scout, VMAF measurement, search, and decisions (v1/, v2/)
     └── encoding/  planning, execution, and concurrent scheduling
 ```
 

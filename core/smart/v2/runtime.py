@@ -18,8 +18,8 @@ from typing import Callable, TextIO
 from core.ffmpeg.segmented import build_shot_commands, seek_args
 from core.models import EncodePlanItem, OperationCancelledError, ShotRange
 from core.progress_events import ProgressCallback
-from core.smart.measurement import run_logged
-from core.smart.vmaf import (
+from core.smart.v1.measurement import run_logged
+from core.smart.v1.vmaf import (
     PTS_RESET_FILTER, build_cpu_vmaf_command, candidate_encode_metadata,
     select_vmaf_model, validate_vmaf_score, vmaf_thread_budget,
 )

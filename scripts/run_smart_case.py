@@ -29,7 +29,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 _bootstrap = argparse.ArgumentParser(add_help=False)
 _bootstrap.add_argument("--implementation-root", type=Path, default=_REPO_ROOT)
 _implementation_root = _bootstrap.parse_known_args()[0].implementation_root.resolve()
-if not (_implementation_root / "core/smart/workflow.py").is_file():
+if not (_implementation_root / "core/smart/v1/workflow.py").is_file():
     raise SystemExit(f"Invalid implementation checkout: {_implementation_root}")
 sys.path.insert(0, str(_implementation_root))
 
@@ -52,14 +52,14 @@ from core.models import (  # noqa: E402
     QualitySearchResult,
     QualitySearchStatus,
 )
-from core.smart.bitrate import calculate_smart_bitrate_budget  # noqa: E402
-from core.smart.evaluation import EvaluationDataError, calculate_case_metrics  # noqa: E402
-from core.smart.profiles import bind_analysis_profile, parse_analysis_profile_name  # noqa: E402
-from core.smart.receipts import load_analysis_receipt  # noqa: E402
-from core.smart.runtime import AnalysisDecodePolicy  # noqa: E402
-import core.smart.runtime as _smart_runtime  # noqa: E402
-import core.smart.workflow as _smart_workflow  # noqa: E402
-from core.smart.vmaf import (  # noqa: E402
+from core.smart.v1.bitrate import calculate_smart_bitrate_budget  # noqa: E402
+from core.smart.v1.evaluation import EvaluationDataError, calculate_case_metrics  # noqa: E402
+from core.smart.v1.profiles import bind_analysis_profile, parse_analysis_profile_name  # noqa: E402
+from core.smart.v1.receipts import load_analysis_receipt  # noqa: E402
+from core.smart.v1.runtime import AnalysisDecodePolicy  # noqa: E402
+import core.smart.v1.runtime as _smart_runtime  # noqa: E402
+import core.smart.v1.workflow as _smart_workflow  # noqa: E402
+from core.smart.v1.vmaf import (  # noqa: E402
     MAX_VMAF_THREADS,
     VmafEncodeMetadata,
     VmafModelSpec,
@@ -88,8 +88,8 @@ def enforce_software_decode() -> None:
 
 def apply_disable_window_cache_patch() -> None:
     """Ablation patch: discard candidate measurement cache in runner without prod flags."""
-    import core.smart.measurement as smart_measurement
-    import core.smart.session as smart_session
+    import core.smart.v1.measurement as smart_measurement
+    import core.smart.v1.session as smart_session
 
     orig_score_candidate = smart_measurement.score_candidate
 

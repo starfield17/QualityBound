@@ -12,13 +12,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
 
-from core.smart.receipts import (
+from core.smart.v1.receipts import (
     ANALYSIS_RECEIPT_SCHEMA_VERSION,
     analysis_receipt_path,
     load_analysis_receipt,
     save_analysis_receipt,
 )
-from core.smart.decisions import prepare_size_miss_retry
+from core.smart.v1.decisions import prepare_size_miss_retry
 from core.encoding import analyze_plan_item, item_needs_smart_analysis
 from core.models import (
     AnalysisReceipt,
@@ -41,12 +41,12 @@ from core.models import (
     VmafRuntimeSupport,
 )
 from core.config.store import _default_app_config, smart_policies_from_config
-from core.smart.decisions import apply_decision_to_options, build_decision_options
-from core.smart.workflow import analyze_quality
-from core.smart.cache import measurement_configuration_fingerprint, quality_configuration_fingerprint
-from core.smart.bitrate import reselect_from_candidates
-from core.smart.sampling.planner import PlannedWindow, SamplePlan
-from core.smart.sampling.scout import SamplingResult
+from core.smart.v1.decisions import apply_decision_to_options, build_decision_options
+from core.smart.v1.workflow import analyze_quality
+from core.smart.v1.cache import measurement_configuration_fingerprint, quality_configuration_fingerprint
+from core.smart.v1.bitrate import reselect_from_candidates
+from core.smart.v1.sampling.planner import PlannedWindow, SamplePlan
+from core.smart.v1.sampling.scout import SamplingResult
 from core.i18n import get_translator
 from gui.queue_model import QueueTableModel
 from gui.queue_manager import QueueManager
@@ -644,15 +644,15 @@ class AnalysisReceiptTestCase(unittest.TestCase):
 
             with (
                 patch(
-                    "core.smart.workflow.select_vmaf_runtime",
+                    "core.smart.v1.workflow.select_vmaf_runtime",
                     return_value=VmafRuntimeSupport(
                         VmafBackend.CPU, "vmaf_v1.0.16_3d0h", True
                     ),
                 ),
-                patch("core.smart.workflow.discover_sample_plan", return_value=_three_window_sampling()),
-                patch("core.smart.workflow._run_logged"),
-                patch("core.smart.session.run_logged"),
-                patch("core.smart.session.score_candidate", side_effect=score) as first_score,
+                patch("core.smart.v1.workflow.discover_sample_plan", return_value=_three_window_sampling()),
+                patch("core.smart.v1.workflow._run_logged"),
+                patch("core.smart.v1.session.run_logged"),
+                patch("core.smart.v1.session.score_candidate", side_effect=score) as first_score,
             ):
                 progress_events: list[dict[str, object]] = []
                 first = analyze_quality(
@@ -687,14 +687,14 @@ class AnalysisReceiptTestCase(unittest.TestCase):
             )
             with (
                 patch(
-                    "core.smart.workflow.select_vmaf_runtime",
+                    "core.smart.v1.workflow.select_vmaf_runtime",
                     return_value=VmafRuntimeSupport(
                         VmafBackend.CPU, "vmaf_v1.0.16_3d0h", True
                     ),
                 ),
-                patch("core.smart.workflow._run_logged"),
-                patch("core.smart.session.run_logged"),
-                patch("core.smart.session.score_candidate", side_effect=score) as second_score,
+                patch("core.smart.v1.workflow._run_logged"),
+                patch("core.smart.v1.session.run_logged"),
+                patch("core.smart.v1.session.score_candidate", side_effect=score) as second_score,
             ):
                 second = analyze_quality(ffmpeg, changed_policy, root, root / "analysis-2.log")
 

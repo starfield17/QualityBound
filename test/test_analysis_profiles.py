@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtWidgets import QApplication
 
 from cli.cli_entry import _build_parser, _options_from_args
-from core.smart.profiles import (
+from core.smart.v1.profiles import (
     FACTORY_ANALYSIS_PROFILES,
     all_analysis_profile_payloads,
     analysis_profiles_from_config,

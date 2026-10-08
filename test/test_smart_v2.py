@@ -21,7 +21,7 @@ from core.models import (
 )
 from core.config.store import encode_options_to_preset_data, preset_data_to_encode_options
 from core.encoding.segmented import _validate_auxiliary, execute_segmented_item, validate_scores
-from core.smart.decisions import prepare_size_miss_retry, reselect_after_quality_decision
+from core.smart.v1.decisions import prepare_size_miss_retry, reselect_after_quality_decision
 from core.smart.v2.optimizer import SETTINGS, allocate, sample_windows, worst_one_second
 from core.smart.v2.receipts import fingerprint, load, receipt_root, save
 from core.smart.v2.runtime import Runtime, UnsupportedV2, decoder_configuration

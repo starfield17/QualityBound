@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from core.smart.sampling.planner import PlannedWindow, SamplePlan
-from core.smart.sampling.scout import _align_plan
+from core.smart.v1.sampling.planner import PlannedWindow, SamplePlan
+from core.smart.v1.sampling.scout import _align_plan
 
 
 class SmartSamplingAlignmentTest(unittest.TestCase):
@@ -14,7 +14,7 @@ class SmartSamplingAlignmentTest(unittest.TestCase):
         blind = PlannedWindow("holdout:unscouted", 30.0, 5.0, ("unscouted_validation",))
         plan = SamplePlan((), (), (blind,), False)
         with tempfile.TemporaryDirectory() as directory:
-            with patch("core.smart.sampling.scout.build_scene_guard_command") as command:
+            with patch("core.smart.v1.sampling.scout.build_scene_guard_command") as command:
                 aligned = _align_plan(plan, ffmpeg_path=Path("ffmpeg"), source_path=Path("source"),
                                      source_duration_sec=60.0, temp_root=Path(directory),
                                      run_command=lambda *_args: None, progress=lambda *_args: None)
@@ -33,9 +33,9 @@ class SmartSamplingAlignmentTest(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as temp_dir:
             with (
-                patch("core.smart.sampling.scout._read_metadata", return_value="metadata"),
+                patch("core.smart.v1.sampling.scout._read_metadata", return_value="metadata"),
                 patch(
-                    "core.smart.sampling.scout.parse_scene_guard_metadata",
+                    "core.smart.v1.sampling.scout.parse_scene_guard_metadata",
                     side_effect=[(1.0,), ()],
                 ),
             ):

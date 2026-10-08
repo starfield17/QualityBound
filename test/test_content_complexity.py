@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from core.smart.sampling.complexity import (
+from core.smart.v1.sampling.complexity import (
     ComplexityProbeError,
     SCENE_CHANGE_THRESHOLD,
     build_scene_guard_command,

@@ -184,11 +184,12 @@ class ArchitectureTestCase(unittest.TestCase):
     def test_package_relative_imports_resolve_to_concrete_owner(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "__init__.py"
-            path.write_text("from . import workflow\nfrom ..models import EncodePlanItem\n", encoding="utf-8")
-            imports = _imports("core.smart", path)
-            self.assertIn("core.smart.workflow", imports)
+            # Mirrors core/smart/v1/__init__.py: one sibling owner, one core contract.
+            path.write_text("from . import workflow\nfrom ...models import EncodePlanItem\n", encoding="utf-8")
+            imports = _imports("core.smart.v1", path)
+            self.assertIn("core.smart.v1.workflow", imports)
             self.assertIn("core.models", imports)
-            self.assertEqual(_layer_violations("core.smart", path), [])
+            self.assertEqual(_layer_violations("core.smart.v1", path), [])
 
     def test_core_has_no_ui_or_entrypoint_dependencies(self) -> None:
         violations: list[str] = []
@@ -275,12 +276,12 @@ class ArchitectureTestCase(unittest.TestCase):
     def test_smart_sampling_dependency_direction(self) -> None:
         graph = _dependency_graph()
         expected = {
-            "core.smart.sampling.complexity": set(),
-            "core.smart.sampling.planner": {"core.models"},
-            "core.smart.sampling.scout": {
+            "core.smart.v1.sampling.complexity": set(),
+            "core.smart.v1.sampling.planner": {"core.models"},
+            "core.smart.v1.sampling.scout": {
                 "core.models",
-                "core.smart.sampling.complexity",
-                "core.smart.sampling.planner",
+                "core.smart.v1.sampling.complexity",
+                "core.smart.v1.sampling.planner",
             },
         }
         for module, allowed_core_dependencies in expected.items():
@@ -298,16 +299,16 @@ class ArchitectureTestCase(unittest.TestCase):
     def test_smart_quality_module_boundaries(self) -> None:
         graph = _dependency_graph()
         focused_modules = {
-            "core.smart.bitrate",
-            "core.smart.cache",
-            "core.smart.measurement",
-            "core.smart.runtime",
+            "core.smart.v1.bitrate",
+            "core.smart.v1.cache",
+            "core.smart.v1.measurement",
+            "core.smart.v1.runtime",
         }
         forbidden_dependencies = {
-            "core.smart.workflow",
-            "core.smart.decisions",
-            "core.smart.session",
-            "core.smart.search",
+            "core.smart.v1.workflow",
+            "core.smart.v1.decisions",
+            "core.smart.v1.session",
+            "core.smart.v1.search",
         }
         violations = {
             module: sorted(graph[module] & forbidden_dependencies)
@@ -320,20 +321,44 @@ class ArchitectureTestCase(unittest.TestCase):
             f"into orchestration or decisions: {violations}",
         )
         self.assertFalse(
-            graph["core.smart.workflow"] & {"core.smart.decisions"},
+            graph["core.smart.v1.workflow"] & {"core.smart.v1.decisions"},
             "Smart workflow must orchestrate focused modules without importing the "
             "queue decision policy",
         )
 
     def test_smart_session_and_search_have_no_upward_dependencies(self) -> None:
         graph = _dependency_graph()
-        self.assertFalse(graph["core.smart.session"] & {
-            "core.smart", "core.smart.workflow", "core.smart.search", "core.smart.decisions",
+        self.assertFalse(graph["core.smart.v1.session"] & {
+            "core.smart", "core.smart.v1.workflow", "core.smart.v1.search", "core.smart.v1.decisions",
         })
-        self.assertFalse(graph["core.smart.search"] & {
-            "core.smart", "core.smart.workflow", "core.smart.decisions",
+        self.assertFalse(graph["core.smart.v1.search"] & {
+            "core.smart", "core.smart.v1.workflow", "core.smart.v1.decisions",
         })
         self.assertNotIn("core.smart_quality", graph)
+
+    def test_smart_v2_reuses_only_v1_leaf_primitives(self) -> None:
+        graph = _dependency_graph()
+        v2_modules = {source for source in graph if source.startswith("core.smart.v2.")}
+        self.assertTrue(v2_modules, "core.smart.v2 owns an independent implementation path")
+        allowed_v1_dependencies = {
+            "core.smart.v1.bitrate",
+            "core.smart.v1.cache",
+            "core.smart.v1.measurement",
+            "core.smart.v1.vmaf",
+        }
+        violations = [
+            f"{source} imports {dependency}"
+            for source in sorted(v2_modules)
+            for dependency in sorted(graph[source])
+            if dependency.startswith("core.smart.v1") and dependency not in allowed_v1_dependencies
+        ]
+        self.assertFalse(
+            violations,
+            "Smart v2 owns its own orchestration (workflow, runtime, optimizer, receipts) "
+            "and may reuse only the listed v1 leaf primitives; v1 workflow, search, session "
+            "and decisions stay out of reach, and a new shared primitive needs review: "
+            + ", ".join(violations),
+        )
 
     def test_smart_public_surface_matches_adapter_operations(self) -> None:
         tree = ast.parse((ROOT / "core/smart/__init__.py").read_text(encoding="utf-8"))
@@ -395,8 +420,8 @@ class ArchitectureTestCase(unittest.TestCase):
     def test_queue_model_has_no_domain_side_effect_dependencies(self) -> None:
         path = _app_modules()["gui.queue_model"]
         forbidden = (
-            "core.smart.receipts",
-            "core.smart.decisions",
+            "core.smart.v1.receipts",
+            "core.smart.v1.decisions",
             "core.media.subtitles",
         )
         violations = [

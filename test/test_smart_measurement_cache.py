@@ -7,9 +7,9 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from core.smart.measurement import score_candidate
-from core.smart.runtime import AnalysisTier
-from core.smart.vmaf import VmafWindowScore
+from core.smart.v1.measurement import score_candidate
+from core.smart.v1.runtime import AnalysisTier
+from core.smart.v1.vmaf import VmafWindowScore
 import test_analysis_runtime as runtime_tests
 from core.models import OperationCancelledError
 
@@ -24,7 +24,7 @@ class WindowMeasurementCacheTest(unittest.TestCase):
             for failure in (RuntimeError("invalid score"), OperationCancelledError("cancelled")):
                 with self.subTest(failure=type(failure).__name__):
                     cache = {}
-                    with patch("core.smart.measurement.run_logged", side_effect=failure):
+                    with patch("core.smart.v1.measurement.run_logged", side_effect=failure):
                         with self.assertRaises(type(failure)):
                             score_candidate(session.ffmpeg_path, session.item, [reference], 900_000,
                                             root, root, io.StringIO(), cancel_check=None,
@@ -57,8 +57,8 @@ class WindowMeasurementCacheTest(unittest.TestCase):
                 return score_candidate(session.ffmpeg_path, session.item, refs, 900_000,
                                        root, root, io.StringIO(), **options)
 
-            with patch("core.smart.measurement.run_logged", side_effect=run), patch(
-                "core.smart.measurement.parse_vmaf_json",
+            with patch("core.smart.v1.measurement.run_logged", side_effect=run), patch(
+                "core.smart.v1.measurement.parse_vmaf_json",
                 return_value=VmafWindowScore(96, 94, 93, 96),
             ):
                 first = measure(references[:2])
@@ -86,8 +86,8 @@ class WindowMeasurementCacheTest(unittest.TestCase):
                 if kwargs["phase"] == "candidate encode":
                     Path(command[-1]).write_bytes(b"encoded")
 
-            with patch("core.smart.measurement.run_logged", side_effect=run), patch(
-                "core.smart.measurement.parse_vmaf_json",
+            with patch("core.smart.v1.measurement.run_logged", side_effect=run), patch(
+                "core.smart.v1.measurement.parse_vmaf_json",
                 side_effect=[VmafWindowScore(80, 79, 78, 80), VmafWindowScore(96, 95, 94, 96),
                              VmafWindowScore(97, 96, 95, 97)],
             ) as parse:

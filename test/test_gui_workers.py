@@ -7,7 +7,7 @@ from unittest.mock import patch
 from PySide6.QtCore import QCoreApplication
 
 from core.models import VmafBackend, VmafRuntimeSupport
-from core.smart.vmaf import VMAF_PRODUCTION_MODELS
+from core.smart.v1.vmaf import VMAF_PRODUCTION_MODELS
 from gui.gui_workers import EncoderCapabilityDetectWorker
 
 

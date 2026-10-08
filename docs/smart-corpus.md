@@ -35,7 +35,7 @@ Key architectural properties:
   - `--hevc-derivative`: Encodes long-GOP HEVC using CPU `libx265` with `-x265-params keyint=fps*10:min-keyint=fps*10:scenecut=0`.
   - `--h264-derivative`: Preserves `libx264` option; fails closed with explicit exception and stderr if `libx264` is missing from the binary.
 - **Audit-Ready Manifest**: Emits JSON manifests strictly conforming to `schema_version: 1`
-  consumable by `scripts/evaluate_smart.py` and `core.smart.evaluation.load_evaluation_manifest`.
+  consumable by `scripts/evaluate_smart.py` and `core.smart.v1.evaluation.load_evaluation_manifest`.
   Commands use `scripts/run_smart_case.py` with `--workdir {case_dir}`. No fabricated measurements.
 
 ---

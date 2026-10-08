@@ -15,12 +15,12 @@ from core.models import (
     EncoderInfo,
     MediaInfo,
 )
-from core.smart.evaluation import (
+from core.smart.v1.evaluation import (
     calculate_case_metrics,
     is_false_size_block,
     is_quality_false_pass,
 )
-from core.smart.vmaf import VMAF_STANDARD_MODEL, VmafEncodeMetadata
+from core.smart.v1.vmaf import VMAF_STANDARD_MODEL, VmafEncodeMetadata
 from scripts.run_smart_case import (
     OraclePoint,
     align_cfr_command,

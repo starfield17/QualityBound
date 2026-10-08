@@ -4,8 +4,8 @@ Core implementation modules import the concrete owner module. CLI and GUI
 adapters use this deliberately small package API.
 """
 
-from core.smart.bitrate import resolve_max_output_ratio
-from core.smart.decisions import (
+from core.smart.v1.bitrate import resolve_max_output_ratio
+from core.smart.v1.decisions import (
     accept_rejected_output,
     build_decision_options,
     constraint_policy_from_size_blocked,
@@ -14,14 +14,14 @@ from core.smart.decisions import (
     reselect_after_quality_decision,
     size_blocked_from_constraint_policy,
 )
-from core.smart.profiles import (
+from core.smart.v1.profiles import (
     analysis_profiles_from_config,
     bind_analysis_profile,
     parse_analysis_profile_name,
 )
-from core.smart.receipts import delete_analysis_receipt
-from core.smart.vmaf import VMAF_PRODUCTION_MODELS, probe_vmaf_runtime
-from core.smart.workflow import analyze_quality
+from core.smart.v1.receipts import delete_analysis_receipt
+from core.smart.v1.vmaf import VMAF_PRODUCTION_MODELS, probe_vmaf_runtime
+from core.smart.v1.workflow import analyze_quality
 from core.smart.v2.receipts import delete_receipt as delete_segmented_analysis_receipt
 
 

@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from core.smart.evaluation import (
+from core.smart.v1.evaluation import (
     EvaluationDataError,
     aggregate_evaluation_records,
     analysis_cost,

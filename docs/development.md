@@ -88,7 +88,7 @@ python -m pyright -p .debt-probe.json --outputjson \
 ```
 
 The annotations added for the strict adoption (`gui/qt_optionals.maybe_none`,
-`QueueTableModel._transient_index`, `core.smart.bitrate._SharedSearchResultFields`,
+`QueueTableModel._transient_index`, `core.smart.v1.bitrate._SharedSearchResultFields`,
 the `__all__` lists in `core/encoding`) are not suppressions. They stay checked by
 the remaining strict rules, and the `__all__` lists keep working after the six rules
 come back on.

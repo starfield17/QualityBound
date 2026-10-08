@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import unittest
 
-from core.smart.profiles import FACTORY_ANALYSIS_PROFILES
+from core.smart.v1.profiles import FACTORY_ANALYSIS_PROFILES
 from core.models import AnalysisProfileName, AnalysisProfileSettings
-from core.smart.sampling.planner import (
+from core.smart.v1.sampling.planner import (
     PlannedWindow,
     ScoutObservation,
     align_window_to_scene_cuts,

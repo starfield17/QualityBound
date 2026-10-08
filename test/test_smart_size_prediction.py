@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from core.smart.size_prediction import predict_size_distribution
+from core.smart.v1.size_prediction import predict_size_distribution
 
 
 class SmartSizePredictionTest(unittest.TestCase):
