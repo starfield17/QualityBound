@@ -100,7 +100,7 @@ class QueueCompletionTestCase(unittest.TestCase):
         self.notify.assert_called_once()
         self.assertEqual(self.notify.call_args.args[0], chinese.t("app.title"))
 
-    def test_unsuccessful_run_never_notifies_or_requests_power_action(self) -> None:
+    def test_failed_run_reports_and_notifies_without_power_action(self) -> None:
         records = [
             self._record(status.value, status)
             for status in (
@@ -114,11 +114,17 @@ class QueueCompletionTestCase(unittest.TestCase):
             patch("gui.queue_completion.execute_power_action") as power,
         ):
             self.handler.handle(records, self.tr, {"post_encode_action": "shutdown"})
-        self.notify.assert_not_called()
+        self.notify.assert_called_once()
+        self.assertEqual(self.notify.call_args.args[0], self.tr.t("app.title"))
+        self.assertEqual(
+            self.notify.call_args.args[1],
+            self.tr.t("gui.notification.batch_incomplete", failed=1, cancelled=1),
+        )
+        self.assertIn(self.tr.t("gui.report.batch_incomplete"), "\n".join(self.logs))
+        self.assertNotIn(self.tr.t("gui.report.batch_complete"), "\n".join(self.logs))
         self.close.assert_not_called()
         countdown.assert_not_called()
         power.assert_not_called()
-        self.assertEqual(self.logs, [self.tr.t("gui.log.encode_done")])
 
     def test_power_actions_require_confirmation_and_quit_uses_close_callback(self) -> None:
         record = self._record("done", QueueItemStatus.DONE)

@@ -12,7 +12,7 @@ from PySide6.QtCore import QObject, QThread, Signal
 from core.encoding import execute_plan, execute_plan_concurrent
 from core.models import EncodePlan, EncodeResult, OperationCancelledError
 from core.progress_events import ProgressEvent
-from gui.queue_state import QueueItemRecord, QueueItemStatus, create_queue_records
+from gui.queue_state import ACTIVE_ITEM_STATUSES, RUNNABLE_ITEM_STATUSES, QueueItemRecord, QueueItemStatus, create_queue_records
 from gui.queue_model import QueueTableModel
 
 
@@ -179,20 +179,26 @@ class QueueManager(QObject):
         if self._worker is not None:
             return False
         execution_records = self.model.execution_records()
-        if self._pending_run is not None:
-            pending_ids = set(self._pending_run.item_ids)
-            execution_records = [
-                record for record in execution_records if record.item_id in pending_ids
-            ]
         if not execution_records:
             return False
 
         items = [QueueExecutionItem(item_id=record.item_id, record=record) for record in execution_records]
+        item_ids = tuple(item.item_id for item in items)
         if self._pending_run is None:
             self._pending_run = QueueRunCompletion(
                 run_id=uuid.uuid4().hex,
-                item_ids=tuple(item.item_id for item in items),
+                item_ids=item_ids,
             )
+        else:
+            known = set(self._pending_run.item_ids)
+            extra = tuple(item_id for item_id in item_ids if item_id not in known)
+            if extra:
+                # Fold newly queued items into the current batch so a resumed or
+                # decided run does not silently skip work added while it waited.
+                self._pending_run = QueueRunCompletion(
+                    run_id=self._pending_run.run_id,
+                    item_ids=self._pending_run.item_ids + extra,
+                )
         self.model.prepare_for_execution([item.item_id for item in items])
         self._pause_after_current_requested = False
         self._worker_outcome = None
@@ -226,26 +232,60 @@ class QueueManager(QObject):
         return True
 
     def remove_rows(self, rows: list[int]) -> int:
-        if not self.can_remove_rows(rows):
+        targets = [
+            row
+            for row in rows
+            if (record := self.model.record_for_row(row)) is not None and self._is_removable(record)
+        ]
+        if not targets:
             return 0
-        return self.model.remove_rows_by_index(rows)
+        return self.model.remove_rows_by_index(targets)
 
     def _pending_item_ids(self) -> set[str]:
         return set(self._pending_run.item_ids) if self._pending_run is not None else set()
 
+    def _is_removable(self, record: QueueItemRecord) -> bool:
+        # Active items belong to the worker, and an unresolved size miss owns a
+        # preserved output that must be accepted, retried, or discarded first.
+        if record.status in ACTIVE_ITEM_STATUSES:
+            return False
+        if record.status == QueueItemStatus.NEEDS_DECISION and record.item_id in self._pending_item_ids():
+            return False
+        return True
+
     def can_remove_rows(self, rows: list[int]) -> bool:
-        protected = self._pending_item_ids()
-        for row in rows:
-            record = self.model.record_for_row(row)
-            if record is not None and record.item_id in protected:
-                return False
-        return self.model.can_remove_rows(rows)
+        return any(
+            (record := self.model.record_for_row(row)) is not None and self._is_removable(record)
+            for row in rows
+        )
 
     def retry_rows(self, rows: list[int]) -> int:
         return self.model.retry_rows(rows)
 
     def clear_completed(self) -> int:
-        return self.model.clear_completed(excluded_item_ids=self._pending_item_ids())
+        protected_decisions = {
+            record.item_id
+            for record in self._pending_records()
+            if record.status == QueueItemStatus.NEEDS_DECISION
+        }
+        return self.model.clear_completed(excluded_item_ids=protected_decisions)
+
+    def has_pending_run(self) -> bool:
+        return self._pending_run is not None
+
+    def abandon_run(self) -> bool:
+        """Drop the in-flight batch without touching item statuses or files.
+
+        Used when a run is paused or waiting for decisions and no worker owns
+        it anymore, so the user can clean up or start a fresh batch.
+        """
+
+        if self._worker is not None or self._pending_run is None:
+            return False
+        self._pending_run = None
+        self._pause_after_current_requested = False
+        self.stateChanged.emit("idle")
+        return True
 
     def _on_item_started(self, item_id: str, backend: str, encoder: str) -> None:
         self._active_item_ids.add(item_id)
@@ -313,10 +353,7 @@ class QueueManager(QObject):
         if self._worker is not None or self._pending_run is None:
             return False
         records = self._pending_records()
-        if not any(
-            record.status in {QueueItemStatus.QUEUED, QueueItemStatus.WAITING_ANALYSIS}
-            for record in records
-        ):
+        if not any(record.status in RUNNABLE_ITEM_STATUSES for record in records):
             self._reconcile_pending_run()
             return False
         return self.start(max_workers=max_workers)
@@ -340,10 +377,7 @@ class QueueManager(QObject):
         if any(record.status == QueueItemStatus.NEEDS_DECISION for record in records):
             self.stateChanged.emit("awaiting_decision")
             return
-        if any(
-            record.status in {QueueItemStatus.QUEUED, QueueItemStatus.WAITING_ANALYSIS}
-            for record in records
-        ):
+        if any(record.status in RUNNABLE_ITEM_STATUSES for record in records):
             self.stateChanged.emit("idle")
             return
         self._pending_run = None

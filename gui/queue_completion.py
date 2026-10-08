@@ -129,7 +129,7 @@ class QueueCompletionHandler:
         if savings.successful_files > 0:
             report_lines = [
                 "==================================================",
-                f"🎉 {tr.t('gui.report.batch_complete')}",
+                tr.t("gui.report.batch_complete"),
                 f"- {tr.t('gui.report.successful_files')}: {savings.successful_files}/{savings.total_files}",
                 f"- {tr.t('gui.report.original_size')}: {format_size(savings.original_total_bytes)}",
                 f"- {tr.t('gui.report.compressed_size')}: {format_size(savings.compressed_total_bytes)}",
@@ -145,6 +145,25 @@ class QueueCompletionHandler:
                         count=savings.successful_files,
                         saved=format_size(savings.saved_bytes),
                         ratio=f"{savings.saved_ratio * 100:.1f}%",
+                    ),
+                )
+
+        if savings.failed_files > 0 or savings.cancelled_files > 0:
+            failure_lines = [
+                "==================================================",
+                tr.t("gui.report.batch_incomplete"),
+                f"- {tr.t('gui.report.failed_files')}: {savings.failed_files}",
+                f"- {tr.t('gui.report.cancelled_files')}: {savings.cancelled_files}",
+                "==================================================",
+            ]
+            self._append_log("\n".join(failure_lines))
+            if config.get("desktop_notifications", True):
+                self._notify(
+                    tr.t("app.title"),
+                    tr.t(
+                        "gui.notification.batch_incomplete",
+                        failed=savings.failed_files,
+                        cancelled=savings.cancelled_files,
                     ),
                 )
 

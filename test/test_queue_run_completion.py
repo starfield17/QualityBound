@@ -130,7 +130,7 @@ class QueueRunCompletionTestCase(unittest.TestCase):
 
         self.assertEqual(emitted, [completion])
 
-    def test_retry_keeps_run_and_excludes_new_queue_items(self) -> None:
+    def test_resume_includes_new_queue_items_in_the_pending_run(self) -> None:
         retry = _record(self.root, "retry", QueueItemStatus.WAITING_ANALYSIS)
         newly_added = _record(self.root, "new", QueueItemStatus.WAITING_ANALYSIS)
         self.model.add_records([retry, newly_added])
@@ -144,8 +144,14 @@ class QueueRunCompletionTestCase(unittest.TestCase):
             self.assertTrue(self.manager.start(max_workers=2))
 
         execution_items = worker_class.call_args.args[0]
-        self.assertEqual([item.item_id for item in execution_items], [retry.item_id])
-        self.assertIs(self.manager._pending_run, completion)
+        self.assertEqual(
+            [item.item_id for item in execution_items],
+            [retry.item_id, newly_added.item_id],
+        )
+        pending = self.manager._pending_run
+        assert pending is not None
+        self.assertEqual(pending.run_id, completion.run_id)
+        self.assertEqual(pending.item_ids, (retry.item_id, newly_added.item_id))
         self.manager._worker = None
 
     def test_resume_after_decision_runs_ready_items_even_when_another_decision_remains(self) -> None:
@@ -160,7 +166,7 @@ class QueueRunCompletionTestCase(unittest.TestCase):
         self.assertEqual([item.item_id for item in execution_items], [ready.item_id])
         self.manager._worker = None
 
-    def test_pending_run_records_cannot_be_removed_or_cleared(self) -> None:
+    def test_pending_terminal_items_can_be_removed_but_decisions_stay_protected(self) -> None:
         done = _record(self.root, "done", QueueItemStatus.DONE)
         decision = _record(self.root, "decision", QueueItemStatus.NEEDS_DECISION)
         historical = _record(self.root, "historical-done", QueueItemStatus.DONE)
@@ -169,14 +175,34 @@ class QueueRunCompletionTestCase(unittest.TestCase):
             "run-protected", (done.item_id, decision.item_id)
         )
 
-        self.assertFalse(self.manager.can_remove_rows([0]))
+        self.assertTrue(self.manager.can_remove_rows([0]))
         self.assertFalse(self.manager.can_remove_rows([1]))
-        self.assertEqual(self.manager.remove_rows([0, 1]), 0)
+        self.assertEqual(self.manager.remove_rows([0, 1]), 1)
         self.assertEqual(self.manager.clear_completed(), 1)
         self.assertEqual(
             [record.item_id for record in self.model.records()],
-            [done.item_id, decision.item_id],
+            [decision.item_id],
         )
+
+    def test_abandon_run_clears_pending_and_keeps_item_statuses(self) -> None:
+        queued = _record(self.root, "queued", QueueItemStatus.QUEUED)
+        decision = _record(self.root, "decision", QueueItemStatus.NEEDS_DECISION)
+        self.model.add_records([queued, decision])
+        self.manager._pending_run = QueueRunCompletion(
+            "run-abandon", (queued.item_id, decision.item_id)
+        )
+        states: list[str] = []
+        self.manager.stateChanged.connect(states.append)
+
+        self.assertFalse(self.manager.can_remove_rows([1]))
+        self.assertTrue(self.manager.abandon_run())
+
+        self.assertFalse(self.manager.has_pending_run())
+        self.assertEqual(states, ["idle"])
+        self.assertTrue(self.manager.can_remove_rows([1]))
+        self.assertEqual(queued.status, QueueItemStatus.QUEUED)
+        self.assertEqual(decision.status, QueueItemStatus.NEEDS_DECISION)
+        self.assertFalse(self.manager.abandon_run())
 
     def test_completion_waits_for_worker_thread_finished(self) -> None:
         current = _record(self.root, "thread", QueueItemStatus.DONE)

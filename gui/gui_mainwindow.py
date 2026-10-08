@@ -2,7 +2,7 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QPoint, QSignalBlocker, Qt, QTimer, QUrl
+from PySide6.QtCore import QByteArray, QModelIndex, QPoint, QSignalBlocker, Qt, QTimer, QUrl
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -76,7 +76,7 @@ from gui.preset_manager_dialog import PresetManagerDialog
 from gui.qt_optionals import maybe_none
 from gui.queue_completion import QueueCompletionHandler
 from gui.queue_manager import QueueManager, QueueRunCompletion
-from gui.queue_state import QueueItemRecord, QueueMetrics
+from gui.queue_state import QueueItemRecord, QueueItemStatus, TERMINAL_ITEM_STATUSES, QueueMetrics
 from gui.queue_model import QueueTableModel, format_duration, format_size
 from gui.queue_view import ResponsiveQueueTableView, create_queue_view
 from gui.queue_window import QueueWindow
@@ -143,10 +143,11 @@ class MainWindow(QMainWindow):
         self._encoder_capabilities_ready = False
         self._startup_encoder_detection_started = False
         self._pending_encoder_detection_force_refresh = False
-        self._pending_backend: BackendChoice | None = None
         self.queue_busy = False
         self._header_sync_guard = False
         self._queue_state = "idle"
+        self._persisted_snapshot: tuple[object, ...] | None = None
+        self._action_state: tuple[object, ...] | None = None
         self._status_stage = "-"
         self._status_file = "-"
         self._status_speed = "-"
@@ -178,6 +179,18 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if not self._has_running_task():
+            if not self._close_after_running_task_stops and self._has_unsaved_queue_work():
+                result = QMessageBox.question(
+                    self,
+                    self.translator.t("gui.message.close_pending_title"),
+                    self.translator.t("gui.message.close_pending_text"),
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if result != QMessageBox.StandardButton.Yes:
+                    event.ignore()
+                    return
+            self._persist_runtime_state()
             event.accept()
             return
         if self._close_after_running_task_stops:
@@ -432,6 +445,8 @@ class MainWindow(QMainWindow):
         summary_layout.addWidget(divider)
         summary_layout.addWidget(right_summary, 1)
 
+        self.queue_state_label = QLabel()
+        self.queue_state_label.setObjectName("summaryValue")
         self.queue_progress_text = QLabel()
         self.queue_progress_bar = QProgressBar()
         self.queue_progress_bar.setRange(0, 1000)
@@ -442,6 +457,7 @@ class MainWindow(QMainWindow):
         self.table_view.horizontalHeader().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
 
         jobs_layout.addWidget(summary_widget)
+        jobs_layout.addWidget(self.queue_state_label)
         jobs_layout.addWidget(self.queue_progress_text)
         jobs_layout.addWidget(self.queue_progress_bar)
         jobs_layout.addWidget(self.table_view, 1)
@@ -496,12 +512,16 @@ class MainWindow(QMainWindow):
         self.manage_presets_button.clicked.connect(self._open_preset_manager)
         self.post_encode_combo.currentIndexChanged.connect(self._post_encode_combo_changed)
         self.options_panel.analysis_profile_changed.connect(lambda _name: self._persist_runtime_state())
-        self.source_combo.editTextChanged.connect(self._persist_runtime_state)
+        self.source_combo.activated.connect(lambda *_args: self._persist_runtime_state())
         self.output_edit.editingFinished.connect(self._persist_runtime_state)
         self.preset_combo.currentIndexChanged.connect(self._preset_combo_changed)
 
         self.table_view.filesDropped.connect(self._handle_dropped_paths)
         self.queue_window.table_view.filesDropped.connect(self._handle_dropped_paths)
+        for view in [self.table_view, self.queue_window.table_view]:
+            view.doubleClicked.connect(
+                lambda index, source_view=view: self._on_queue_row_activated(source_view, index)
+            )
 
         self.queue_model.metricsChanged.connect(self._update_queue_metrics)
         self.queue_manager.log.connect(self._append_log)
@@ -604,6 +624,7 @@ class MainWindow(QMainWindow):
         self.queue_model.set_translator(self.translator)
         self.activity_log_window.apply_translations(self.translator)
         self.queue_window.apply_translations(self.translator)
+        self._render_queue_state()
         self._set_status_snapshot(
             self._status_stage,
             self._status_file,
@@ -913,6 +934,8 @@ class MainWindow(QMainWindow):
             return
         source_text = self.source_combo.currentText().strip()
         output_text = self.output_edit.text().strip()
+        analysis_profile = self.options_panel.current_analysis_profile_name().value
+        post_action = self.post_encode_combo.currentData() or PostEncodeAction.DO_NOTHING.value
         self.app_config["language"] = self.language
         self.app_config["last_source_path"] = source_text
         self.app_config["last_output_dir"] = output_text
@@ -921,17 +944,30 @@ class MainWindow(QMainWindow):
         self.app_config.setdefault("ffprobe_path", "")
         self.app_config.setdefault("encode_workers", 1)
         self.app_config.setdefault("log_level", "info")
-        self.app_config["analysis_profile"] = self.options_panel.current_analysis_profile_name().value
-        self.app_config["post_encode_action"] = (
-            self.post_encode_combo.currentData() or PostEncodeAction.DO_NOTHING.value
-        )
+        self.app_config["analysis_profile"] = analysis_profile
+        self.app_config["post_encode_action"] = post_action
 
+        # Only remember a source that resolves on disk.  Persisting every
+        # keystroke used to fill the history with prefixes like "/U", "/Us".
         recent_paths = list(self.app_config.get("recent_paths", []))
-        if source_text:
+        if source_text and Path(source_text).expanduser().exists():
             recent_paths = [item for item in recent_paths if item != source_text]
             recent_paths.insert(0, source_text)
-            self.app_config["recent_paths"] = recent_paths[:10]
-            self._set_source_history(self.app_config["recent_paths"])
+            recent_paths = recent_paths[:10]
+            self.app_config["recent_paths"] = recent_paths
+            self._set_source_history(recent_paths)
+
+        snapshot = (
+            self.language,
+            source_text,
+            output_text,
+            analysis_profile,
+            post_action,
+            tuple(recent_paths),
+        )
+        if snapshot == self._persisted_snapshot:
+            return
+        self._persisted_snapshot = snapshot
         self._save_app_config_preserving_capabilities()
 
     def _set_controls_enabled(self, enabled: bool) -> None:
@@ -953,13 +989,18 @@ class MainWindow(QMainWindow):
         queue_busy = self.queue_busy
         any_busy = plan_busy or queue_busy
         has_queued_items = bool(self.queue_model.execution_records())
+        has_pending_run = self.queue_manager.has_pending_run()
+        signature = (plan_busy, queue_busy, has_queued_items, has_pending_run)
+        if signature == self._action_state:
+            return
+        self._action_state = signature
 
         self.add_files_action.setEnabled(not any_busy)
         self.add_folder_action.setEnabled(not any_busy)
         self.plan_action.setEnabled(not any_busy)
         self.start_queue_action.setEnabled(not any_busy and has_queued_items)
         self.pause_after_current_action.setEnabled(queue_busy)
-        self.stop_action.setEnabled(any_busy)
+        self.stop_action.setEnabled(any_busy or has_pending_run)
         self.presets_action.setEnabled(not any_busy)
         self.settings_action.setEnabled(not any_busy)
         self._set_controls_enabled(not any_busy)
@@ -976,6 +1017,18 @@ class MainWindow(QMainWindow):
             or self.encoder_detection_worker is not None
             or self.queue_busy
             or queue_manager_busy
+        )
+
+    def _has_unsaved_queue_work(self) -> bool:
+        if not self.queue_manager.has_pending_run():
+            return False
+        return any(
+            record.status in {
+                QueueItemStatus.NEEDS_DECISION,
+                QueueItemStatus.QUEUED,
+                QueueItemStatus.WAITING_ANALYSIS,
+            }
+            for record in self.queue_model.records()
         )
 
     def _maybe_close_after_running_task(self) -> None:
@@ -1024,8 +1077,27 @@ class MainWindow(QMainWindow):
         self._refresh_action_state()
         self._maybe_close_after_running_task()
 
+    def _queue_state_text(self) -> str:
+        if self._queue_state == "running":
+            return self.translator.t("gui.queue_state.running")
+        if self._queue_state == "pause_after_current":
+            return self.translator.t("gui.queue_state.pause_after_current")
+        if self._queue_state == "paused":
+            return self.translator.t("gui.queue_state.paused")
+        if self._queue_state == "awaiting_decision":
+            return self.translator.t("gui.queue_state.awaiting_decision")
+        if self._queue_state == "cancelled":
+            return self.translator.t("gui.queue_state.cancelled")
+        if self._queue_state == "failed":
+            return self.translator.t("gui.queue_state.failed")
+        return self.translator.t("gui.queue_state.idle")
+
+    def _render_queue_state(self) -> None:
+        self.queue_state_label.setText(self._queue_state_text())
+
     def _on_queue_state_changed(self, state: str) -> None:
         self._queue_state = state
+        self._render_queue_state()
         if state == "pause_after_current":
             self._append_log(self.translator.t("gui.log.pause_after_current_requested"))
         elif state == "paused":
@@ -1034,7 +1106,14 @@ class MainWindow(QMainWindow):
             self._append_log(self.translator.t("gui.log.queue_cancelled"))
         elif state == "awaiting_decision":
             self._append_log(self.translator.t("gui.log.queue_awaiting_decision"))
-        elif state == "idle":
+            if self.app_config.get("desktop_notifications", True):
+                self._send_desktop_notification(
+                    self.translator.t("app.title"),
+                    self.translator.t("gui.notification.awaiting_decision"),
+                )
+        if state in {"paused", "awaiting_decision", "cancelled", "failed"}:
+            self._set_status_snapshot(self._queue_state_text(), "-", "-", "-", None)
+        if state in {"idle", "paused", "awaiting_decision", "cancelled", "failed"}:
             self._refresh_action_state()
 
     def _records_for_ids(self, item_ids: tuple[str, ...]) -> list[QueueItemRecord]:
@@ -1063,6 +1142,9 @@ class MainWindow(QMainWindow):
         if self.queue_busy:
             self._append_log(self.translator.t("gui.log.stop_requested"))
             self.queue_manager.stop()
+            return
+        if self.queue_manager.abandon_run():
+            self._append_log(self.translator.t("gui.log.queue_abandoned"))
 
     def _update_progress(self, event: dict[str, object]) -> None:
         stage = str(event.get("stage") or event.get("phase") or "-")
@@ -1176,9 +1258,10 @@ class MainWindow(QMainWindow):
         self._set_status_snapshot("queue / starting", "-", "-", "-", 0.0)
 
     def _pause_after_current(self) -> None:
-        if self.queue_manager.pause_after_current():
+        if not self.queue_busy:
+            QMessageBox.information(self, self.translator.t("gui.message.info"), self.translator.t("gui.message.no_running_queue"))
             return
-        QMessageBox.information(self, self.translator.t("gui.message.info"), self.translator.t("gui.message.no_running_queue"))
+        self.queue_manager.pause_after_current()
 
     def _show_queue_window(self) -> None:
         self.queue_window.show()
@@ -1259,7 +1342,10 @@ class MainWindow(QMainWindow):
             and self.queue_manager.can_remove_rows(rows)
             and not self.queue_busy
         )
-        clear_completed_action.setEnabled(not self.queue_busy)
+        clear_completed_action.setEnabled(
+            not self.queue_busy
+            and any(record.status in TERMINAL_ITEM_STATUSES for record in self.queue_model.records())
+        )
 
         action = maybe_none(menu.exec(view.viewport().mapToGlobal(pos)))
         if action is None:
@@ -1329,6 +1415,8 @@ class MainWindow(QMainWindow):
         result = record.result
         if result is not None and result.rejected_output_path is not None:
             choice = choose_size_miss_decision(self, self.translator, record)
+            if choice is None:
+                return
             resolved = False
             if choice == SizeMissDecision.ACCEPT:
                 resolved = self.queue_model.accept_size_miss(row)
@@ -1336,19 +1424,21 @@ class MainWindow(QMainWindow):
                 resolved = self.queue_model.retry_size_miss(row)
             elif choice == SizeMissDecision.DISCARD:
                 resolved = self.queue_model.discard_size_miss(row)
-            if resolved and choice is not None:
-                self._append_log(
-                    self.translator.t("gui.log.decision_resolved", file=record.source_path.name, action=choice.value)
+            if not resolved:
+                self._report_decision_failure(record)
+                return
+            self._append_log(
+                self.translator.t("gui.log.decision_resolved", file=record.source_path.name, action=choice.value)
+            )
+            if record.result is not None:
+                for warning in record.result.external_subtitle_warnings:
+                    self._append_log(warning)
+            if choice == SizeMissDecision.RETRY:
+                self.queue_manager.resume_after_decision(
+                    parse_encode_workers(self.app_config.get("encode_workers", 1))
                 )
-                if record.result is not None:
-                    for warning in record.result.external_subtitle_warnings:
-                        self._append_log(warning)
-                if choice == SizeMissDecision.RETRY:
-                    self.queue_manager.resume_after_decision(
-                        parse_encode_workers(self.app_config.get("encode_workers", 1))
-                    )
-                else:
-                    self.queue_manager.reconcile_after_decision()
+            else:
+                self.queue_manager.reconcile_after_decision()
             return
 
         options = self.queue_model.decision_options_for_row(row)
@@ -1357,25 +1447,41 @@ class MainWindow(QMainWindow):
         decision = choose_quality_decision(self, self.translator, record, options)
         if decision is None:
             return
-        if self.queue_model.apply_quality_decision(row, decision):
-            self._append_log(
-                self.translator.t(
-                    "gui.log.decision_resolved",
-                    file=record.source_path.name,
-                    action=decision.action_code.value,
-                )
+        if not self.queue_model.apply_quality_decision(row, decision):
+            self._report_decision_failure(record)
+            return
+        self._append_log(
+            self.translator.t(
+                "gui.log.decision_resolved",
+                file=record.source_path.name,
+                action=decision.action_code.value,
             )
-            if decision.action_code in {
-                DecisionActionCode.RELAX_SIZE,
-                DecisionActionCode.RELAX_QUALITY,
-                DecisionActionCode.CHANGE_MEDIA_BUDGET,
-                DecisionActionCode.REANALYZE,
-            }:
-                self.queue_manager.resume_after_decision(
-                    parse_encode_workers(self.app_config.get("encode_workers", 1))
-                )
-            else:
-                self.queue_manager.reconcile_after_decision()
+        )
+        if decision.action_code in {
+            DecisionActionCode.RELAX_SIZE,
+            DecisionActionCode.RELAX_QUALITY,
+            DecisionActionCode.CHANGE_MEDIA_BUDGET,
+            DecisionActionCode.REANALYZE,
+        }:
+            self.queue_manager.resume_after_decision(
+                parse_encode_workers(self.app_config.get("encode_workers", 1))
+            )
+        else:
+            self.queue_manager.reconcile_after_decision()
+
+    def _report_decision_failure(self, record: QueueItemRecord) -> None:
+        detail = record.error_summary or self.translator.t("gui.message.decision_failed")
+        self._append_log(f"{self.translator.t('gui.message.error')}: {detail}")
+        QMessageBox.warning(self, self.translator.t("gui.message.warning"), detail)
+
+    def _on_queue_row_activated(self, _view: ResponsiveQueueTableView, index: QModelIndex) -> None:
+        if self.queue_busy:
+            return
+        row = index.row()
+        record = self.queue_model.record_for_row(row)
+        if record is None or not self.queue_model.can_resolve_row(row):
+            return
+        self._resolve_queue_decision(row, record)
 
     def _show_header_context_menu(self, view: ResponsiveQueueTableView, pos: QPoint) -> None:
         menu = QMenu(self)

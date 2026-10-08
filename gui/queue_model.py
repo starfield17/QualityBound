@@ -29,10 +29,12 @@ from gui.queue_actions import (
     decision_options_for_record,
     discard_size_miss as discard_size_miss_action,
     can_edit_record,
+    record_quality_result,
     retry_size_miss as retry_size_miss_action,
 )
 from gui.queue_state import (
     ACTIVE_ITEM_STATUSES,
+    RUNNABLE_ITEM_STATUSES,
     QueueItemRecord,
     QueueItemStatus,
     QueueMetrics,
@@ -217,7 +219,7 @@ class QueueTableModel(QAbstractTableModel):
             if column == QueueColumn.OUTPUT:
                 return record.output_path.name
             if column == QueueColumn.TAGS:
-                return " ".join(build_tags(record))
+                return " ".join(build_tags(record, self.translator))
             if column == QueueColumn.STATUS:
                 if record.status == QueueItemStatus.ANALYZING and record.analysis_candidate_limit:
                     return (
@@ -238,9 +240,7 @@ class QueueTableModel(QAbstractTableModel):
                 return str(record.source_path.parent)
             if column == QueueColumn.OUTPUT:
                 return str(record.output_path)
-            if column == QueueColumn.TAGS and record.error_summary:
-                return build_tooltip(record)
-            return build_tooltip(record)
+            return build_tooltip(record, self.translator)
         elif role == Qt.ItemDataRole.TextAlignmentRole:
             if column in {
                 QueueColumn.RESOLUTION,
@@ -278,7 +278,7 @@ class QueueTableModel(QAbstractTableModel):
             if record.status == QueueItemStatus.FAILED:
                 return style.standardIcon(QStyle.StandardPixmap.SP_MessageBoxCritical)
             if record.status == QueueItemStatus.NEEDS_DECISION:
-                return style.standardIcon(QStyle.StandardPixmap.SP_MessageBoxWarning)
+                return style.standardIcon(QStyle.StandardPixmap.SP_MessageBoxQuestion)
             if record.status == QueueItemStatus.CANCELLED:
                 return style.standardIcon(QStyle.StandardPixmap.SP_DialogCancelButton)
             if record.status == QueueItemStatus.SKIPPED:
@@ -399,6 +399,7 @@ class QueueTableModel(QAbstractTableModel):
             and record.status
             in {
                 QueueItemStatus.DONE,
+                QueueItemStatus.FAILED,
                 QueueItemStatus.SKIPPED,
                 QueueItemStatus.CANCELLED,
             }
@@ -428,8 +429,7 @@ class QueueTableModel(QAbstractTableModel):
         record = self.record_for_row(row)
         if record is None or record.status != QueueItemStatus.NEEDS_DECISION:
             return False
-        quality = record.plan_item.quality_search_result
-        if quality is None:
+        if record_quality_result(record) is None:
             return False
         resolved = apply_quality_decision_action(record, decision)
         self._emit_rows_changed([row])
@@ -480,7 +480,7 @@ class QueueTableModel(QAbstractTableModel):
             row, record = self.record_for_id(item_id)
             if row is None or record is None:
                 continue
-            if record.status in {QueueItemStatus.QUEUED, QueueItemStatus.WAITING_ANALYSIS}:
+            if record.status in RUNNABLE_ITEM_STATUSES:
                 prepare_record_for_execution(record)
                 changed_rows.append(row)
         self._emit_rows_changed(changed_rows)
@@ -488,7 +488,7 @@ class QueueTableModel(QAbstractTableModel):
     def execution_records(self) -> list[QueueItemRecord]:
         return [
             record for record in self._records
-            if record.status in {QueueItemStatus.QUEUED, QueueItemStatus.WAITING_ANALYSIS}
+            if record.status in RUNNABLE_ITEM_STATUSES
         ]
 
     def mark_running(self, item_id: str) -> None:
@@ -610,7 +610,11 @@ class QueueTableModel(QAbstractTableModel):
 
     def can_resolve_row(self, row: int) -> bool:
         record = self.record_for_row(row)
-        return record is not None and record.status == QueueItemStatus.NEEDS_DECISION
+        return (
+            record is not None
+            and record.status == QueueItemStatus.NEEDS_DECISION
+            and record.result is not None
+        )
 
     def _emit_rows_changed(self, rows: list[int]) -> None:
         clean_rows = sorted({row for row in rows if 0 <= row < len(self._records)})

@@ -15,6 +15,7 @@ from core.models import (
     DecisionActionCode,
     DecisionOption,
     EncodeOptions,
+    QualitySearchResult,
     QualitySearchStatus,
     SegmentedAnalysisResult,
     SkipOrigin,
@@ -44,6 +45,17 @@ EDITABLE_ITEM_STATUSES = {
 
 def can_edit_record(record: QueueItemRecord) -> bool:
     return record.status in EDITABLE_ITEM_STATUSES
+
+
+def record_quality_result(record: QueueItemRecord) -> QualitySearchResult | SegmentedAnalysisResult | None:
+    """Return whichever Smart result the item carries.
+
+    Smart v1 stores a ``QualitySearchResult`` while Smart v2 stores a
+    ``SegmentedAnalysisResult``.  Every decision path must accept both, so the
+    lookup lives here instead of being re-derived from one field.
+    """
+
+    return record.plan_item.quality_search_result or record.plan_item.segmented_analysis_result
 
 
 def apply_options_to_record(
@@ -110,7 +122,7 @@ def decision_options_for_record(record: QueueItemRecord) -> list[DecisionOption]
     result = record.result
     if result is None or result.rejected_output_path is not None:
         return []
-    quality = record.plan_item.quality_search_result or record.plan_item.segmented_analysis_result
+    quality = record_quality_result(record)
     return build_decision_options(quality) if quality is not None else []
 
 
@@ -119,7 +131,7 @@ def apply_quality_decision(record: QueueItemRecord, decision: DecisionOption) ->
 
     if record.status != QueueItemStatus.NEEDS_DECISION:
         return False
-    quality = record.plan_item.quality_search_result or record.plan_item.segmented_analysis_result
+    quality = record_quality_result(record)
     if quality is None:
         return False
 

@@ -9,6 +9,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Mapping
 
+from core.i18n import Translator
 from core.models import CompressionMode, EncodePlan, EncodePlanItem, EncodeResult, MediaInfo, QualitySearchResult, SegmentedAnalysisResult
 from core.progress_events import ProgressEvent
 
@@ -50,6 +51,20 @@ ACTIVE_ITEM_STATUSES = {
     QueueItemStatus.ANALYZING,
     QueueItemStatus.ENCODING,
     QueueItemStatus.VALIDATING,
+}
+
+# Items that can still be scheduled for the current or a future run.
+RUNNABLE_ITEM_STATUSES = {
+    QueueItemStatus.QUEUED,
+    QueueItemStatus.WAITING_ANALYSIS,
+}
+
+# Items whose file work is finished; only a user decision changes them further.
+TERMINAL_ITEM_STATUSES = {
+    QueueItemStatus.DONE,
+    QueueItemStatus.FAILED,
+    QueueItemStatus.SKIPPED,
+    QueueItemStatus.CANCELLED,
 }
 
 
@@ -185,60 +200,84 @@ def short_error(message: str | None, limit: int = 120) -> str:
     return normalized[: limit - 3].rstrip() + "..."
 
 
-def build_tags(record: QueueItemRecord) -> list[str]:
+def build_tags(record: QueueItemRecord, translator: Translator) -> list[str]:
     tags: list[str] = []
     if record.total_passes > 1:
-        tags.append("Two-pass")
+        tags.append(translator.t("gui.tag.two_pass"))
     if record.plan_item.options.overwrite:
-        tags.append("Overwrite")
+        tags.append(translator.t("gui.tag.overwrite"))
     if record.plan_item.options.copy_external_subtitles:
-        tags.append("ExtSub")
+        tags.append(translator.t("gui.tag.external_subtitles"))
     if record.plan_item.warnings:
-        tags.append("Warn")
+        tags.append(translator.t("gui.tag.warning"))
     if record.status == QueueItemStatus.SKIPPED:
-        tags.append("Skip")
+        tags.append(translator.t("gui.tag.skipped"))
     if record.status == QueueItemStatus.FAILED:
-        tags.append("Fail")
+        tags.append(translator.t("gui.tag.failed"))
     if record.status == QueueItemStatus.NEEDS_DECISION:
-        tags.append("Decision")
+        tags.append(translator.t("gui.tag.decision"))
     if record.error_summary and record.status not in {
         QueueItemStatus.SKIPPED,
         QueueItemStatus.FAILED,
         QueueItemStatus.NEEDS_DECISION,
     }:
-        tags.append("Note")
+        tags.append(translator.t("gui.tag.note"))
     return tags
 
 
-def build_tooltip(record: QueueItemRecord) -> str:
+def build_tooltip(record: QueueItemRecord, translator: Translator) -> str:
     lines = [
-        f"Source: {record.source_path}",
-        f"Output: {record.output_path}",
+        translator.t("gui.tooltip.source", path=record.source_path),
+        translator.t("gui.tooltip.output", path=record.output_path),
     ]
     if record.plan_item.warnings:
-        lines.append("Warnings: " + "; ".join(record.plan_item.warnings))
+        lines.append(
+            translator.t("gui.tooltip.warnings", warnings="; ".join(record.plan_item.warnings))
+        )
     if record.error_summary:
-        lines.append("Detail: " + record.error_summary)
+        lines.append(translator.t("gui.tooltip.detail", detail=record.error_summary))
     quality = record.plan_item.quality_search_result
     segmented = record.plan_item.segmented_analysis_result
     if segmented is not None:
         mean = segmented.final_mean_vmaf if segmented.final_mean_vmaf is not None else segmented.predicted_mean_vmaf
-        lines.append(f"Smart v2 (experimental): {len(segmented.shots)} shots")
+        lines.append(translator.t("gui.tooltip.smart_v2_shots", count=len(segmented.shots)))
         if record.analysis_measurement_budget:
-            lines.append(f"Initial sample encode budget: {record.analysis_measurement_budget}; holdouts and repairs are additional.")
+            lines.append(
+                translator.t(
+                    "gui.tooltip.measurement_budget",
+                    budget=record.analysis_measurement_budget,
+                )
+            )
         if mean is not None:
-            lines.append(f"{'Measured' if segmented.final_mean_vmaf is not None else 'Predicted'} mean VMAF: {mean:.2f}")
+            if segmented.final_mean_vmaf is not None:
+                lines.append(translator.t("gui.tooltip.measured_mean_vmaf", value=f"{mean:.2f}"))
+            else:
+                lines.append(translator.t("gui.tooltip.predicted_mean_vmaf", value=f"{mean:.2f}"))
         if segmented.approximate:
-            lines.append("Allocation used bounded state compression.")
+            lines.append(translator.t("gui.tooltip.allocation_compressed"))
+        if segmented.reason:
+            lines.append(translator.t("gui.tooltip.smart_analysis", reason=segmented.reason))
     if quality is not None:
         if quality.min_vmaf is not None:
-            lines.append(f"SMART quality score: {quality.min_vmaf:.2f}")
+            lines.append(
+                translator.t("gui.tooltip.smart_quality_score", value=f"{quality.min_vmaf:.2f}")
+            )
         if quality.predicted_output_ratio is not None:
-            lines.append(f"Predicted output: {quality.predicted_output_ratio * 100:.2f}%")
+            lines.append(
+                translator.t(
+                    "gui.tooltip.predicted_output",
+                    value=f"{quality.predicted_output_ratio * 100:.2f}",
+                )
+            )
         if quality.required_output_ratio is not None:
-            lines.append(f"Estimated required output: {quality.required_output_ratio * 100:.2f}%")
+            lines.append(
+                translator.t(
+                    "gui.tooltip.required_output",
+                    value=f"{quality.required_output_ratio * 100:.2f}",
+                )
+            )
         if quality.reason:
-            lines.append("Smart analysis: " + quality.reason)
+            lines.append(translator.t("gui.tooltip.smart_analysis", reason=quality.reason))
     return "\n".join(lines)
 
 
@@ -294,7 +333,7 @@ def processed_weight(record: QueueItemRecord) -> float:
     weight = record.effective_weight
     if weight <= 0:
         return 0.0
-    if record.status in {QueueItemStatus.DONE, QueueItemStatus.SKIPPED}:
+    if record.status in TERMINAL_ITEM_STATUSES:
         return weight
     if record.status == QueueItemStatus.NEEDS_DECISION:
         return weight * 0.99
@@ -318,7 +357,8 @@ def compute_metrics(records: list[QueueItemRecord]) -> QueueMetrics:
             metrics.queued_items += 1
         elif record.status in ACTIVE_ITEM_STATUSES:
             metrics.running_items += 1
-            running_record = record
+            if running_record is None:
+                running_record = record
         elif record.status == QueueItemStatus.FAILED:
             metrics.failed_items += 1
         elif record.status == QueueItemStatus.NEEDS_DECISION:

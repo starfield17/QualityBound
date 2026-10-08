@@ -254,5 +254,71 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
             window.close()
 
 
+    def test_source_persistence_skips_nonexistent_history_and_redundant_writes(self) -> None:
+        import tempfile
+
+        window = MainWindow(self.repo_root, language="en")
+        try:
+            window.app_config["recent_paths"] = []
+            window.app_config["last_source_path"] = ""
+            window.source_combo.setEditText("/definitely/not/a/real/file.mov")
+            with patch("gui.gui_mainwindow.update_app_config") as update:
+                window._persist_runtime_state()
+            update.assert_called_once()
+            merged = update.call_args.args[1]({})
+            self.assertEqual(merged["last_source_path"], "/definitely/not/a/real/file.mov")
+            self.assertEqual(merged["recent_paths"], [])
+
+            with tempfile.TemporaryDirectory() as temp_dir:
+                source = Path(temp_dir) / "movie.mov"
+                source.write_bytes(b"source")
+                window.source_combo.setEditText(str(source))
+                with patch("gui.gui_mainwindow.update_app_config") as update:
+                    window._persist_runtime_state()
+                update.assert_called_once()
+                merged = update.call_args.args[1]({})
+                self.assertEqual(merged["recent_paths"], [str(source)])
+
+                with patch("gui.gui_mainwindow.update_app_config") as update:
+                    window._persist_runtime_state()
+                update.assert_not_called()
+        finally:
+            window.close()
+
+
+    def test_queue_state_is_visible_and_translated(self) -> None:
+        window = MainWindow(self.repo_root, language="en")
+        try:
+            window.app_config["desktop_notifications"] = False
+            window._on_queue_state_changed("awaiting_decision")
+            self.assertEqual(
+                window.queue_state_label.text(),
+                window.translator.t("gui.queue_state.awaiting_decision"),
+            )
+            with patch("gui.gui_mainwindow.update_app_config"):
+                window._language_changed("zh_cn")
+            self.assertEqual(window.translator.language, "zh_cn")
+            self.assertEqual(
+                window.queue_state_label.text(),
+                window.translator.t("gui.queue_state.awaiting_decision"),
+            )
+        finally:
+            window.close()
+
+    def test_stop_abandons_a_pending_run_when_no_worker_owns_it(self) -> None:
+        import tempfile
+
+        window = MainWindow(self.repo_root, language="en")
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                record = self._record(Path(temp_dir), "queued", QueueItemStatus.QUEUED)
+                window.queue_model.add_records([record])
+                window.queue_manager._pending_run = QueueRunCompletion("run", (record.item_id,))
+                window._stop_active_task()
+                self.assertFalse(window.queue_manager.has_pending_run())
+        finally:
+            window.close()
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
