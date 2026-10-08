@@ -1,69 +1,56 @@
 {
   "schema_version": 2,
-  "verification_contract_version": 3,
-  "ffmpeg_version": "9.0.1",
+  "verification_contract_version": 4,
+  "ffmpeg_version": "9.0.2",
   "licenses": [
     {
       "component": "FFmpeg",
       "name": "LICENSE.md",
-      "url": "https://raw.githubusercontent.com/FFmpeg/FFmpeg/n9.0.1/LICENSE.md",
-      "sha256": "2e1d16c72fd74e12063776371da757322f8b77589386532f4fd8634bde7de1af"
+      "sha256": "2e1d16c72fd74e12063776371da757322f8b77589386532f4fd8634bde7de1af",
+      "url": "https://raw.githubusercontent.com/FFmpeg/FFmpeg/n9.0.2/LICENSE.md"
     },
     {
       "component": "FFmpeg",
       "name": "COPYING.GPLv3",
-      "url": "https://raw.githubusercontent.com/FFmpeg/FFmpeg/n9.0.1/COPYING.GPLv3",
-      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+      "url": "https://raw.githubusercontent.com/FFmpeg/FFmpeg/n9.0.2/COPYING.GPLv3"
     },
     {
       "component": "Netflix VMAF",
       "name": "VMAF-LICENSE.txt",
-      "url": "https://raw.githubusercontent.com/Netflix/vmaf/v3.2.0/LICENSE",
-      "sha256": "a6fdb51d02b9dfe198e55534bb8047fe6d756eda117f4ff83de98f92c1952710"
+      "sha256": "a6fdb51d02b9dfe198e55534bb8047fe6d756eda117f4ff83de98f92c1952710",
+      "url": "https://raw.githubusercontent.com/Netflix/vmaf/v3.2.0/LICENSE"
+    },
+    {
+      "component": "dav1d",
+      "name": "DAV1D-LICENSE.txt",
+      "sha256": "dd92c3c2247c5651606fc23a5e2d6a1ebc5ace9a3e49cbde0e12f05ad1cb1ee5",
+      "url": "https://raw.githubusercontent.com/videolan/dav1d/54706fc6bc0cdecab7e9593974a4039cc038fca7/COPYING"
     }
   ],
   "targets": {
-    "windows-x86_64": {
-      "platform": "windows",
-      "architecture": "x86_64",
-      "source_kind": "mirror",
-      "provider": "starfield17/ffmpeg-vmaf-v1-builds (BtbN trusted mirror)",
-      "source_version": "n9.0.1-6-g9d4ca21220",
-      "build_recipe": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/tree/18884f433a57d81130cb92c7817297df9f98ceed",
-      "ffmpeg_commit": "9d4ca21220bfd3f06fc8bfc90ddf0f6d0a484611",
-      "ffmpeg_source": "https://github.com/FFmpeg/FFmpeg/tree/9d4ca21220bfd3f06fc8bfc90ddf0f6d0a484611",
-      "libvmaf_version": "3.2.0",
-      "libvmaf_commit": "e80d6c593e6e2327687dccd00b7cc9c91036d79f",
-      "libvmaf_source": "https://github.com/Netflix/vmaf/tree/e80d6c593e6e2327687dccd00b7cc9c91036d79f",
-      "upstream_build_recipe": "https://github.com/BtbN/FFmpeg-Builds/tree/d5e1920c45f0cdc418a39754e33dedd9483063a6",
-      "upstream_release": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-08-18-15-03",
-      "archives": [
-        {
-          "url": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/releases/download/ffmpeg-9.0.1-vmaf-v1.0.16-r3/ffmpeg-9.0.1-vmaf-v1.0.16-r3-windows-x86_64.zip",
-          "sha256": "335d0e2bbb8eae5358af9fff96f636cc103699cda6fc1b5d1d3e05518364403a",
-          "format": "zip"
-        }
-      ]
-    },
-    "windows-arm64": {
-      "platform": "windows",
+    "linux-arm64": {
+      "platform": "linux",
       "architecture": "arm64",
       "source_kind": "mirror",
       "provider": "starfield17/ffmpeg-vmaf-v1-builds (BtbN trusted mirror)",
-      "source_version": "n9.0.1-6-g9d4ca21220",
-      "build_recipe": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/tree/18884f433a57d81130cb92c7817297df9f98ceed",
-      "ffmpeg_commit": "9d4ca21220bfd3f06fc8bfc90ddf0f6d0a484611",
-      "ffmpeg_source": "https://github.com/FFmpeg/FFmpeg/tree/9d4ca21220bfd3f06fc8bfc90ddf0f6d0a484611",
+      "source_version": "n9.0.2-22-g46d8f462ee",
+      "build_recipe": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/tree/f00ad587fffcf8e2ece8404bf1d146ff288a8cf2",
+      "ffmpeg_commit": "46d8f462eeb87ee1f704d8c44a0ee24fca471ad1",
+      "ffmpeg_source": "https://github.com/FFmpeg/FFmpeg/tree/46d8f462eeb87ee1f704d8c44a0ee24fca471ad1",
       "libvmaf_version": "3.2.0",
-      "libvmaf_commit": "e80d6c593e6e2327687dccd00b7cc9c91036d79f",
-      "libvmaf_source": "https://github.com/Netflix/vmaf/tree/e80d6c593e6e2327687dccd00b7cc9c91036d79f",
-      "upstream_build_recipe": "https://github.com/BtbN/FFmpeg-Builds/tree/d5e1920c45f0cdc418a39754e33dedd9483063a6",
-      "upstream_release": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-08-18-15-03",
+      "libvmaf_commit": "86da14d0306a138fd3f01319860b905169746516",
+      "libvmaf_source": "https://github.com/Netflix/vmaf/tree/86da14d0306a138fd3f01319860b905169746516",
+      "dav1d_version": "1.5.4",
+      "dav1d_commit": "9711965b60bb692ae24004659acf61f5c7d9ed61",
+      "dav1d_source": "https://github.com/videolan/dav1d/tree/9711965b60bb692ae24004659acf61f5c7d9ed61",
+      "upstream_build_recipe": "https://github.com/BtbN/FFmpeg-Builds/tree/9acad4a9ef1583096af7836cc1e9c8cbcb4d3950",
+      "upstream_release": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-10-07-13-07",
       "archives": [
         {
-          "url": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/releases/download/ffmpeg-9.0.1-vmaf-v1.0.16-r3/ffmpeg-9.0.1-vmaf-v1.0.16-r3-windows-arm64.zip",
-          "sha256": "3cd5e6c87de500c8c272430901663eeb4eb46d8a4304c4bc984b2f25e46d7da8",
-          "format": "zip"
+          "url": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/releases/download/ffmpeg-9.0.2-vmaf-v1.0.16-r1/ffmpeg-9.0.2-vmaf-v1.0.16-r1-linux-arm64.tar.xz",
+          "sha256": "3bac6b43e13a5701468bde0468e88e745146a4207ff3bf3f1136d55a6a62647a",
+          "format": "tar.xz"
         }
       ]
     },
@@ -72,41 +59,22 @@
       "architecture": "x86_64",
       "source_kind": "mirror",
       "provider": "starfield17/ffmpeg-vmaf-v1-builds (BtbN trusted mirror)",
-      "source_version": "n9.0.1-6-g9d4ca21220",
-      "build_recipe": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/tree/18884f433a57d81130cb92c7817297df9f98ceed",
-      "ffmpeg_commit": "9d4ca21220bfd3f06fc8bfc90ddf0f6d0a484611",
-      "ffmpeg_source": "https://github.com/FFmpeg/FFmpeg/tree/9d4ca21220bfd3f06fc8bfc90ddf0f6d0a484611",
+      "source_version": "n9.0.2-22-g46d8f462ee",
+      "build_recipe": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/tree/f00ad587fffcf8e2ece8404bf1d146ff288a8cf2",
+      "ffmpeg_commit": "46d8f462eeb87ee1f704d8c44a0ee24fca471ad1",
+      "ffmpeg_source": "https://github.com/FFmpeg/FFmpeg/tree/46d8f462eeb87ee1f704d8c44a0ee24fca471ad1",
       "libvmaf_version": "3.2.0",
-      "libvmaf_commit": "e80d6c593e6e2327687dccd00b7cc9c91036d79f",
-      "libvmaf_source": "https://github.com/Netflix/vmaf/tree/e80d6c593e6e2327687dccd00b7cc9c91036d79f",
-      "upstream_build_recipe": "https://github.com/BtbN/FFmpeg-Builds/tree/d5e1920c45f0cdc418a39754e33dedd9483063a6",
-      "upstream_release": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-08-18-15-03",
+      "libvmaf_commit": "86da14d0306a138fd3f01319860b905169746516",
+      "libvmaf_source": "https://github.com/Netflix/vmaf/tree/86da14d0306a138fd3f01319860b905169746516",
+      "dav1d_version": "1.5.4",
+      "dav1d_commit": "9711965b60bb692ae24004659acf61f5c7d9ed61",
+      "dav1d_source": "https://github.com/videolan/dav1d/tree/9711965b60bb692ae24004659acf61f5c7d9ed61",
+      "upstream_build_recipe": "https://github.com/BtbN/FFmpeg-Builds/tree/9acad4a9ef1583096af7836cc1e9c8cbcb4d3950",
+      "upstream_release": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-10-07-13-07",
       "archives": [
         {
-          "url": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/releases/download/ffmpeg-9.0.1-vmaf-v1.0.16-r3/ffmpeg-9.0.1-vmaf-v1.0.16-r3-linux-x86_64.tar.xz",
-          "sha256": "c1f8cfdbc81dbbfaec0e2176d6d2f31431ee0af4c24163de3bdf56a7336f57af",
-          "format": "tar.xz"
-        }
-      ]
-    },
-    "linux-arm64": {
-      "platform": "linux",
-      "architecture": "arm64",
-      "source_kind": "mirror",
-      "provider": "starfield17/ffmpeg-vmaf-v1-builds (BtbN trusted mirror)",
-      "source_version": "n9.0.1-6-g9d4ca21220",
-      "build_recipe": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/tree/18884f433a57d81130cb92c7817297df9f98ceed",
-      "ffmpeg_commit": "9d4ca21220bfd3f06fc8bfc90ddf0f6d0a484611",
-      "ffmpeg_source": "https://github.com/FFmpeg/FFmpeg/tree/9d4ca21220bfd3f06fc8bfc90ddf0f6d0a484611",
-      "libvmaf_version": "3.2.0",
-      "libvmaf_commit": "e80d6c593e6e2327687dccd00b7cc9c91036d79f",
-      "libvmaf_source": "https://github.com/Netflix/vmaf/tree/e80d6c593e6e2327687dccd00b7cc9c91036d79f",
-      "upstream_build_recipe": "https://github.com/BtbN/FFmpeg-Builds/tree/d5e1920c45f0cdc418a39754e33dedd9483063a6",
-      "upstream_release": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-08-18-15-03",
-      "archives": [
-        {
-          "url": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/releases/download/ffmpeg-9.0.1-vmaf-v1.0.16-r3/ffmpeg-9.0.1-vmaf-v1.0.16-r3-linux-arm64.tar.xz",
-          "sha256": "b1b00e5e8d8a276bd2992d1bf7a057da8a676489d5030f6fa3431875cb6d94aa",
+          "url": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/releases/download/ffmpeg-9.0.2-vmaf-v1.0.16-r1/ffmpeg-9.0.2-vmaf-v1.0.16-r1-linux-x86_64.tar.xz",
+          "sha256": "f39bb3cd70a90df9c876c920378ebf100a62d64ff92b803b23a9baa374e57685",
           "format": "tar.xz"
         }
       ]
@@ -116,18 +84,71 @@
       "architecture": "arm64",
       "source_kind": "build",
       "provider": "starfield17/ffmpeg-vmaf-v1-builds",
-      "source_version": "ffmpeg-n9.0.1+libvmaf-v3.2.0",
-      "build_recipe": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/tree/18884f433a57d81130cb92c7817297df9f98ceed",
-      "ffmpeg_commit": "bf1b838f2ab88b4f8fd83443325c782ea0e0f7fa",
-      "ffmpeg_source": "https://github.com/FFmpeg/FFmpeg/tree/bf1b838f2ab88b4f8fd83443325c782ea0e0f7fa",
+      "source_version": "ffmpeg-n9.0.2+libvmaf-v3.2.0+dav1d-v1.5.4",
+      "build_recipe": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/tree/f00ad587fffcf8e2ece8404bf1d146ff288a8cf2",
+      "ffmpeg_commit": "946fcce07b6dcd0331c8cc609192aeff5e1924f8",
+      "ffmpeg_source": "https://github.com/FFmpeg/FFmpeg/tree/946fcce07b6dcd0331c8cc609192aeff5e1924f8",
       "libvmaf_version": "3.2.0",
       "libvmaf_commit": "3f9e02af258a5c0e30124fc585a3c3af90126dee",
       "libvmaf_source": "https://github.com/Netflix/vmaf/tree/3f9e02af258a5c0e30124fc585a3c3af90126dee",
+      "dav1d_version": "1.5.4",
+      "dav1d_commit": "54706fc6bc0cdecab7e9593974a4039cc038fca7",
+      "dav1d_source": "https://github.com/videolan/dav1d/tree/54706fc6bc0cdecab7e9593974a4039cc038fca7",
       "upstream_build_recipe": "https://git.martin-riedl.de/ffmpeg/build-script/src/commit/f63b8aab8f5ce1a067da86ba69e34a36a7e217e5",
       "archives": [
         {
-          "url": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/releases/download/ffmpeg-9.0.1-vmaf-v1.0.16-r3/ffmpeg-9.0.1-vmaf-v1.0.16-r3-macos-arm64.zip",
-          "sha256": "b0062915836c845dd9a1b14bf8671dffaff270a9a9f1b69cf0663b8a2eb36433",
+          "url": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/releases/download/ffmpeg-9.0.2-vmaf-v1.0.16-r1/ffmpeg-9.0.2-vmaf-v1.0.16-r1-macos-arm64.zip",
+          "sha256": "2e8774bbeaa5f1487149fea1726d2d4e6297c2edaa2516aa410e37f9cc720654",
+          "format": "zip"
+        }
+      ]
+    },
+    "windows-arm64": {
+      "platform": "windows",
+      "architecture": "arm64",
+      "source_kind": "mirror",
+      "provider": "starfield17/ffmpeg-vmaf-v1-builds (BtbN trusted mirror)",
+      "source_version": "n9.0.2-22-g46d8f462ee",
+      "build_recipe": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/tree/f00ad587fffcf8e2ece8404bf1d146ff288a8cf2",
+      "ffmpeg_commit": "46d8f462eeb87ee1f704d8c44a0ee24fca471ad1",
+      "ffmpeg_source": "https://github.com/FFmpeg/FFmpeg/tree/46d8f462eeb87ee1f704d8c44a0ee24fca471ad1",
+      "libvmaf_version": "3.2.0",
+      "libvmaf_commit": "86da14d0306a138fd3f01319860b905169746516",
+      "libvmaf_source": "https://github.com/Netflix/vmaf/tree/86da14d0306a138fd3f01319860b905169746516",
+      "dav1d_version": "1.5.4",
+      "dav1d_commit": "9711965b60bb692ae24004659acf61f5c7d9ed61",
+      "dav1d_source": "https://github.com/videolan/dav1d/tree/9711965b60bb692ae24004659acf61f5c7d9ed61",
+      "upstream_build_recipe": "https://github.com/BtbN/FFmpeg-Builds/tree/9acad4a9ef1583096af7836cc1e9c8cbcb4d3950",
+      "upstream_release": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-10-07-13-07",
+      "archives": [
+        {
+          "url": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/releases/download/ffmpeg-9.0.2-vmaf-v1.0.16-r1/ffmpeg-9.0.2-vmaf-v1.0.16-r1-windows-arm64.zip",
+          "sha256": "5461332057fde941164b8c7db8adb428c2ee5e5ce7be13a7950b8100c0a6372d",
+          "format": "zip"
+        }
+      ]
+    },
+    "windows-x86_64": {
+      "platform": "windows",
+      "architecture": "x86_64",
+      "source_kind": "mirror",
+      "provider": "starfield17/ffmpeg-vmaf-v1-builds (BtbN trusted mirror)",
+      "source_version": "n9.0.2-22-g46d8f462ee",
+      "build_recipe": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/tree/f00ad587fffcf8e2ece8404bf1d146ff288a8cf2",
+      "ffmpeg_commit": "46d8f462eeb87ee1f704d8c44a0ee24fca471ad1",
+      "ffmpeg_source": "https://github.com/FFmpeg/FFmpeg/tree/46d8f462eeb87ee1f704d8c44a0ee24fca471ad1",
+      "libvmaf_version": "3.2.0",
+      "libvmaf_commit": "86da14d0306a138fd3f01319860b905169746516",
+      "libvmaf_source": "https://github.com/Netflix/vmaf/tree/86da14d0306a138fd3f01319860b905169746516",
+      "dav1d_version": "1.5.4",
+      "dav1d_commit": "9711965b60bb692ae24004659acf61f5c7d9ed61",
+      "dav1d_source": "https://github.com/videolan/dav1d/tree/9711965b60bb692ae24004659acf61f5c7d9ed61",
+      "upstream_build_recipe": "https://github.com/BtbN/FFmpeg-Builds/tree/9acad4a9ef1583096af7836cc1e9c8cbcb4d3950",
+      "upstream_release": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-10-07-13-07",
+      "archives": [
+        {
+          "url": "https://github.com/starfield17/ffmpeg-vmaf-v1-builds/releases/download/ffmpeg-9.0.2-vmaf-v1.0.16-r1/ffmpeg-9.0.2-vmaf-v1.0.16-r1-windows-x86_64.zip",
+          "sha256": "3211d4905ea17fe979e7aa1952a2476a67f6882478e6c44896db93861f388c50",
           "format": "zip"
         }
       ]

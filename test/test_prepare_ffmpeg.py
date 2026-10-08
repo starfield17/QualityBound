@@ -20,6 +20,7 @@ from scripts.prepare_ffmpeg import (
     prepare_target,
     verify_anamorphic_normalization,
     verify_capabilities,
+    verify_codec_roundtrips,
 )
 
 
@@ -63,8 +64,8 @@ class FFmpegManifestTestCase(unittest.TestCase):
     def test_manifest_pins_all_release_targets(self) -> None:
         manifest = load_manifest(ROOT / "packaging" / "ffmpeg" / "manifest.json")
         self.assertEqual(manifest["schema_version"], 2)
-        self.assertEqual(manifest["verification_contract_version"], 3)
-        self.assertEqual(manifest["ffmpeg_version"], "9.0.1")
+        self.assertEqual(manifest["verification_contract_version"], 4)
+        self.assertEqual(manifest["ffmpeg_version"], "9.0.2")
         self.assertEqual(set(manifest["targets"]), EXPECTED_TARGETS)
         self.assertNotIn("macos-x86_64", manifest["targets"])
         for target in manifest["targets"].values():
@@ -84,6 +85,35 @@ class FFmpegManifestTestCase(unittest.TestCase):
                 )
 
 
+class CodecRoundtripTestCase(unittest.TestCase):
+    def test_roundtrip_rejects_missing_decoder_and_incomplete_scores(self):
+        for failure in ("decoder", "frames", "score", "frame_order"):
+            with self.subTest(failure=failure):
+                def run(command, failure=failure, **kwargs):
+                    if "-show_streams" in command:
+                        codec = Path(command[-1]).stem
+                        return json.dumps({"streams": [{"codec_name": codec, "width": 320,
+                                                       "height": 180, "pix_fmt": "yuv420p"}]})
+                    if "framemd5" in command:
+                        if failure == "decoder":
+                            raise RuntimeError("decoder unavailable")
+                        return "\n".join("0, 0, 0, 1, 86400, hash" for _ in range(24))
+                    if "-filter_complex" in command:
+                        graph = command[command.index("-filter_complex") + 1]
+                        scores = [{"frameNum": n, "metrics": {"vmaf": 95.0}}
+                                  for n in range(23 if failure == "frames" else 24)]
+                        if failure == "score":
+                            scores[0]["metrics"]["vmaf"] = float("nan")
+                        if failure == "frame_order":
+                            scores[0]["frameNum"] = 1
+                        (kwargs["cwd"] / graph.split("log_path=")[-1]).write_text(json.dumps({"frames": scores}))
+                    return ""
+                with patch("scripts.prepare_ffmpeg._run_checked", side_effect=run), self.assertRaises(RuntimeError):
+                    verify_codec_roundtrips(Path("ffmpeg"), Path("ffprobe"))
+
+
+
+
 class FFmpegPreparationTestCase(unittest.TestCase):
     def _fixture_manifest(self, root: Path, *, archive_digest: str | None = None) -> dict[str, object]:
         archive = root / "fixture.zip"
@@ -97,13 +127,17 @@ class FFmpegPreparationTestCase(unittest.TestCase):
         copying_path.write_text("copying", encoding="utf-8")
         vmaf_license_path = root / "VMAF-LICENSE.txt"
         vmaf_license_path.write_text("vmaf license", encoding="utf-8")
+        dav1d_license_path = root / "DAV1D-LICENSE.txt"
+        dav1d_license_path.write_text("dav1d license", encoding="utf-8")
         ffmpeg_commit = "a" * 40
         libvmaf_commit = "b" * 40
         return {
             "schema_version": 2,
-            "verification_contract_version": 3,
-            "ffmpeg_version": "9.0.1",
+            "verification_contract_version": 4,
+            "ffmpeg_version": "9.0.2",
             "licenses": [
+                {"component": "dav1d", "name": dav1d_license_path.name,
+                 "url": dav1d_license_path.as_uri(), "sha256": _sha256(dav1d_license_path)},
                 {
                     "component": "FFmpeg",
                     "name": license_path.name,
@@ -171,6 +205,7 @@ class FFmpegPreparationTestCase(unittest.TestCase):
             self.assertTrue((output / "LICENSES" / "LICENSE.md").is_file())
             self.assertTrue((output / "LICENSES" / "COPYING.GPLv3").is_file())
             self.assertTrue((output / "LICENSES" / "VMAF-LICENSE.txt").is_file())
+            self.assertTrue((output / "LICENSES" / "DAV1D-LICENSE.txt").is_file())
             source = json.loads((output / "SOURCE.json").read_text(encoding="utf-8"))
             self.assertEqual(source["schema_version"], 2)
             self.assertEqual(source["target"], "windows-x86_64")
@@ -284,10 +319,12 @@ class FFmpegPreparationTestCase(unittest.TestCase):
         )
         with (
             patch("scripts.prepare_ffmpeg._run_checked", side_effect=fake_run),
+            patch("scripts.prepare_ffmpeg.verify_codec_roundtrips") as roundtrips,
             patch("scripts.prepare_ffmpeg.detect_analysis_capabilities", return_value=capabilities),
         ):
             verify_capabilities(Path("ffmpeg"), Path("ffprobe"))
 
+        roundtrips.assert_called_once_with(Path("ffmpeg"), Path("ffprobe"))
         probes = [
             command
             for command in commands

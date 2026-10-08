@@ -108,7 +108,8 @@ With complete decoder-header compatibility checks enabled:
   cleanup, publication failure, source/parameter identity, old presets/defaults,
   GUI/CLI semantics, retry/relax decisions and invalid receipts.
 
-Ruff, strict Pyright, architecture checks and576 complete unit tests passed
+The initial v2 development gate passed Ruff, strict Pyright, architecture checks
+and576 complete unit tests
 on this host (one existing platform-specific skip). The full suite used a
 temporary clean app configuration and restored the user's configuration:
 one pre-existing smoke test otherwise assumes the default workdir despite the
@@ -125,3 +126,36 @@ memory/time; subtitle/container edge cases; and compatible configurations for
 each native hardware backend. Compare against both v1 and whole-file ABR/two-pass
 searches with the same bound encoder/preset and complete scoring. Keep failed,
 unsupported and exhausted runs in the report rather than counting only wins.
+
+## Official dependency upgrade verification (2026-10-08)
+
+The published `ffmpeg-9.0.2-vmaf-v1.0.16-r1` release passed verification
+contract v4 on all five native targets. The release records 24 decoded and 24
+ordered finite VMAF-scored frames for HEVC and AV1 on every target, alongside
+the existing four-model, Scout, normalization, architecture and linkage gates.
+macOS builds official FFmpeg9.0.2 and static dav1d1.5.4; Windows/Linux mirror the
+pinned BtbN 9.0.2-plus-22-commits recipe. See the distribution's published
+[provenance and reports](https://github.com/starfield17/ffmpeg-vmaf-v1-builds/releases/tag/ffmpeg-9.0.2-vmaf-v1.0.16-r1).
+
+Using the actual published macOS pair and the existing seed1729 development
+fixture, Smart v2 completed both software HEVC (mean88.8591,349,961bytes) and
+AV1 (mean89.3022,469,198bytes), with complete final quality checks. The independent
+frame oracle retained all192 frames in order, including one-frame boundaries.
+These checks establish operation with the new distribution; they do not isolate
+FFmpeg version effects, compare codec efficiency, or establish real-content gains.
+The bundled AV1 decode fix is the inclusion of dav1d: the old distribution's
+AV1 roundtrip is rejected specifically during software decoding.
+
+VideoToolbox still returned `UNSUPPORTED` because different bitrates produced
+incompatible decoder parameter sets. Its runtime check remains unchanged; a
+version upgrade did not resolve this case. Native GPU backends on other platforms
+remain untested by this development fixture. Portable measurements and native
+roundtrip summaries are recorded under `dependency_upgrade` in
+[the development results](smart-v2-development-results.json); previous benchmark
+results retain their original tools and measurements.
+
+The dependency upgrade passed Ruff, strict Pyright, architecture checks and all577
+unit tests locally. The existing optional normalization integration test was
+enabled with the explicitly supplied official macOS FFmpeg pair; no tests were
+skipped in that run. The clean-config fixture precaution described above was
+retained, and the original local application configuration was restored.

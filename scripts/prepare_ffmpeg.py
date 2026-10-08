@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import platform
 import re
 import shutil
@@ -10,6 +11,7 @@ import struct
 import subprocess
 import sys
 import tarfile
+import tempfile
 import urllib.parse
 import urllib.request
 import zipfile
@@ -37,7 +39,7 @@ from core.smart.vmaf import (  # noqa: E402
 
 
 USER_AGENT = "QualityBound-release-ci/1.0"
-LICENSE_NAMES = {"LICENSE.md", "COPYING.GPLv3", "VMAF-LICENSE.txt"}
+LICENSE_NAMES = {"LICENSE.md", "COPYING.GPLv3", "VMAF-LICENSE.txt", "DAV1D-LICENSE.txt"}
 REQUIRED_FILTERS = {"libvmaf", "siti", "scdet"}
 _COMMIT_RE = re.compile(r"[0-9a-f]{40}")
 MACHINE_TYPES = {
@@ -70,7 +72,7 @@ def _require_commit(value: object, label: str) -> str:
 
 
 def validate_manifest(data: dict[str, object]) -> None:
-    if data.get("schema_version") != 2 or data.get("verification_contract_version") != 3:
+    if data.get("schema_version") != 2 or data.get("verification_contract_version") != 4:
         raise ValueError("Unsupported FFmpeg manifest schema.")
     licenses = data.get("licenses")
     if not isinstance(licenses, list) or {
@@ -251,7 +253,7 @@ def verify_binary_architecture(path: Path, expected: str) -> None:
         raise RuntimeError(f"Architecture mismatch for {path}: expected {expected}, got {actual}")
 
 
-def _run_checked(command: list[str]) -> str:
+def _run_checked(command: list[str], *, cwd: Path | None = None) -> str:
     result = subprocess.run(
         command,
         check=False,
@@ -259,6 +261,8 @@ def _run_checked(command: list[str]) -> str:
         text=True,
         encoding="utf-8",
         errors="replace",
+        cwd=cwd,
+        timeout=180,
     )
     output = result.stdout + "\n" + result.stderr
     if result.returncode != 0:
@@ -326,6 +330,50 @@ def verify_scout_runtime(ffmpeg_path: Path) -> None:
         raise RuntimeError("Bundled FFmpeg Scout smoke did not report usable metadata.")
 
 
+def verify_codec_roundtrips(ffmpeg: Path, ffprobe: Path) -> dict[str, object]:
+    """Verify produced bitstreams through software decoding and complete scoring."""
+    evidence: dict[str, object] = {}
+    ffmpeg, ffprobe = ffmpeg.resolve(), ffprobe.resolve()
+    with tempfile.TemporaryDirectory(prefix="ffmpeg-roundtrip-") as temporary:
+        work = Path(temporary)
+        reference = work / "reference.mkv"
+        _run_checked([str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y",
+              "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=1",
+              "-frames:v", "24", "-pix_fmt", "yuv420p", "-c:v", "ffv1", str(reference)])
+        for encoder, codec, preset in (("libx265", "hevc", "fast"), ("libsvtav1", "av1", "10")):
+            encoded = work / (codec + ".mkv")
+            _run_checked([str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y",
+                  "-hwaccel", "none", "-i", str(reference), "-an", "-frames:v", "24",
+                  "-pix_fmt", "yuv420p", "-c:v", encoder, "-preset", preset,
+                  "-b:v", "500k", "-g", "24", str(encoded)])
+            stream = json.loads(_run_checked([str(ffprobe), "-v", "error", "-select_streams", "v:0",
+                                     "-show_streams", "-of", "json", str(encoded)]))["streams"][0]
+            if (stream.get("codec_name"), stream.get("width"), stream.get("height"), stream.get("pix_fmt")) != (codec, 320, 180, "yuv420p"):
+                raise RuntimeError(f"Unexpected encoded stream configuration for {encoder}.")
+            decoded = _run_checked([str(ffmpeg), "-hide_banner", "-loglevel", "error",
+                            "-hwaccel", "none", "-i", str(encoded), "-map", "0:v:0", "-an",
+                            "-f", "framemd5", "-"])
+            decoded_frames = len([line for line in decoded.splitlines() if line.strip() and not line.startswith("#")])
+            if decoded_frames != 24:
+                raise RuntimeError(f"Software decode produced {decoded_frames} frames for {encoder}, expected 24.")
+            probe = build_vmaf_probe_command(ffmpeg, VMAF_STANDARD_MODEL, VmafBackend.CPU)
+            graph = (probe[probe.index("-filter_complex") + 1] +
+                     ":log_fmt=json:log_path=" + codec + "-vmaf.json")
+            _run_checked([str(ffmpeg), "-hide_banner", "-loglevel", "error", "-hwaccel", "none",
+                  "-i", str(encoded), "-hwaccel", "none", "-i", str(reference),
+                  "-filter_complex", graph, "-an", "-f", "null", "-"], cwd=work)
+            frames = json.loads((work / (codec + "-vmaf.json")).read_text())["frames"]
+            scores = [frame["metrics"]["vmaf"] for frame in frames]
+            if len(frames) != 24 or [frame["frameNum"] for frame in frames] != list(range(24)) or any(
+                    not isinstance(score, (int, float)) or not math.isfinite(score) or not 0 <= score <= 100 for score in scores):
+                raise RuntimeError(f"Incomplete or invalid roundtrip VMAF scores for {encoder}.")
+            evidence[encoder] = {"codec": codec, "frames": 24, "decoded_frames": decoded_frames,
+                                 "scored_frames": len(frames), "width": 320, "height": 180,
+                                 "pixel_format": "yuv420p", "software_decode": True,
+                                 "mean_vmaf": sum(scores) / len(scores)}
+    return evidence
+
+
 def verify_capabilities(ffmpeg_path: Path, ffprobe_path: Path) -> None:
     version = _run_checked([str(ffmpeg_path), "-hide_banner", "-version"])
     for option in ("--enable-gpl", "--enable-version3"):
@@ -357,26 +405,7 @@ def verify_capabilities(ffmpeg_path: Path, ffprobe_path: Path) -> None:
             ) from exc
         parse_vmaf_score(output, model_spec)
     verify_anamorphic_normalization(ffmpeg_path)
-    for encoder in ("libx265", "libsvtav1"):
-        _run_checked(
-            [
-                str(ffmpeg_path),
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-f",
-                "lavfi",
-                "-i",
-                "testsrc2=size=128x128:duration=0.2:rate=5",
-                "-frames:v",
-                "1",
-                "-c:v",
-                encoder,
-                "-f",
-                "null",
-                "-",
-            ]
-        )
+    verify_codec_roundtrips(ffmpeg_path, ffprobe_path)
 
     try:
         print(format_analysis_capability_report(detect_analysis_capabilities(ffmpeg_path)))
@@ -469,7 +498,7 @@ def prepare_target(
         f"Corresponding source: {target['ffmpeg_source']}\n"
         f"Build recipe: {target['build_recipe']}\n"
         "See LICENSES/LICENSE.md, LICENSES/COPYING.GPLv3, and "
-        "LICENSES/VMAF-LICENSE.txt.\n",
+        "LICENSES/VMAF-LICENSE.txt and LICENSES/DAV1D-LICENSE.txt.\n",
         encoding="utf-8",
     )
 

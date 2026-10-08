@@ -244,5 +244,212 @@
         "ffprobe": "ffprobe version 9.0.1-https://www.martin-riedl.de Copyright (c) 2007-2026 the FFmpeg developers"
       }
     }
-  ]
+  ],
+  "dependency_upgrade": {
+    "release": "ffmpeg-9.0.2-vmaf-v1.0.16-r1",
+    "build_commit": "f00ad587fffcf8e2ece8404bf1d146ff288a8cf2",
+    "verification_contract_version": 4,
+    "native_roundtrips": {
+      "linux-arm64": {
+        "libsvtav1": {
+          "codec": "av1",
+          "decoded_frames": 24,
+          "frames": 24,
+          "height": 180,
+          "mean_vmaf": 92.10859808333333,
+          "pixel_format": "yuv420p",
+          "scored_frames": 24,
+          "software_decode": true,
+          "width": 320
+        },
+        "libx265": {
+          "codec": "hevc",
+          "decoded_frames": 24,
+          "frames": 24,
+          "height": 180,
+          "mean_vmaf": 91.23486112500001,
+          "pixel_format": "yuv420p",
+          "scored_frames": 24,
+          "software_decode": true,
+          "width": 320
+        }
+      },
+      "linux-x86_64": {
+        "libsvtav1": {
+          "codec": "av1",
+          "decoded_frames": 24,
+          "frames": 24,
+          "height": 180,
+          "mean_vmaf": 92.11895275,
+          "pixel_format": "yuv420p",
+          "scored_frames": 24,
+          "software_decode": true,
+          "width": 320
+        },
+        "libx265": {
+          "codec": "hevc",
+          "decoded_frames": 24,
+          "frames": 24,
+          "height": 180,
+          "mean_vmaf": 91.23486112500001,
+          "pixel_format": "yuv420p",
+          "scored_frames": 24,
+          "software_decode": true,
+          "width": 320
+        }
+      },
+      "macos-arm64": {
+        "libsvtav1": {
+          "codec": "av1",
+          "decoded_frames": 24,
+          "frames": 24,
+          "height": 180,
+          "mean_vmaf": 76.42358445833334,
+          "pixel_format": "yuv420p",
+          "scored_frames": 24,
+          "software_decode": true,
+          "width": 320
+        },
+        "libx265": {
+          "codec": "hevc",
+          "decoded_frames": 24,
+          "frames": 24,
+          "height": 180,
+          "mean_vmaf": 93.88577275,
+          "pixel_format": "yuv420p",
+          "scored_frames": 24,
+          "software_decode": true,
+          "width": 320
+        }
+      },
+      "windows-arm64": {
+        "libsvtav1": {
+          "codec": "av1",
+          "decoded_frames": 24,
+          "frames": 24,
+          "height": 180,
+          "mean_vmaf": 92.07387141666668,
+          "pixel_format": "yuv420p",
+          "scored_frames": 24,
+          "software_decode": true,
+          "width": 320
+        },
+        "libx265": {
+          "codec": "hevc",
+          "decoded_frames": 24,
+          "frames": 24,
+          "height": 180,
+          "mean_vmaf": 91.23486075,
+          "pixel_format": "yuv420p",
+          "scored_frames": 24,
+          "software_decode": true,
+          "width": 320
+        }
+      },
+      "windows-x86_64": {
+        "libsvtav1": {
+          "codec": "av1",
+          "decoded_frames": 24,
+          "frames": 24,
+          "height": 180,
+          "mean_vmaf": 92.17264483333334,
+          "pixel_format": "yuv420p",
+          "scored_frames": 24,
+          "software_decode": true,
+          "width": 320
+        },
+        "libx265": {
+          "codec": "hevc",
+          "decoded_frames": 24,
+          "frames": 24,
+          "height": 180,
+          "mean_vmaf": 91.23486112500001,
+          "pixel_format": "yuv420p",
+          "scored_frames": 24,
+          "software_decode": true,
+          "width": 320
+        }
+      }
+    },
+    "software_frame_oracle": {
+      "passed": true,
+      "frames": 192,
+      "fps": 24,
+      "cuts": [
+        0,
+        1,
+        96,
+        97,
+        191,
+        192
+      ]
+    },
+    "cases": {
+      "hevc": {
+        "success": true,
+        "status": "found",
+        "reason": null,
+        "mean_vmaf": 88.85913391145833,
+        "worst_1s_vmaf": 73.39196662500002,
+        "shot_means": [
+          78.9040845625,
+          100.0,
+          76.53245108333333
+        ],
+        "actual_bytes": 349961,
+        "candidate_encodes": 16,
+        "wall_seconds": 9.86899825000728,
+        "child_process_cpu_seconds": 56.056132,
+        "ffmpeg_cpu_seconds": 54.82899999999998,
+        "gpu_seconds": null,
+        "prediction_error_ratio": 0.00990101867082216,
+        "tool_versions": {
+          "ffmpeg": "ffmpeg version 9.0.2-https://www.martin-riedl.de Copyright (c) 2000-2026 the FFmpeg developers",
+          "ffprobe": "ffprobe version 9.0.2-https://www.martin-riedl.de Copyright (c) 2007-2026 the FFmpeg developers"
+        }
+      },
+      "av1": {
+        "success": true,
+        "status": "found",
+        "reason": null,
+        "mean_vmaf": 89.30222444270834,
+        "worst_1s_vmaf": 76.088385125,
+        "shot_means": [
+          78.03241129166666,
+          100.0,
+          79.17648647916667
+        ],
+        "actual_bytes": 469198,
+        "candidate_encodes": 16,
+        "wall_seconds": 10.0886540000065,
+        "child_process_cpu_seconds": 56.498616,
+        "ffmpeg_cpu_seconds": 55.053999999999995,
+        "gpu_seconds": null,
+        "prediction_error_ratio": -0.00666460603032526,
+        "tool_versions": {
+          "ffmpeg": "ffmpeg version 9.0.2-https://www.martin-riedl.de Copyright (c) 2000-2026 the FFmpeg developers",
+          "ffprobe": "ffprobe version 9.0.2-https://www.martin-riedl.de Copyright (c) 2007-2026 the FFmpeg developers"
+        }
+      },
+      "videotoolbox": {
+        "success": false,
+        "status": "unsupported",
+        "reason": "Smart v2 encode/concatenation preflight failed for the bound encoder: Bound encoder produces incompatible stream configurations at different bitrates.",
+        "mean_vmaf": null,
+        "worst_1s_vmaf": null,
+        "shot_means": [],
+        "actual_bytes": null,
+        "candidate_encodes": 2,
+        "wall_seconds": 0.5832562499999767,
+        "child_process_cpu_seconds": 0.630652,
+        "ffmpeg_cpu_seconds": 0.186,
+        "gpu_seconds": null,
+        "prediction_error_ratio": null,
+        "tool_versions": {
+          "ffmpeg": "ffmpeg version 9.0.2-https://www.martin-riedl.de Copyright (c) 2000-2026 the FFmpeg developers",
+          "ffprobe": "ffprobe version 9.0.2-https://www.martin-riedl.de Copyright (c) 2007-2026 the FFmpeg developers"
+        }
+      }
+    }
+  }
 }

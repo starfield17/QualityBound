@@ -1,1 +1,5 @@
-Download ffmpeg at https://ffmpeg.org/download.html
+Download the pinned QualityBound FFmpeg distribution:
+https://github.com/starfield17/ffmpeg-vmaf-v1-builds/releases/tag/ffmpeg-9.0.2-vmaf-v1.0.16-r1
+
+Verify the archive against packaging/ffmpeg/manifest.json.
+See FFmpeg/README.md for supported platforms and installation.
