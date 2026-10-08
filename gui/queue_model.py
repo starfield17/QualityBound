@@ -593,7 +593,6 @@ class QueueTableModel(QAbstractTableModel):
         rows: list[int],
         options: EncodeOptions,
         *,
-        config_dir: Path | None = None,
         runtime_capabilities: dict | None = None,
     ) -> int:
         return self._atomic_edit_rows(
@@ -601,7 +600,6 @@ class QueueTableModel(QAbstractTableModel):
             lambda record: apply_options_to_record_action(
                 record,
                 options,
-                config_dir=config_dir,
                 runtime_capabilities=runtime_capabilities,
             ),
         )

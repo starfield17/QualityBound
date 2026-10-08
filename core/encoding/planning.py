@@ -5,7 +5,6 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Iterable, cast
 
-from core.config.paths import config_dir as app_config_dir
 from core.ffmpeg.capabilities import ensure_encoder_capabilities
 from core.ffmpeg.discovery import discover_ffmpeg_tools
 from core.ffmpeg.encoders import (
@@ -154,13 +153,11 @@ def _options_with_default_preset(
 def _resolve_plan_encoder(
     options: EncodeOptions,
     ffmpeg: Path,
-    config_dir: Path | None,
     progress_callback: Callable[[str], None] | None,
     runtime_capabilities: dict | None = None,
 ) -> tuple[EncoderInfo, EncodeOptions]:
     if runtime_capabilities is None:
         runtime_capabilities = ensure_encoder_capabilities(
-            config_dir or app_config_dir(),
             ffmpeg,
             progress_callback=progress_callback,
         )
@@ -239,7 +236,6 @@ def reconfigure_plan_item(
     *,
     ffmpeg_path: Path,
     workdir: Path,
-    config_dir: Path | None = None,
     runtime_capabilities: dict | None = None,
     output_path: Path | None = None,
     create_directories: bool = True,
@@ -250,7 +246,6 @@ def reconfigure_plan_item(
     resolved_encoder, resolved_options = _resolve_plan_encoder(
         copy.deepcopy(options),
         ffmpeg_path,
-        config_dir,
         None,
         runtime_capabilities,
     )
@@ -420,7 +415,6 @@ def build_encode_plan(
     workdir: Path = Path("workdir"),
     ffmpeg_path: str | None = None,
     ffprobe_path: str | None = None,
-    config_dir: Path | None = None,
     files: Iterable[VideoFileItem] | None = None,
     progress_callback: Callable[[str], None] | None = None,
     progress_event_callback: ProgressCallback | None = None,
@@ -438,7 +432,7 @@ def build_encode_plan(
     ffmpeg, ffprobe = discover_ffmpeg_tools(ffmpeg_path, ffprobe_path)
     _emit(progress_callback, f"Using ffmpeg: {ffmpeg}")
     _emit(progress_callback, f"Using ffprobe: {ffprobe}")
-    encoder_info, options = _resolve_plan_encoder(options, ffmpeg, config_dir, progress_callback)
+    encoder_info, options = _resolve_plan_encoder(options, ffmpeg, progress_callback)
 
     output_root = choose_output_root(input_root, output_dir, options.codec)
     _emit(progress_callback, f"Output root: {output_root}")

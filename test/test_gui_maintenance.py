@@ -86,7 +86,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
         window = MainWindow(self.repo_root, language="en")
         persisted: dict[str, object] = {}
 
-        def update_config(_config_dir, updater):
+        def update_config(updater):
             current = {
                 "encoder_capabilities": {"source": "worker"},
                 "future_config_field": "preserve-me",
@@ -265,7 +265,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
             with patch("gui.gui_mainwindow.update_app_config") as update:
                 window._persist_runtime_state()
             update.assert_called_once()
-            merged = update.call_args.args[1]({})
+            merged = update.call_args.args[0]({})
             self.assertEqual(merged["last_source_path"], "/definitely/not/a/real/file.mov")
             self.assertEqual(merged["recent_paths"], [])
 
@@ -276,7 +276,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                 with patch("gui.gui_mainwindow.update_app_config") as update:
                     window._persist_runtime_state()
                 update.assert_called_once()
-                merged = update.call_args.args[1]({})
+                merged = update.call_args.args[0]({})
                 self.assertEqual(merged["recent_paths"], [str(source)])
 
                 with patch("gui.gui_mainwindow.update_app_config") as update:

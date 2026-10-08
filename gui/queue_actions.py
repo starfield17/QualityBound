@@ -62,7 +62,6 @@ def apply_options_to_record(
     record: QueueItemRecord,
     options: EncodeOptions,
     *,
-    config_dir: Path | None = None,
     runtime_capabilities: dict | None = None,
 ) -> bool:
     """Re-plan one editable queue record with a newly bound encoder."""
@@ -75,7 +74,6 @@ def apply_options_to_record(
         options,
         ffmpeg_path=record.job_snapshot.ffmpeg_path,
         workdir=record.job_snapshot.workdir,
-        config_dir=config_dir,
         runtime_capabilities=runtime_capabilities,
         create_directories=False,
     )

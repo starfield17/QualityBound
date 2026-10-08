@@ -15,7 +15,7 @@ from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QAbstractButton, QApplication, QMessageBox, QScrollArea
 from PySide6.QtWidgets import QComboBox, QGroupBox, QHeaderView, QLabel, QLineEdit
 
-from core.config.paths import app_root, config_dir
+from core.config.paths import app_root
 from core.i18n import get_translator
 from core.models import (
     BackendChoice,
@@ -86,7 +86,7 @@ class SmokeTestCase(unittest.TestCase):
         )
 
     def test_app_config_path_uses_workdir(self) -> None:
-        config_path = app_config_path(config_dir())
+        config_path = app_config_path()
         self.assertEqual(config_path, self.repo_root / "workdir" / "app_config.json")
 
     def test_smoke_fixture_is_isolated_from_project_workdir(self) -> None:

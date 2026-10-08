@@ -37,7 +37,10 @@ def presets_dir(config_dir: Path) -> Path:
     return path
 
 
-def app_config_path(config_dir: Path) -> Path:
+def app_config_path() -> Path:
+    # The app config lives in the runtime work directory (a gitignored, writable
+    # location), never in the bundled/source config directory. The parameter is
+    # deliberately absent so callers cannot imply otherwise.
     runtime_workdir = workdir_dir()
     runtime_workdir.mkdir(parents=True, exist_ok=True)
     return runtime_workdir / APP_CONFIG_NAME
@@ -268,8 +271,8 @@ def smart_policies_from_config(
     )
 
 
-def _load_app_config_unlocked(config_dir: Path) -> dict[str, Any]:
-    path = app_config_path(config_dir)
+def _load_app_config_unlocked() -> dict[str, Any]:
+    path = app_config_path()
     data: Any = {}
     if path.exists():
         try:
@@ -290,31 +293,30 @@ def _load_app_config_unlocked(config_dir: Path) -> dict[str, Any]:
     return data
 
 
-def _save_app_config_unlocked(config_dir: Path, data: dict[str, Any]) -> Path:
-    path = app_config_path(config_dir)
+def _save_app_config_unlocked(data: dict[str, Any]) -> Path:
+    path = app_config_path()
     _atomic_write_text(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
     return path
 
 
-def load_app_config(config_dir: Path) -> dict[str, Any]:
+def load_app_config() -> dict[str, Any]:
     with _APP_CONFIG_LOCK:
-        return _load_app_config_unlocked(config_dir)
+        return _load_app_config_unlocked()
 
 
-def save_app_config(config_dir: Path, data: dict[str, Any]) -> Path:
+def save_app_config(data: dict[str, Any]) -> Path:
     with _APP_CONFIG_LOCK:
-        return _save_app_config_unlocked(config_dir, data)
+        return _save_app_config_unlocked(data)
 
 
 def update_app_config(
-    config_dir: Path,
     updater: Callable[[dict[str, Any]], dict[str, Any] | None],
 ) -> Path:
     # Atomically read-modify-write. Returning None means the updater mutated
     # the loaded dict in place; returning a dict replaces it entirely.
     with _APP_CONFIG_LOCK:
-        data = _load_app_config_unlocked(config_dir)
+        data = _load_app_config_unlocked()
         updated = updater(data)
         if updated is not None:
             data = updated
-        return _save_app_config_unlocked(config_dir, data)
+        return _save_app_config_unlocked(data)

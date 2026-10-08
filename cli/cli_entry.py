@@ -78,7 +78,7 @@ def _load_base_options(args: argparse.Namespace, config_dir: Path) -> EncodeOpti
     if preset_name:
         return load_preset(preset_name, config_dir)
 
-    app_config = load_app_config(config_dir)
+    app_config = load_app_config()
     default_preset_name = app_config.get("default_preset_name")
     if default_preset_name:
         try:
@@ -153,7 +153,7 @@ def _normalize_auto_backend_preset(options: EncodeOptions, args: argparse.Namesp
 
 
 def _apply_analysis_profile(options: EncodeOptions, args: argparse.Namespace, config_dir: Path) -> EncodeOptions:
-    app_config = load_app_config(config_dir)
+    app_config = load_app_config()
     selected = getattr(args, "analysis_profile", None)
     if selected is None:
         selected = app_config.get("analysis_profile")
@@ -386,7 +386,7 @@ def _translator_for_args(
     config_dir: Path,
     catalog: TranslationCatalog,
 ):
-    app_config = load_app_config(config_dir)
+    app_config = load_app_config()
     language = getattr(args, "lang", None) or app_config.get("language", "en")
     return catalog.translator(language)
 
@@ -403,7 +403,6 @@ def _run_plan(args: argparse.Namespace, config_dir: Path, catalog: TranslationCa
         workdir=Path(args.workdir).expanduser().resolve() if args.workdir else _default_workdir(),
         ffmpeg_path=args.ffmpeg,
         ffprobe_path=args.ffprobe,
-        config_dir=config_dir,
     )
     print_plan(plan, tr)
     return 0
@@ -421,7 +420,6 @@ def _run_encode(args: argparse.Namespace, config_dir: Path, catalog: Translation
         workdir=Path(args.workdir).expanduser().resolve() if args.workdir else _default_workdir(),
         ffmpeg_path=args.ffmpeg,
         ffprobe_path=args.ffprobe,
-        config_dir=config_dir,
     )
     print_plan(plan, tr)
     if options.dry_run:

@@ -185,12 +185,11 @@ class AppConfigRobustnessTestCase(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             workdir = Path(temp_dir)
             with patch("core.config.store.workdir_dir", return_value=workdir):
-                config_dir = workdir / "config"
-                path = app_config_path(config_dir)
+                path = app_config_path()
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("{not valid json", encoding="utf-8")
 
-                loaded = load_app_config(config_dir)
+                loaded = load_app_config()
 
                 self.assertEqual(loaded["language"], "en")
                 self.assertFalse(path.exists())
@@ -200,10 +199,9 @@ class AppConfigRobustnessTestCase(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             workdir = Path(temp_dir)
             with patch("core.config.store.workdir_dir", return_value=workdir):
-                config_dir = workdir / "config"
-                update_app_config(config_dir, lambda data: {**data, "language": "zh_cn"})
+                update_app_config(lambda data: {**data, "language": "zh_cn"})
 
-                path = app_config_path(config_dir)
+                path = app_config_path()
                 self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["language"], "zh_cn")
                 self.assertFalse(list(path.parent.glob("*.tmp")))
                 self.assertFalse(list(path.parent.glob(".*.tmp")))

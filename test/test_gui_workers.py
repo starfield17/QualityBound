@@ -32,7 +32,7 @@ class EncoderCapabilityDetectWorkerTestCase(unittest.TestCase):
                 error_message=None if runnable else "missing model",
             )
 
-        worker = EncoderCapabilityDetectWorker(Path("config"), "ffmpeg")
+        worker = EncoderCapabilityDetectWorker("ffmpeg")
         worker.completed.connect(completed.append)
         worker.failed.connect(failed.append)
         with (

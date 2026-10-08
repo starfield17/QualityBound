@@ -105,19 +105,16 @@ def _valid_capability_shape(capabilities: dict) -> bool:
     return True
 
 
-def load_cached_encoder_capabilities(config_dir: Path) -> dict | None:
-    data = load_app_config(config_dir)
+def load_cached_encoder_capabilities() -> dict | None:
+    data = load_app_config()
     capabilities = data.get("encoder_capabilities")
     return capabilities if isinstance(capabilities, dict) else None
 
 
-def save_encoder_capabilities(config_dir: Path, capabilities: dict) -> Path:
+def save_encoder_capabilities(capabilities: dict) -> Path:
     if not _valid_capability_shape(capabilities):
         raise ValueError("Invalid encoder capability cache shape.")
-    return update_app_config(
-        config_dir,
-        lambda data: {**data, "encoder_capabilities": capabilities},
-    )
+    return update_app_config(lambda data: {**data, "encoder_capabilities": capabilities})
 
 
 def is_encoder_capability_cache_valid(capabilities: dict | None, ffmpeg_path: Path) -> bool:
@@ -248,7 +245,6 @@ def detect_encoder_capabilities(
 
 
 def ensure_encoder_capabilities(
-    config_dir: Path,
     ffmpeg_path: Path,
     *,
     force_refresh: bool = False,
@@ -256,7 +252,7 @@ def ensure_encoder_capabilities(
 ) -> dict:
     resolved = _resolved_ffmpeg_path(ffmpeg_path)
     with _CACHE_LOCK:
-        cached = load_cached_encoder_capabilities(config_dir)
+        cached = load_cached_encoder_capabilities()
         if (
             not force_refresh
             and isinstance(cached, dict)
@@ -266,5 +262,5 @@ def ensure_encoder_capabilities(
 
         _emit(progress_callback, "Detecting hardware encoders...")
         capabilities = detect_encoder_capabilities(resolved, progress_callback=progress_callback)
-        save_encoder_capabilities(config_dir, capabilities)
+        save_encoder_capabilities(capabilities)
         return capabilities

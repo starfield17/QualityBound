@@ -128,7 +128,7 @@ class MainWindow(QMainWindow):
         self.repo_root = repo_root
         self.config_dir = repo_root / "config"
         self.default_workdir = repo_root / "workdir"
-        self.app_config = load_app_config(self.config_dir)
+        self.app_config = load_app_config()
         self.catalog = catalog or TranslationCatalog(
             bundle_dir=self.config_dir / "i18n",
             translations_dir=self.config_dir.parent / "translations",
@@ -708,7 +708,6 @@ class MainWindow(QMainWindow):
         self._encoder_capabilities_ready = False
         self.options_panel.begin_capability_detection()
         worker = EncoderCapabilityDetectWorker(
-            self.config_dir,
             self._selected_ffmpeg(),
             force_refresh=force_refresh,
         )
@@ -921,7 +920,7 @@ class MainWindow(QMainWindow):
             data.update(patch)
             return data
 
-        update_app_config(self.config_dir, merge)
+        update_app_config(merge)
 
     def _post_encode_combo_changed(self) -> None:
         action = self.post_encode_combo.currentData()
@@ -1200,7 +1199,6 @@ class MainWindow(QMainWindow):
             workdir=workdir,
             ffmpeg_path=ffmpeg_path,
             ffprobe_path=ffprobe_path,
-            config_dir=self.config_dir,
         )
         self._start_worker(worker, lambda plan, workdir=workdir: self._on_plan_ready(plan, workdir))
 
@@ -1228,7 +1226,6 @@ class MainWindow(QMainWindow):
             workdir=workdir,
             ffmpeg_path=ffmpeg_path,
             ffprobe_path=ffprobe_path,
-            config_dir=self.config_dir,
             files=file_items,
         )
         self._start_worker(worker, lambda plan, workdir=workdir: self._on_plan_ready(plan, workdir))
@@ -1364,7 +1361,6 @@ class MainWindow(QMainWindow):
                 updated = self.queue_model.apply_options_to_rows(
                     rows,
                     opts,
-                    config_dir=self.config_dir,
                     runtime_capabilities=self._runtime_encoder_capabilities(),
                 )
             except Exception as exc:
@@ -1379,7 +1375,6 @@ class MainWindow(QMainWindow):
                 updated = self.queue_model.apply_options_to_rows(
                     rows,
                     opts,
-                    config_dir=self.config_dir,
                     runtime_capabilities=self._runtime_encoder_capabilities(),
                 )
                 if updated:
