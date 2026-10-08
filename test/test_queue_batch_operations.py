@@ -234,6 +234,21 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
         self.assertEqual(model.record_for_row(0).plan_item.output_path, new_dir.resolve() / "file0_hevc.mp4")
         self.assertEqual(model.record_for_row(2).plan_item.output_path, new_dir.resolve() / "file2_hevc.mp4")
 
+    def test_planning_skipped_record_is_excluded_from_output_collision_check(self) -> None:
+        model = QueueTableModel(self.tr)
+        planned = self._record("clip", QueueItemStatus.QUEUED)
+        skipped = self._record("clip_skipped", QueueItemStatus.SKIPPED)
+        skipped.plan_item.output_path = planned.output_path
+        skipped.plan_item.skip_reason = "probe failed"
+
+        model.add_records([planned, skipped])
+        self.assertEqual(model.rowCount(), 2)
+
+        colliding = self._record("clip_other", QueueItemStatus.QUEUED)
+        colliding.plan_item.output_path = planned.output_path
+        with self.assertRaisesRegex(RuntimeError, "collision"):
+            model.add_records([colliding])
+
     def test_codec_change_rebinds_encoder_and_clears_smart_result(self) -> None:
         rec = self._record("switch", QueueItemStatus.WAITING_ANALYSIS)
         rec.plan_item.quality_search_result = QualitySearchResult(

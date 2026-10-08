@@ -22,6 +22,7 @@ from core.models import (
     EncodeOptions,
     EncodePlanItem,
     EncoderInfo,
+    MediaInfo,
     OperationCancelledError,
 )
 
@@ -81,6 +82,99 @@ class FixedBitratePublicationTestCase(unittest.TestCase):
             self.assertFalse(result.success)
             self.assertFalse(output.exists())
             self.assertFalse(list(root.glob(".*.partial-*")))
+
+
+class SkippedOutputCollisionTestCase(unittest.TestCase):
+    def _source(self, directory: Path, name: str) -> Path:
+        source = directory / name
+        source.write_bytes(b"video")
+        return source
+
+    def _capabilities(self) -> dict[str, object]:
+        return {
+            "hwaccels": [],
+            "codecs": {
+                "hevc": [
+                    {
+                        "backend": BackendChoice.CPU.value,
+                        "encoder": "libx265",
+                        "preset_choices": ["slow"],
+                    }
+                ],
+                "av1": [],
+            },
+        }
+
+    def _media(self, path: Path) -> MediaInfo:
+        return MediaInfo(
+            path=path,
+            duration=10.0,
+            format_bitrate_bps=2_000_000,
+            video_bitrate_bps=1_800_000,
+            audio_bitrate_bps=128_000,
+            width=1280,
+            height=720,
+            fps=30.0,
+            video_codec="h264",
+            audio_codec="aac",
+        )
+
+    def _build(self, folder: Path, probe: object) -> object:
+        from core.encoding import build_encode_plan
+
+        with (
+            patch(
+                "core.encoding.planning.discover_ffmpeg_tools",
+                return_value=(folder / "ffmpeg", folder / "ffprobe"),
+            ),
+            patch(
+                "core.encoding.planning.ensure_encoder_capabilities",
+                return_value=self._capabilities(),
+            ),
+            patch("core.encoding.planning.probe_media_info", side_effect=probe),
+        ):
+            return build_encode_plan(
+                input_path=folder,
+                options=EncodeOptions(
+                    backend=BackendChoice.CPU,
+                    encoder_preset="slow",
+                    overwrite=True,
+                    copy_external_subtitles=False,
+                ),
+                output_dir=None,
+                workdir=folder / "work",
+            )
+
+    def test_probe_failure_is_skipped_without_aborting_on_shared_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            self._source(folder, "clip.mkv")
+            self._source(folder, "clip.mp4")
+
+            def probe(_ffprobe: Path, source: Path, **_kwargs: object) -> MediaInfo:
+                if source.suffix == ".mp4":
+                    raise RuntimeError("cannot probe")
+                return self._media(source)
+
+            plan = self._build(folder, probe)
+
+            self.assertEqual(len(plan.items), 2)
+            by_name = {item.source_path.name: item for item in plan.items}
+            self.assertIsNone(by_name["clip.mkv"].skip_reason)
+            self.assertEqual(by_name["clip.mp4"].skip_reason, "cannot probe")
+            self.assertEqual(by_name["clip.mkv"].output_path, by_name["clip.mp4"].output_path)
+
+    def test_two_live_items_sharing_an_output_still_abort_the_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            self._source(folder, "clip.mkv")
+            self._source(folder, "clip.mp4")
+
+            def probe(_ffprobe: Path, source: Path, **_kwargs: object) -> MediaInfo:
+                return self._media(source)
+
+            with self.assertRaisesRegex(RuntimeError, "collision"):
+                self._build(folder, probe)
 
 
 class AppConfigRobustnessTestCase(unittest.TestCase):

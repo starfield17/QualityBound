@@ -73,10 +73,10 @@ class ExplicitPlanningPathsTestCase(unittest.TestCase):
             ),
             patch(
                 "core.encoding.planning.probe_media_info",
-                side_effect=lambda _ffprobe, source: _media(source),
+                side_effect=lambda _ffprobe, source, **_kwargs: _media(source),
             ),
         ):
-            return build_encode_plan(
+            plan = build_encode_plan(
                 input_path=None,
                 options=EncodeOptions(
                     backend=BackendChoice.CPU,
@@ -88,6 +88,11 @@ class ExplicitPlanningPathsTestCase(unittest.TestCase):
                 workdir=self.root / "work",
                 files=files,
             )
+        self.assertTrue(
+            all(item.skip_reason is None for item in plan.items),
+            [item.skip_reason for item in plan.items],
+        )
+        return plan
 
     def test_without_output_dir_each_file_stays_beside_its_source(self) -> None:
         first = self._source("first", "clip.mov")

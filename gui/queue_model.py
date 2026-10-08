@@ -47,6 +47,7 @@ from gui.queue_state import (
     mark_failed,
     mark_finished,
     mark_started,
+    output_will_be_written,
     prepare_record_for_execution,
     reset_for_retry,
     status_key,
@@ -368,6 +369,7 @@ class QueueTableModel(QAbstractTableModel):
         validate_unique_output_paths(
             (record.source_path, record.output_path)
             for record in [*self._records, *records]
+            if output_will_be_written(record)
         )
         start = len(self._records)
         end = start + len(records) - 1
@@ -577,7 +579,9 @@ class QueueTableModel(QAbstractTableModel):
             replacements[row] = candidate
         combined = [replacements.get(row, record) for row, record in enumerate(self._records)]
         validate_unique_output_paths(
-            (record.source_path, record.output_path) for record in combined
+            (record.source_path, record.output_path)
+            for record in combined
+            if output_will_be_written(record)
         )
         for row, replacement in replacements.items():
             self._records[row] = replacement

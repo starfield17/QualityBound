@@ -329,6 +329,17 @@ def estimate_saved_bytes(records: list[QueueItemRecord]) -> int | None:
     return total_saved if has_estimate else None
 
 
+def output_will_be_written(record: QueueItemRecord) -> bool:
+    """Return whether this record still targets a file that will be produced.
+
+    A planning failure (probe or validation) leaves ``skip_reason`` set and is
+    published as a skipped item without an encode, so its reserved output path
+    must not participate in queue-wide collision checks.
+    """
+
+    return record.plan_item.skip_reason is None
+
+
 def processed_weight(record: QueueItemRecord) -> float:
     weight = record.effective_weight
     if weight <= 0:

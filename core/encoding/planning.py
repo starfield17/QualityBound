@@ -518,8 +518,12 @@ def build_encode_plan(
             )
         items.append(item)
 
+    # Planning failures are never written; keeping their reserved destination
+    # out of the check lets the rest of the batch plan instead of aborting.
     validate_unique_output_paths(
-        (item.source_path, item.output_path) for item in items
+        (item.source_path, item.output_path)
+        for item in items
+        if item.skip_reason is None
     )
 
     _emit(progress_callback, "Planning finished.")
