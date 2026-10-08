@@ -60,6 +60,7 @@ def _iter_sources(
     input_path: Path | None,
     recursive: bool,
     files: Iterable[VideoFileItem] | None,
+    on_error: Callable[[str], None] | None = None,
 ) -> tuple[Path, list[VideoFileItem]]:
     if files is not None:
         file_items = []
@@ -80,7 +81,7 @@ def _iter_sources(
     if input_path is None:
         raise ValueError("input_path or files must be provided.")
     input_root = input_path.expanduser().resolve()
-    return input_root, collect_video_files(input_root, recursive)
+    return input_root, collect_video_files(input_root, recursive, on_error)
 
 
 def _usable_encoder_count(runtime_capabilities: dict) -> int:
@@ -297,8 +298,9 @@ def _successful_plan_item(
     options: EncodeOptions,
     encoder_info: EncoderInfo,
     workdir: Path,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> EncodePlanItem:
-    media_info = probe_media_info(ffprobe, file_item.path)
+    media_info = probe_media_info(ffprobe, file_item.path, cancel_check=cancel_check)
     target_bitrate = 0
     if options.compression_mode == CompressionMode.FIXED_BITRATE:
         if ratio is None:
@@ -427,7 +429,7 @@ def build_encode_plan(
     _emit(progress_callback, "Planning started.")
     _emit_progress(progress_event_callback, stage="planning", state="started", percent=0.0)
     explicit_files = files is not None
-    input_root, file_items = _iter_sources(input_path, options.recursive, files)
+    input_root, file_items = _iter_sources(input_path, options.recursive, files, progress_callback)
     if not file_items:
         raise FileNotFoundError("No processable video files were found.")
 
@@ -481,6 +483,7 @@ def build_encode_plan(
                 options,
                 encoder_info,
                 workdir,
+                cancel_check,
             )
             _emit_plan_item_status(
                 "planned",
@@ -491,6 +494,15 @@ def build_encode_plan(
                 progress_event_callback,
                 output_path=default_output,
             )
+        except OperationCancelledError:
+            _emit(progress_callback, "Planning cancelled by user.")
+            _emit_progress(
+                progress_event_callback,
+                stage="planning",
+                state="cancelled",
+                percent=((index - 1) / max(len(file_items), 1)) * 100.0,
+            )
+            raise
         except Exception as exc:
             # Probing or validation failures produce skipped items rather than
             # aborting the whole batch.

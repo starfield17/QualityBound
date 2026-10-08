@@ -51,27 +51,25 @@ class SubprocessPolicyTestCase(unittest.TestCase):
 
 class SubprocessCallSiteTestCase(unittest.TestCase):
     def test_probe_command_uses_noninteractive_stdin(self) -> None:
-        completed = subprocess.CompletedProcess(
-            ["ffprobe"],
-            0,
-            stdout="{}",
-            stderr="",
-        )
-        with patch("core.ffmpeg.probe.subprocess.run", return_value=completed) as run:
-            self.assertIs(_run_command(["ffprobe"]), completed)
+        with patch("core.ffmpeg.probe.subprocess.Popen") as popen:
+            popen.return_value.wait.return_value = 0
+            popen.return_value.poll.return_value = 0
+            result = _run_command(["ffprobe"])
 
-        self.assertIs(run.call_args.kwargs["stdin"], subprocess.DEVNULL)
+        self.assertEqual(result.returncode, 0)
+        self.assertIs(popen.call_args.kwargs["stdin"], subprocess.DEVNULL)
 
     def test_probe_command_forwards_windows_creation_flag(self) -> None:
         creationflags = 0x08000000
-        completed = subprocess.CompletedProcess(["ffprobe"], 0, stdout="{}", stderr="")
         with (
             patch("core.ffmpeg.subprocess.hidden_process_creationflags", return_value=creationflags),
-            patch("core.ffmpeg.probe.subprocess.run", return_value=completed) as run,
+            patch("core.ffmpeg.probe.subprocess.Popen") as popen,
         ):
+            popen.return_value.wait.return_value = 0
+            popen.return_value.poll.return_value = 0
             _run_command(["ffprobe"])
 
-        self.assertEqual(run.call_args.kwargs["creationflags"], creationflags)
+        self.assertEqual(popen.call_args.kwargs["creationflags"], creationflags)
 
     def test_encoding_process_keeps_pipe_stdin_and_forwards_windows_flag(self) -> None:
         creationflags = 0x08000000

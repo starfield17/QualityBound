@@ -50,6 +50,7 @@ class SystemPowerTestCase(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 timeout=5.0,
+                stdin=subprocess.DEVNULL,
             )
 
     @patch("subprocess.run")
@@ -76,6 +77,7 @@ class SystemPowerTestCase(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 timeout=5.0,
+                stdin=subprocess.DEVNULL,
             )
 
     @patch("subprocess.run")
@@ -109,6 +111,7 @@ class SystemPowerTestCase(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 timeout=5.0,
+                stdin=subprocess.DEVNULL,
             )
 
     @patch("subprocess.run")
@@ -133,6 +136,7 @@ class SystemPowerTestCase(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 timeout=5.0,
+                stdin=subprocess.DEVNULL,
             )
 
     @patch("subprocess.run")
@@ -148,6 +152,7 @@ class SystemPowerTestCase(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 timeout=5.0,
+                stdin=subprocess.DEVNULL,
             )
 
     @patch("subprocess.run")
@@ -163,6 +168,7 @@ class SystemPowerTestCase(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 timeout=5.0,
+                stdin=subprocess.DEVNULL,
             )
 
     @patch("subprocess.run")
@@ -178,6 +184,7 @@ class SystemPowerTestCase(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 timeout=5.0,
+                stdin=subprocess.DEVNULL,
             )
 
     def test_unsupported_platform(self) -> None:

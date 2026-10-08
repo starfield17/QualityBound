@@ -26,3 +26,19 @@ def noninteractive_run_kwargs() -> dict[str, Any]:
 def hidden_popen_kwargs() -> dict[str, Any]:
     creationflags = hidden_process_creationflags()
     return {"creationflags": creationflags} if creationflags else {}
+
+
+def terminate_process(proc: subprocess.Popen[Any]) -> None:
+    """Stop a child process: try SIGTERM, then force-kill if it stays alive."""
+
+    if proc.poll() is not None:
+        return
+    try:
+        proc.terminate()
+        proc.wait(timeout=3)
+    except (OSError, subprocess.TimeoutExpired):
+        try:
+            proc.kill()
+            proc.wait(timeout=3)
+        except (OSError, subprocess.TimeoutExpired):
+            pass

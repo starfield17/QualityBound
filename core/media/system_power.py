@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 
 class PostEncodeAction(str, Enum):
@@ -50,6 +52,18 @@ def parse_post_encode_action(value: object) -> PostEncodeAction:
     return PostEncodeAction.DO_NOTHING
 
 
+def _noninteractive_kwargs() -> dict[str, Any]:
+    # Mirrors core.ffmpeg.subprocess.noninteractive_run_kwargs; core.media may not
+    # depend on core.ffmpeg, so the few lines are repeated here to keep power
+    # commands from blocking on stdin or flashing a console window on Windows.
+    kwargs: dict[str, Any] = {"stdin": subprocess.DEVNULL}
+    if os.name == "nt":
+        creationflags = int(getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if creationflags:
+            kwargs["creationflags"] = creationflags
+    return kwargs
+
+
 def _run_single_command(
     cmd: list[str],
     timeout_sec: float = DEFAULT_POWER_TIMEOUT_SEC,
@@ -65,6 +79,7 @@ def _run_single_command(
             capture_output=True,
             text=True,
             timeout=timeout_sec,
+            **_noninteractive_kwargs(),
         )
         rc = res.returncode
         out = res.stdout or ""

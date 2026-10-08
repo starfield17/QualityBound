@@ -156,8 +156,21 @@ def find_binary(user_path: Optional[str], binary_name: str) -> Path:
     )
 
 
+def _find_sibling_binary(binary: Path, binary_name: str) -> Optional[Path]:
+    # Prefer the tool shipped next to the one we already resolved (same build),
+    # so an explicit ffmpeg is not silently paired with a different ffprobe.
+    candidates = (binary.parent, binary.parent.parent)
+    return _find_binary_under(candidates, (Path(), Path("bin")), binary_name)
+
+
 def discover_ffmpeg_tools(
     ffmpeg_path: Optional[str] = None,
     ffprobe_path: Optional[str] = None,
 ) -> tuple[Path, Path]:
-    return find_binary(ffmpeg_path, "ffmpeg"), find_binary(ffprobe_path, "ffprobe")
+    ffmpeg = find_binary(ffmpeg_path, "ffmpeg")
+    if ffprobe_path:
+        return ffmpeg, find_binary(ffprobe_path, "ffprobe")
+    sibling = _find_sibling_binary(ffmpeg, "ffprobe")
+    if sibling is not None:
+        return ffmpeg, sibling
+    return ffmpeg, find_binary(None, "ffprobe")

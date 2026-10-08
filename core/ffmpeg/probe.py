@@ -2,24 +2,65 @@ from __future__ import annotations
 
 import json
 import subprocess
+import tempfile
+import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from core.models import MediaInfo
-from core.ffmpeg.subprocess import noninteractive_run_kwargs
+from core.models import MediaInfo, OperationCancelledError
+from core.ffmpeg.subprocess import noninteractive_run_kwargs, terminate_process
 from core.media.metadata import infer_bit_depth_from_pix_fmt
 
 
-def _run_command(cmd: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        cmd,
-        check=True,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        **noninteractive_run_kwargs(),
-    )
+# A hung ffprobe (dead network mount, stalled device) must not freeze planning
+# forever; 60 s is far above the sub-second cost of reading a normal header.
+DEFAULT_PROBE_TIMEOUT_SEC = 60.0
+_PROBE_POLL_SEC = 0.25
+
+
+def _run_command(
+    cmd: list[str],
+    *,
+    timeout_sec: float | None = None,
+    cancel_check: Callable[[], bool] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    effective_timeout = DEFAULT_PROBE_TIMEOUT_SEC if timeout_sec is None else timeout_sec
+    # Redirect to temp files instead of PIPE so a child that writes more than the
+    # pipe buffer cannot deadlock against us while we wait for it.
+    with (
+        tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace") as stdout_file,
+        tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace") as stderr_file,
+    ):
+        proc = subprocess.Popen(
+            cmd,
+            stdout=stdout_file,
+            stderr=stderr_file,
+            **noninteractive_run_kwargs(),
+        )
+        deadline = time.monotonic() + effective_timeout
+        try:
+            while True:
+                try:
+                    proc.wait(timeout=_PROBE_POLL_SEC)
+                    break
+                except subprocess.TimeoutExpired:
+                    if cancel_check is not None and cancel_check():
+                        raise OperationCancelledError("ffprobe was cancelled.") from None
+                    if time.monotonic() >= deadline:
+                        raise RuntimeError(
+                            f"ffprobe timed out after {effective_timeout:.0f}s: {cmd[-1]}"
+                        ) from None
+        finally:
+            if proc.poll() is None:
+                terminate_process(proc)
+        returncode = proc.wait()
+        stdout_file.seek(0)
+        stderr_file.seek(0)
+        stdout = stdout_file.read()
+        stderr = stderr_file.read()
+    if returncode != 0:
+        raise subprocess.CalledProcessError(returncode, cmd, output=stdout, stderr=stderr)
+    return subprocess.CompletedProcess(cmd, returncode, stdout=stdout, stderr=stderr)
 
 
 def _parse_float(value: Any) -> float | None:
@@ -61,7 +102,13 @@ def _guess_fps(stream: dict[str, Any]) -> float | None:
     return None
 
 
-def ffprobe_json(ffprobe_path: Path, input_path: Path) -> dict[str, Any]:
+def ffprobe_json(
+    ffprobe_path: Path,
+    input_path: Path,
+    *,
+    timeout_sec: float | None = None,
+    cancel_check: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
     cmd = [
         str(ffprobe_path),
         "-v",
@@ -72,15 +119,26 @@ def ffprobe_json(ffprobe_path: Path, input_path: Path) -> dict[str, Any]:
         "-show_streams",
         str(input_path),
     ]
-    proc = _run_command(cmd)
+    proc = _run_command(cmd, timeout_sec=timeout_sec, cancel_check=cancel_check)
     try:
         return json.loads(proc.stdout)
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"ffprobe did not return valid JSON for: {input_path}") from exc
 
 
-def probe_media_info(ffprobe_path: Path, input_path: Path) -> MediaInfo:
-    data = ffprobe_json(ffprobe_path, input_path)
+def probe_media_info(
+    ffprobe_path: Path,
+    input_path: Path,
+    *,
+    timeout_sec: float | None = None,
+    cancel_check: Callable[[], bool] | None = None,
+) -> MediaInfo:
+    data = ffprobe_json(
+        ffprobe_path,
+        input_path,
+        timeout_sec=timeout_sec,
+        cancel_check=cancel_check,
+    )
     streams = data.get("streams", [])
     fmt = data.get("format", {}) or {}
 

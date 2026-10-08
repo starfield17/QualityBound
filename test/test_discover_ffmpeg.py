@@ -179,6 +179,24 @@ class DiscoverFfmpegTestCase(unittest.TestCase):
             self.assertEqual(ffmpeg_path, explicit_ffmpeg.resolve())
             self.assertEqual(ffprobe_path, auto_ffprobe.resolve())
 
+    def test_explicit_ffmpeg_prefers_its_sibling_ffprobe(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            bin_dir = temp_root / "ffmpeg-build" / "bin"
+            explicit_ffmpeg = _touch_binary(bin_dir / "ffmpeg")
+            sibling_ffprobe = _touch_binary(bin_dir / "ffprobe")
+            other_ffprobe = _touch_binary(temp_root / "other" / "ffprobe")
+
+            with (
+                patch.object(discover_ffmpeg, "app_root", return_value=temp_root / "project"),
+                patch.object(discover_ffmpeg, "bundle_root", return_value=temp_root / "project"),
+                patch("core.ffmpeg.discovery.shutil.which", return_value=str(other_ffprobe)),
+            ):
+                ffmpeg_path, ffprobe_path = discover_ffmpeg.discover_ffmpeg_tools(str(explicit_ffmpeg), None)
+
+            self.assertEqual(ffmpeg_path, explicit_ffmpeg.resolve())
+            self.assertEqual(ffprobe_path, sibling_ffprobe.resolve())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

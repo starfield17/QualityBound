@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Callable, TextIO, cast
 
-from core.ffmpeg.subprocess import hidden_popen_kwargs
+from core.ffmpeg.subprocess import hidden_popen_kwargs, terminate_process
 from core.models import OperationCancelledError
 from core.progress_events import ProgressCallback, ProgressEvent
 
@@ -63,16 +63,7 @@ def _parse_ffmpeg_progress(line: str, duration_sec: float | None) -> dict[str, o
 
 def _cancel_process(proc: subprocess.Popen[str]) -> None:
     # Try graceful termination first, then force-kill if the process stays alive.
-    if proc.poll() is not None:
-        return
-    try:
-        proc.terminate()
-        proc.wait(timeout=3)
-    except Exception:
-        try:
-            proc.kill()
-        except Exception:
-            pass
+    terminate_process(proc)
 
 
 def _cancel_requested(cancel_check: Callable[[], bool] | None) -> bool:

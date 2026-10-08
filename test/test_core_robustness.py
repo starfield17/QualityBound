@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from core.config.store import app_config_path, load_app_config, update_app_config
 from core.encoding.executor import execute_plan_item
+from core.ffmpeg.probe import _run_command
+from core.media.discovery import collect_video_files
 from core.media.subtitles import discover_external_subtitles
 from core.models import (
     BackendChoice,
@@ -17,6 +22,7 @@ from core.models import (
     EncodeOptions,
     EncodePlanItem,
     EncoderInfo,
+    OperationCancelledError,
 )
 
 
@@ -110,6 +116,77 @@ class ExternalSubtitleDiscoveryTestCase(unittest.TestCase):
     def test_unreadable_source_directory_is_not_fatal(self) -> None:
         with patch.object(Path, "iterdir", side_effect=OSError("permission denied")):
             self.assertEqual(discover_external_subtitles(Path("/nonexistent/source.mkv")), [])
+
+
+class ProbeCommandLifecycleTestCase(unittest.TestCase):
+    def _slow_command(self) -> list[str]:
+        return [sys.executable, "-c", "import time; time.sleep(30)"]
+
+    def test_command_output_is_captured(self) -> None:
+        result = _run_command([sys.executable, "-c", "print('hello')"])
+        self.assertEqual(result.stdout.strip(), "hello")
+
+    def test_command_timeout_is_reported(self) -> None:
+        start = time.monotonic()
+        with self.assertRaisesRegex(RuntimeError, "timed out"):
+            _run_command(self._slow_command(), timeout_sec=0.3)
+        self.assertLess(time.monotonic() - start, 20.0)
+
+    def test_command_cancel_terminates_the_process(self) -> None:
+        with self.assertRaises(OperationCancelledError):
+            _run_command(self._slow_command(), timeout_sec=30.0, cancel_check=lambda: True)
+
+    def test_nonzero_exit_reports_stderr(self) -> None:
+        with self.assertRaises(subprocess.CalledProcessError) as caught:
+            _run_command(
+                [sys.executable, "-c", "import sys; sys.stderr.write('boom'); sys.exit(3)"]
+            )
+        self.assertEqual(caught.exception.returncode, 3)
+        self.assertIn("boom", caught.exception.stderr or "")
+
+
+class VideoDiscoveryErrorReportingTestCase(unittest.TestCase):
+    def test_unreadable_subfolder_is_reported_and_batch_continues(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "ok.mp4").write_bytes(b"x")
+            locked = root / "locked"
+            locked.mkdir()
+            (locked / "hidden.mp4").write_bytes(b"x")
+            locked_resolved = locked.resolve()
+            reported: list[str] = []
+            real_scandir = os.scandir
+
+            def fake_scandir(path: object) -> object:
+                if Path(str(path)) == locked_resolved:
+                    raise PermissionError(13, "Permission denied", str(path))
+                return real_scandir(str(path))
+
+            with patch("core.media.discovery.os.scandir", side_effect=fake_scandir):
+                files = collect_video_files(root, recursive=True, on_error=reported.append)
+
+            self.assertEqual([item.path.name for item in files], ["ok.mp4"])
+            self.assertTrue(any("unreadable folder" in message.lower() for message in reported))
+
+    def test_unreadable_root_folder_raises_a_clear_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            with patch(
+                "core.media.discovery.os.scandir",
+                side_effect=PermissionError(13, "Permission denied", str(root)),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "Cannot read folder"):
+                    collect_video_files(root, recursive=False)
+
+
+class SystemPowerCommandTestCase(unittest.TestCase):
+    def test_power_command_does_not_attach_stdin(self) -> None:
+        completed = subprocess.CompletedProcess(["cmd"], 0, stdout="", stderr="")
+        with patch("core.media.system_power.subprocess.run", return_value=completed) as run:
+            from core.media.system_power import _run_single_command
+
+            _run_single_command(["cmd"])
+        self.assertEqual(run.call_args.kwargs.get("stdin"), subprocess.DEVNULL)
 
 
 if __name__ == "__main__":
