@@ -9,7 +9,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Mapping
 
-from core.models import CompressionMode, EncodePlan, EncodePlanItem, EncodeResult, MediaInfo, QualitySearchResult
+from core.models import CompressionMode, EncodePlan, EncodePlanItem, EncodeResult, MediaInfo, QualitySearchResult, SegmentedAnalysisResult
 from core.progress_events import ProgressEvent
 
 
@@ -82,6 +82,7 @@ class QueueItemRecord:
     result: EncodeResult | None = None
     analysis_candidate_index: int = 0
     analysis_candidate_limit: int = 0
+    analysis_measurement_budget: int = 0
 
     @property
     def source_path(self) -> Path:
@@ -219,6 +220,16 @@ def build_tooltip(record: QueueItemRecord) -> str:
     if record.error_summary:
         lines.append("Detail: " + record.error_summary)
     quality = record.plan_item.quality_search_result
+    segmented = record.plan_item.segmented_analysis_result
+    if segmented is not None:
+        mean = segmented.final_mean_vmaf if segmented.final_mean_vmaf is not None else segmented.predicted_mean_vmaf
+        lines.append(f"Smart v2 (experimental): {len(segmented.shots)} shots")
+        if record.analysis_measurement_budget:
+            lines.append(f"Initial sample encode budget: {record.analysis_measurement_budget}; holdouts and repairs are additional.")
+        if mean is not None:
+            lines.append(f"{'Measured' if segmented.final_mean_vmaf is not None else 'Predicted'} mean VMAF: {mean:.2f}")
+        if segmented.approximate:
+            lines.append("Allocation used bounded state compression.")
     if quality is not None:
         if quality.min_vmaf is not None:
             lines.append(f"SMART quality score: {quality.min_vmaf:.2f}")
@@ -350,6 +361,7 @@ def mark_started(record: QueueItemRecord) -> None:
     record.result = None
     record.analysis_candidate_index = 0
     record.analysis_candidate_limit = 0
+    record.analysis_measurement_budget = 0
     record.log_path = None
     record.current_pass_index = 1
     record.pass_percent = 0.0
@@ -376,6 +388,7 @@ def reset_for_retry(record: QueueItemRecord) -> None:
     record.result = None
     record.analysis_candidate_index = 0
     record.analysis_candidate_limit = 0
+    record.analysis_measurement_budget = 0
 
 
 def prepare_record_for_execution(record: QueueItemRecord) -> None:
@@ -434,6 +447,12 @@ def apply_progress_event(record: QueueItemRecord, event: Mapping[str, object] | 
     if isinstance(candidate_limit, int):
         record.analysis_candidate_limit = candidate_limit
     quality_result = event.get("quality_search_result")
+    segmented_result = event.get("segmented_analysis_result")
+    budget = event.get("measurement_budget")
+    if isinstance(budget, int):
+        record.analysis_measurement_budget = budget
+    if isinstance(segmented_result, SegmentedAnalysisResult):
+        record.plan_item.segmented_analysis_result = segmented_result
     if isinstance(quality_result, QualitySearchResult):
         record.plan_item.quality_search_result = quality_result
     target_bitrate = event.get("target_video_bitrate_bps")
@@ -466,6 +485,8 @@ def apply_progress_event(record: QueueItemRecord, event: Mapping[str, object] | 
 
 
 def mark_finished(record: QueueItemRecord, result: EncodeResult) -> None:
+    if result.segmented_analysis_result is not None:
+        record.plan_item.segmented_analysis_result = result.segmented_analysis_result
     record.result = result
     record.log_path = result.log_path
     record.finished_at = time.time()

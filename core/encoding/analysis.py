@@ -22,6 +22,7 @@ from core.models import (
     QualitySearchStatus,
     QualityUnreachablePolicy,
     SkipOrigin,
+    SmartAlgorithm,
 )
 from core.progress_events import ProgressCallback, ProgressEvent
 from core.smart.concurrency import analysis_concurrency_limit, analysis_slot
@@ -39,6 +40,7 @@ from .item_results import (
     _skipped_encode_result,
 )
 from .process import _emit, _emit_progress
+from .segmented import analyze_segmented_plan_item
 
 
 def _apply_constraint_policy(
@@ -103,6 +105,14 @@ def analyze_plan_item(
         )
     if item.options.compression_mode != CompressionMode.SMART:
         return None
+    if item.options.smart_algorithm == SmartAlgorithm.V2_EXPERIMENTAL:
+        with analysis_slot(cancel_check):
+            return analyze_segmented_plan_item(
+                ffmpeg_path, item, workdir, queue_index=queue_index, queue_total=queue_total,
+                log_callback=log_callback, progress_callback=progress_callback, cancel_check=cancel_check,
+                process_callback=process_callback, extra_progress_context=extra_progress_context,
+                constraint_policy=constraint_policy, active_cpu_vmaf_jobs=active_cpu_vmaf_jobs,
+            )
 
     result = EncodeResult(
         source_path=item.source_path,

@@ -1,4 +1,7 @@
-# QualityBound algorithm
+# QualityBound Smart v1 algorithm
+
+Smart v1 remains the default. [Experimental Smart v2](smart-v2.md) uses a
+separate per-shot result, receipt space and complete final-quality gate.
 
 QualityBound searches for an encoding point under two explicit constraints: a
 minimum perceptual-quality score and a maximum output size. Smart mode uses
@@ -29,14 +32,17 @@ fit-and-padded to the model canvas and normalized to 10-bit `yuv420p10le` at
 the scoring boundary. This normalization does not change the production output
 pixel format.
 
-The reported candidate score is the lowest mean VMAF among measured windows,
-not a whole-video average or the lowest individual-frame score. VMAF extraction
+Each window's gate is `min(mean VMAF, worst consecutive one-second VMAF + 4)`;
+the candidate takes the lowest window gate. This is not a whole-video average
+or the lowest individual-frame score. VMAF extraction
 is CPU-only; source decoding and candidate encoding may independently use a
 supported hardware path.
 
-Candidate size prediction uses the largest measured encoded-sample bitrate,
-including the container safety factor, plus the audio budget. A requested video
-bitrate is not treated as an observed size.
+Candidate size prediction uses observed/requested bitrate ratios. When risk
+observations cover the timeline, a clipped robust fit estimates their
+distribution; otherwise the estimator uses the median ratio. It adds an
+uncertainty margin, audio budget and container allowance. It does not extrapolate
+the maximum sample bitrate. A requested video bitrate is not an observed size.
 
 ## Independent holdout verification
 
@@ -73,3 +79,5 @@ This process bounds the evidence QualityBound actually measured. It does not
 turn unmeasured parts of a video into a statistical confidence interval. See
 [Smart evaluation](smart-evaluation.md) for the current validation scope and
 known limitations.
+Ordinary v1 completion checks actual size; it does not rescore the complete
+encoded video with VMAF.

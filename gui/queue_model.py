@@ -196,6 +196,10 @@ class QueueTableModel(QAbstractTableModel):
             if column == QueueColumn.TARGET_BITRATE:
                 return human_kbps(record.plan_item.target_video_bitrate_bps) if record.plan_item.target_video_bitrate_bps else "n/a"
             if column == QueueColumn.QUALITY:
+                segmented = record.plan_item.segmented_analysis_result
+                if segmented is not None:
+                    mean = segmented.final_mean_vmaf if segmented.final_mean_vmaf is not None else segmented.predicted_mean_vmaf
+                    return f"{mean:.1f}" if mean is not None else "-"
                 quality = record.plan_item.quality_search_result
                 if quality is None or quality.min_vmaf is None:
                     return "-"

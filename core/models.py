@@ -16,6 +16,11 @@ class CompressionMode(str, Enum):
     FIXED_BITRATE = "fixed_bitrate"
 
 
+class SmartAlgorithm(str, Enum):
+    V1 = "v1"
+    V2_EXPERIMENTAL = "v2_experimental"
+
+
 class SizeBlockedPolicy(str, Enum):
     RELAX_SIZE = "relax_size"
     RELAX_QUALITY = "relax_quality"
@@ -173,6 +178,7 @@ class EncodeOptions:
     skipped_output_policy: SkippedOutputPolicy = SkippedOutputPolicy.COPY
     analysis_profile: AnalysisProfileName = AnalysisProfileName.BALANCE
     analysis_settings: AnalysisProfileSettings = field(default_factory=AnalysisProfileSettings)
+    smart_algorithm: SmartAlgorithm = SmartAlgorithm.V1
 
 
 @dataclass(slots=True)
@@ -195,6 +201,10 @@ class EncodePlanItem:
     warnings: list[str] = field(default_factory=list)
     skip_reason: Optional[str] = None
     quality_search_result: Optional["QualitySearchResult"] = None
+    segmented_analysis_result: Optional["SegmentedAnalysisResult"] = None
+    ffprobe_path: Optional[Path] = None
+    # Runtime correction only; never changes the per-shot bitrate ceiling.
+    segmented_video_budget_bytes: Optional[int] = None
 
 
 @dataclass(slots=True)
@@ -227,6 +237,7 @@ class EncodeResult:
     copied_external_subtitle_paths: list[Path] = field(default_factory=list)
     external_subtitle_warnings: list[str] = field(default_factory=list)
     quality_search_result: Optional["QualitySearchResult"] = None
+    segmented_analysis_result: Optional["SegmentedAnalysisResult"] = None
 
 
 class QualitySearchStatus(str, Enum):
@@ -316,6 +327,79 @@ class QualitySearchResult:
     measurement_fingerprint: str = ""
     fingerprint: str = ""
     reason: Optional[str] = None
+
+    @property
+    def success(self) -> bool:
+        return self.status == QualitySearchStatus.FOUND
+
+
+@dataclass(frozen=True, slots=True)
+class ShotRange:
+    start_frame: int
+    end_frame: int
+
+    @property
+    def frame_count(self) -> int:
+        return self.end_frame - self.start_frame
+
+
+@dataclass(slots=True)
+class ShotCandidate:
+    bitrate_bps: int
+    mean_vmaf: float
+    worst_1s_vmaf: float
+    predicted_video_bytes: int
+    measured_frames: int
+    whole_shot: bool = False
+    artifact: Optional[Path] = None
+    artifact_hash: Optional[str] = None
+    holdout_verified: bool = False
+    full_verified: bool = False
+
+
+@dataclass(slots=True)
+class ShotAnalysis:
+    shot: ShotRange
+    search_windows: list[ShotRange] = field(default_factory=list)
+    holdout_window: Optional[ShotRange] = None
+    candidates: list[ShotCandidate] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class SegmentedAnalysisResult:
+    status: QualitySearchStatus
+    encoder_name: str
+    backend: BackendChoice
+    shots: list[ShotAnalysis] = field(default_factory=list)
+    selected: list[ShotCandidate] = field(default_factory=list)
+    fps: float = 0.0
+    fps_rational: str = ""
+    source_start_sec: float = 0.0
+    source_frames: int = 0
+    predicted_mean_vmaf: Optional[float] = None
+    predicted_output_bytes: Optional[int] = None
+    max_output_bytes: int = 0
+    video_budget_bytes: int = 0
+    required_output_ratio: Optional[float] = None
+    best_size_fitting_vmaf: Optional[float] = None
+    failure_kind: Optional[ConstraintFailureKind] = None
+    measurement_fingerprint: str = ""
+    approximate: bool = False
+    reason: Optional[str] = None
+    final_mean_vmaf: Optional[float] = None
+    final_worst_1s_vmaf: Optional[float] = None
+    final_shot_means: list[float] = field(default_factory=list)
+    final_shot_worst_1s: list[float] = field(default_factory=list)
+    final_boundary_worst_1s: list[float] = field(default_factory=list)
+    refinement_rounds: int = 0
+    holdout_refinement_rounds: int = 0
+    candidate_encodes: int = 0
+    vmaf_executions: int = 0
+    measurement_cache_hits: int = 0
+    phase_seconds: dict[str, float] = field(default_factory=dict)
+    resource_cpu_seconds: Optional[float] = None
+    phase_cpu_seconds: dict[str, float] = field(default_factory=dict)
+    resource_gpu_seconds: Optional[float] = None
 
     @property
     def success(self) -> bool:

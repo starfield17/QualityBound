@@ -1,0 +1,248 @@
+{
+  "schema": 1,
+  "date": "2026-10-08",
+  "purpose": "development mechanism checks only; no real-world acceptance claims",
+  "platform": "Darwin arm64",
+  "logical_cpus": 10,
+  "fixture": {
+    "recipe": "high-low-high",
+    "seed": 1729,
+    "source_group": "synthetic-recipe-high-low-high",
+    "width": 320,
+    "height": 180,
+    "fps": 24,
+    "frames": 192,
+    "target": 80,
+    "local_mean_floor": 76,
+    "temporal_floor": 72,
+    "min_video_kbps": 250,
+    "max_video_kbps": 2000,
+    "profile": "balance",
+    "preset": "ultrafast",
+    "cache": "cold"
+  },
+  "tool_versions": {
+    "ffmpeg": "ffmpeg version 9.0.1-https://www.martin-riedl.de Copyright (c) 2000-2026 the FFmpeg developers",
+    "ffprobe": "ffprobe version 9.0.1-https://www.martin-riedl.de Copyright (c) 2007-2026 the FFmpeg developers"
+  },
+  "comparison": {
+    "v2": {
+      "bytes": 349961,
+      "mean_vmaf": 88.85913391145833,
+      "worst_1s_vmaf": 73.39196662500002,
+      "shot_means": [
+        78.9040845625,
+        100.0,
+        76.53245108333333
+      ],
+      "wall_seconds": 9.722270917001879,
+      "child_cpu_seconds": 56.169925,
+      "gpu_seconds": null,
+      "encode_invocations": 16,
+      "measured_points": null,
+      "vmaf_executions": 15,
+      "prediction_error_ratio": 0.00990101867082216,
+      "approximate": false,
+      "cache_hits": 0,
+      "baseline_trial_budget": null
+    },
+    "v1": {
+      "bytes": 403285,
+      "mean_vmaf": 91.18096428125,
+      "worst_1s_vmaf": 78.24287108333333,
+      "shot_means": [
+        80.67702566666667,
+        100.0,
+        84.04683145833333
+      ],
+      "wall_seconds": 5.892330625007162,
+      "child_cpu_seconds": 41.33116,
+      "gpu_seconds": null,
+      "encode_invocations": null,
+      "measured_points": 2,
+      "vmaf_executions": null,
+      "prediction_error_ratio": null,
+      "approximate": null,
+      "cache_hits": null,
+      "baseline_trial_budget": null
+    },
+    "whole_abr": {
+      "bytes": 336987,
+      "mean_vmaf": 88.58534053645833,
+      "worst_1s_vmaf": 73.32731233333334,
+      "shot_means": [
+        76.21081933333333,
+        100.0,
+        78.1305428125
+      ],
+      "wall_seconds": 12.838860749994637,
+      "child_cpu_seconds": 94.430061,
+      "gpu_seconds": null,
+      "encode_invocations": 9,
+      "measured_points": null,
+      "vmaf_executions": 9,
+      "prediction_error_ratio": null,
+      "approximate": null,
+      "cache_hits": null,
+      "baseline_trial_budget": 9
+    },
+    "whole_two_pass": {
+      "bytes": 379964,
+      "mean_vmaf": 90.48894384895834,
+      "worst_1s_vmaf": 79.3188490416667,
+      "shot_means": [
+        80.61689427083333,
+        100.0,
+        81.338881125
+      ],
+      "wall_seconds": 6.499181999999564,
+      "child_cpu_seconds": 44.61712,
+      "gpu_seconds": null,
+      "encode_invocations": 4,
+      "measured_points": null,
+      "vmaf_executions": 4,
+      "prediction_error_ratio": null,
+      "approximate": null,
+      "cache_hits": null,
+      "baseline_trial_budget": 9
+    }
+  },
+  "checks": [
+    {
+      "case": "config-headers-hevc",
+      "passed": true,
+      "status": "found",
+      "reason": null,
+      "shots": 3,
+      "mean_vmaf": 88.86118112499999,
+      "worst_1s_vmaf": 73.39196662500005,
+      "bytes": 350040,
+      "encode_invocations": 16,
+      "wall_seconds": 14.415660832994035,
+      "ffmpeg_cpu_seconds": 59.37999999999999,
+      "tool_versions": {
+        "ffmpeg": "ffmpeg version 9.0.1-https://www.martin-riedl.de Copyright (c) 2000-2026 the FFmpeg developers",
+        "ffprobe": "ffprobe version 9.0.1-https://www.martin-riedl.de Copyright (c) 2007-2026 the FFmpeg developers"
+      }
+    },
+    {
+      "case": "config-headers-av1",
+      "passed": true,
+      "status": "found",
+      "reason": null,
+      "shots": 3,
+      "mean_vmaf": 91.84549588020833,
+      "worst_1s_vmaf": 74.76980704166667,
+      "bytes": 393038,
+      "encode_invocations": 16,
+      "wall_seconds": 16.97191170800943,
+      "ffmpeg_cpu_seconds": 74.55499999999999,
+      "tool_versions": {
+        "ffmpeg": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+        "ffprobe": "ffprobe version 9.0.2 Copyright (c) 2007-2026 the FFmpeg developers"
+      }
+    },
+    {
+      "case": "final-flash-frame-cpu",
+      "passed": true,
+      "status": "found",
+      "reason": null,
+      "shots": 2,
+      "mean_vmaf": 100.0,
+      "worst_1s_vmaf": 100.0,
+      "bytes": 110167,
+      "encode_invocations": 10,
+      "wall_seconds": 5.8932392920105485,
+      "ffmpeg_cpu_seconds": 33.141000000000005,
+      "tool_versions": {
+        "ffmpeg": "ffmpeg version 9.0.1-https://www.martin-riedl.de Copyright (c) 2000-2026 the FFmpeg developers",
+        "ffprobe": "ffprobe version 9.0.1-https://www.martin-riedl.de Copyright (c) 2007-2026 the FFmpeg developers"
+      }
+    },
+    {
+      "case": "final-rapid-cuts-cpu",
+      "passed": true,
+      "status": "found",
+      "reason": null,
+      "shots": 12,
+      "mean_vmaf": 100.0,
+      "worst_1s_vmaf": 100.0,
+      "bytes": 56465,
+      "encode_invocations": 50,
+      "wall_seconds": 6.934343833010644,
+      "ffmpeg_cpu_seconds": 16.330000000000005,
+      "tool_versions": {
+        "ffmpeg": "ffmpeg version 9.0.1-https://www.martin-riedl.de Copyright (c) 2000-2026 the FFmpeg developers",
+        "ffprobe": "ffprobe version 9.0.1-https://www.martin-riedl.de Copyright (c) 2007-2026 the FFmpeg developers"
+      }
+    },
+    {
+      "case": "final-auxiliary-streams-cpu",
+      "passed": true,
+      "status": "found",
+      "reason": null,
+      "shots": 3,
+      "mean_vmaf": 88.85913391145833,
+      "worst_1s_vmaf": 73.391966625,
+      "bytes": 351321,
+      "encode_invocations": 16,
+      "wall_seconds": 9.698620750001282,
+      "ffmpeg_cpu_seconds": 55.066,
+      "tool_versions": {
+        "ffmpeg": "ffmpeg version 9.0.1-https://www.martin-riedl.de Copyright (c) 2000-2026 the FFmpeg developers",
+        "ffprobe": "ffprobe version 9.0.1-https://www.martin-riedl.de Copyright (c) 2007-2026 the FFmpeg developers"
+      }
+    },
+    {
+      "case": "final-high-low-high-cpu-2pass",
+      "passed": true,
+      "status": "found",
+      "reason": null,
+      "shots": 3,
+      "mean_vmaf": 89.38262558854167,
+      "worst_1s_vmaf": 77.24139808333334,
+      "bytes": 356085,
+      "encode_invocations": 16,
+      "wall_seconds": 10.513175792002585,
+      "ffmpeg_cpu_seconds": 56.705000000000005,
+      "tool_versions": {
+        "ffmpeg": "ffmpeg version 9.0.1-https://www.martin-riedl.de Copyright (c) 2000-2026 the FFmpeg developers",
+        "ffprobe": "ffprobe version 9.0.1-https://www.martin-riedl.de Copyright (c) 2007-2026 the FFmpeg developers"
+      }
+    },
+    {
+      "case": "final-shifted-auxiliary",
+      "passed": true,
+      "status": "found",
+      "reason": null,
+      "shots": 3,
+      "mean_vmaf": 90.26382620833334,
+      "worst_1s_vmaf": 76.29623662500012,
+      "bytes": 375632,
+      "encode_invocations": 17,
+      "wall_seconds": 10.54005004100327,
+      "ffmpeg_cpu_seconds": 59.823,
+      "tool_versions": {
+        "ffmpeg": "ffmpeg version 9.0.1-https://www.martin-riedl.de Copyright (c) 2000-2026 the FFmpeg developers",
+        "ffprobe": "ffprobe version 9.0.1-https://www.martin-riedl.de Copyright (c) 2007-2026 the FFmpeg developers"
+      }
+    },
+    {
+      "case": "final-high-low-high-videotoolbox",
+      "passed": false,
+      "status": "unsupported",
+      "reason": "Smart v2 encode/concatenation preflight failed for the bound encoder: Bound encoder produces incompatible stream configurations at different bitrates.",
+      "shots": 3,
+      "mean_vmaf": null,
+      "worst_1s_vmaf": null,
+      "bytes": null,
+      "encode_invocations": 2,
+      "wall_seconds": 0.55848608299857,
+      "ffmpeg_cpu_seconds": 0.188,
+      "tool_versions": {
+        "ffmpeg": "ffmpeg version 9.0.1-https://www.martin-riedl.de Copyright (c) 2000-2026 the FFmpeg developers",
+        "ffprobe": "ffprobe version 9.0.1-https://www.martin-riedl.de Copyright (c) 2007-2026 the FFmpeg developers"
+      }
+    }
+  ]
+}

@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TypedDict
 
-from core.models import QualitySearchResult
+from core.models import QualitySearchResult, SegmentedAnalysisResult
 
 
 class ProgressEvent(TypedDict, total=False):
@@ -50,6 +50,8 @@ class ProgressEvent(TypedDict, total=False):
     parallel: bool
     worker_count: int
     quality_search_result: QualitySearchResult
+    segmented_analysis_result: SegmentedAnalysisResult
+    measurement_budget: int
     target_video_bitrate_bps: int
     candidate_index: int
     candidate_limit: int

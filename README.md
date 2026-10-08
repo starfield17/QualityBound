@@ -106,6 +106,14 @@ python main.py --cli encode input.mp4 \
 
 Supported encoding backends are CPU, NVIDIA NVENC, Intel QSV, AMD AMF, and
 Apple VideoToolbox where the selected FFmpeg build and hardware expose them.
+
+Smart v1 remains the default. To try per-shot allocation, select **Smart v2
+(experimental)** in the GUI Smart options, or pass `--smart-algorithm
+v2_experimental` in the CLI. V2 interprets `--min-vmaf` as a whole-video mean
+target, applies local quality floors and scores the complete final output.
+It requires CFR SDR and a successful encoder/decoder-configuration preflight;
+it may take substantially longer. See [Smart v2](docs/smart-v2.md) for supported
+cases, measured limitations and explicit-tool examples.
 QualityBound performs runtime encoder smoke tests rather than assuming support
 from an encoder name alone.
 

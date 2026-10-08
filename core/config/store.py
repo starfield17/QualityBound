@@ -12,6 +12,7 @@ from core.models import (
     BackendChoice,
     CodecChoice,
     CompressionMode,
+    SmartAlgorithm,
     ContainerChoice,
     DecodeAcceleration,
     EncodeOptions,
@@ -51,6 +52,7 @@ def encode_options_to_preset_data(options: EncodeOptions) -> dict[str, Any]:
     return {
         "codec": options.codec.value,
         "compression_mode": options.compression_mode.value,
+        "smart_algorithm": options.smart_algorithm.value,
         "backend": options.backend.value,
         "decode_acceleration": options.decode_acceleration.value,
         "ratio": options.ratio,
@@ -75,6 +77,7 @@ def encode_options_to_preset_data(options: EncodeOptions) -> dict[str, Any]:
 def validate_preset_schema(data: dict[str, Any]) -> dict[str, Any]:
     # Backfill keys added after the preset format was established, then validate.
     data = dict(data)
+    data.setdefault("smart_algorithm", SmartAlgorithm.V1.value)
     if "copy_external_subtitles" not in data:
         data["copy_external_subtitles"] = False
     if "decode_acceleration" not in data:
@@ -117,6 +120,7 @@ def validate_preset_schema(data: dict[str, Any]) -> dict[str, Any]:
     # Constructing each enum validates the string value; raises ValueError on invalid input.
     CodecChoice(data["codec"])
     CompressionMode(data["compression_mode"])
+    SmartAlgorithm(data["smart_algorithm"])
     BackendChoice(data["backend"])
     DecodeAcceleration(data["decode_acceleration"])
     VmafViewingContext(data["viewing_context"])
@@ -138,6 +142,7 @@ def preset_data_to_encode_options(data: dict[str, Any]) -> EncodeOptions:
     return EncodeOptions(
         codec=CodecChoice(data["codec"]),
         compression_mode=CompressionMode(data["compression_mode"]),
+        smart_algorithm=SmartAlgorithm(data["smart_algorithm"]),
         backend=BackendChoice(data["backend"]),
         decode_acceleration=DecodeAcceleration(data["decode_acceleration"]),
         ratio=None if data["ratio"] is None else float(data["ratio"]),

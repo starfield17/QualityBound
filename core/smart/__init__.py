@@ -22,6 +22,7 @@ from core.smart.profiles import (
 from core.smart.receipts import delete_analysis_receipt
 from core.smart.vmaf import VMAF_PRODUCTION_MODELS, probe_vmaf_runtime
 from core.smart.workflow import analyze_quality
+from core.smart.v2.receipts import delete_receipt as delete_segmented_analysis_receipt
 
 
 __all__ = [
@@ -33,6 +34,7 @@ __all__ = [
     "build_decision_options",
     "constraint_policy_from_size_blocked",
     "delete_analysis_receipt",
+    "delete_segmented_analysis_receipt",
     "discard_rejected_output",
     "parse_analysis_profile_name",
     "prepare_size_miss_retry",

@@ -32,6 +32,7 @@ from core.models import (
     BackendChoice,
     CodecChoice,
     CompressionMode,
+    SmartAlgorithm,
     ContainerChoice,
     DecodeAcceleration,
     EncodeOptions,
@@ -101,6 +102,7 @@ class EncodeOptionsPanel(QWidget):
         self._connect_signals()
 
     def _connect_signals(self) -> None:
+        self.smart_algorithm_combo.currentIndexChanged.connect(self._on_smart_algorithm_changed)
         self.compression_mode_combo.currentIndexChanged.connect(self._on_compression_mode_changed)
         self.audio_mode_combo.currentIndexChanged.connect(self.sync_dependent_controls)
         self.codec_combo.currentIndexChanged.connect(self._on_codec_changed)
@@ -115,6 +117,10 @@ class EncodeOptionsPanel(QWidget):
 
     def _on_analysis_profile_changed(self, *_args: object) -> None:
         self.analysis_profile_changed.emit(self.current_analysis_profile_name())
+
+    def _on_smart_algorithm_changed(self, *_args: object) -> None:
+        self.sync_dependent_controls()
+        self.options_changed.emit()
 
     # ------------------------------------------------------------------ building
 
@@ -133,6 +139,10 @@ class EncodeOptionsPanel(QWidget):
         self.compression_mode_combo = QComboBox()
         self.compression_mode_combo.addItem("smart", CompressionMode.SMART.value)
         self.compression_mode_combo.addItem("fixed_bitrate", CompressionMode.FIXED_BITRATE.value)
+        self.smart_algorithm_label = QLabel()
+        self.smart_algorithm_combo = QComboBox()
+        self.smart_algorithm_combo.addItem("Smart v1", SmartAlgorithm.V1.value)
+        self.smart_algorithm_combo.addItem("Smart v2 (experimental)", SmartAlgorithm.V2_EXPERIMENTAL.value)
 
         self.backend_label = QLabel()
         self.backend_combo = QComboBox()
@@ -183,6 +193,8 @@ class EncodeOptionsPanel(QWidget):
         self._fill_analysis_profile_combo()
         layout.addWidget(self.analysis_profile_label, 3, 0)
         layout.addWidget(self.analysis_profile_combo, 3, 1)
+        layout.addWidget(self.smart_algorithm_label, 4, 0)
+        layout.addWidget(self.smart_algorithm_combo, 4, 1, 1, 3)
 
         self.viewing_context_label = QLabel()
         self.viewing_context_combo = QComboBox()
@@ -355,9 +367,12 @@ class EncodeOptionsPanel(QWidget):
             skipped_output_policy=skipped_policy,
             analysis_profile=profile_name,
             analysis_settings=profile_settings,
+            smart_algorithm=SmartAlgorithm(self.smart_algorithm_combo.currentData())
+            if self.compression_mode_combo.currentData() == CompressionMode.SMART.value else SmartAlgorithm.V1,
         )
 
     def apply_options(self, options: EncodeOptions) -> None:
+        self.smart_algorithm_combo.setCurrentIndex(self.smart_algorithm_combo.findData(options.smart_algorithm.value))
         self.codec_combo.setCurrentText(options.codec.value)
         mode_index = self.compression_mode_combo.findData(options.compression_mode.value)
         if mode_index >= 0:
@@ -434,6 +449,10 @@ class EncodeOptionsPanel(QWidget):
         self.translator = translator
         self.codec_label.setText(self.translator.t("gui.label.codec"))
         self.compression_mode_label.setText(self.translator.t("gui.label.compression_mode"))
+        self.smart_algorithm_label.setText(self.translator.t("gui.label.smart_algorithm"))
+        self.smart_algorithm_combo.setItemText(0, self.translator.t("gui.value.smart_v1"))
+        self.smart_algorithm_combo.setItemText(1, self.translator.t("gui.value.smart_v2"))
+        self.smart_algorithm_combo.setToolTip(self.translator.t("gui.tooltip.smart_v2"))
         smart_mode_index = self.compression_mode_combo.findData(CompressionMode.SMART.value)
         fixed_mode_index = self.compression_mode_combo.findData(CompressionMode.FIXED_BITRATE.value)
         if smart_mode_index >= 0:
@@ -647,6 +666,15 @@ class EncodeOptionsPanel(QWidget):
     def sync_dependent_controls(self) -> None:
         mode_value = self.compression_mode_combo.currentData() or self.compression_mode_combo.currentText()
         smart_mode = mode_value == CompressionMode.SMART.value
+        self.smart_algorithm_label.setVisible(smart_mode)
+        self.smart_algorithm_combo.setVisible(smart_mode)
+        v2 = smart_mode and self.smart_algorithm_combo.currentData() == SmartAlgorithm.V2_EXPERIMENTAL.value
+        if v2:
+            self.min_vmaf_label.setText(self.translator.t("gui.label.mean_vmaf_v2"))
+            self.min_vmaf_spin.setToolTip(self.translator.t("gui.tooltip.mean_vmaf_v2"))
+        else:
+            self.min_vmaf_label.setText(self.translator.t("gui.label.min_vmaf"))
+            self.min_vmaf_spin.setToolTip(self.translator.t("gui.tooltip.min_vmaf"))
         self.ratio_edit.setEnabled(not smart_mode)
         self.min_vmaf_spin.setEnabled(smart_mode)
         self.max_output_ratio_spin.setEnabled(smart_mode)

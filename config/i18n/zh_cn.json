@@ -303,5 +303,11 @@
   "gui.report.original_size": "原始总体积",
   "gui.report.compressed_size": "压缩后总体积",
   "gui.report.saved_space": "节省空间",
-  "gui.notification.batch_done": "批处理转码完成：共完成 {count} 个视频，节省 {saved} ({ratio}) 空间。"
+  "gui.notification.batch_done": "批处理转码完成：共完成 {count} 个视频，节省 {saved} ({ratio}) 空间。",
+  "gui.label.smart_algorithm": "Smart 算法",
+  "gui.value.smart_v1": "Smart v1（默认）",
+  "gui.value.smart_v2": "Smart v2（实验性）",
+  "gui.tooltip.smart_v2": "逐镜头分配码率，候选搜索使用样本，最终输出完整评分。运行时间可能显著增加。",
+  "gui.label.mean_vmaf_v2": "整片平均 VMAF 目标",
+  "gui.tooltip.mean_vmaf_v2": "按时长加权的整片平均目标；每镜头平均不低于目标减4，最差连续一秒不低于目标减8。"
 }

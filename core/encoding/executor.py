@@ -18,6 +18,7 @@ from core.models import (
     EncodePlanItem,
     EncodeResult,
     OperationCancelledError,
+    SmartAlgorithm,
 )
 from core.progress_events import ProgressCallback
 from core.smart.bitrate import resolve_max_output_ratio
@@ -32,6 +33,7 @@ from .item_results import (
     _write_command_failure_log,
 )
 from .process import _cleanup_passlog, _emit, _emit_progress, _run_logged_command
+from .segmented import execute_segmented_item
 
 
 def execute_plan_item(
@@ -55,6 +57,14 @@ def execute_plan_item(
     if item.skip_reason:
         return _skipped_encode_result(
             item, log_path, base_context, queue_index, queue_total, log_callback, progress_callback
+        )
+
+    if item.options.compression_mode == CompressionMode.SMART and item.options.smart_algorithm == SmartAlgorithm.V2_EXPERIMENTAL:
+        return execute_segmented_item(
+            ffmpeg_path, item, workdir, queue_index=queue_index, queue_total=queue_total,
+            log_callback=log_callback, progress_callback=progress_callback, cancel_check=cancel_check,
+            process_callback=process_callback, extra_progress_context=extra_progress_context,
+            constraint_policy=constraint_policy, smart_analysis_validated=smart_analysis_validated,
         )
 
     result = EncodeResult(

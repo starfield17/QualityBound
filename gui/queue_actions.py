@@ -16,12 +16,14 @@ from core.models import (
     DecisionOption,
     EncodeOptions,
     QualitySearchStatus,
+    SegmentedAnalysisResult,
     SkipOrigin,
 )
 from core.smart import (
     accept_rejected_output,
     build_decision_options,
     delete_analysis_receipt,
+    delete_segmented_analysis_receipt,
     discard_rejected_output,
     prepare_size_miss_retry,
     reselect_after_quality_decision,
@@ -108,7 +110,7 @@ def decision_options_for_record(record: QueueItemRecord) -> list[DecisionOption]
     result = record.result
     if result is None or result.rejected_output_path is not None:
         return []
-    quality = record.plan_item.quality_search_result
+    quality = record.plan_item.quality_search_result or record.plan_item.segmented_analysis_result
     return build_decision_options(quality) if quality is not None else []
 
 
@@ -117,7 +119,7 @@ def apply_quality_decision(record: QueueItemRecord, decision: DecisionOption) ->
 
     if record.status != QueueItemStatus.NEEDS_DECISION:
         return False
-    quality = record.plan_item.quality_search_result
+    quality = record.plan_item.quality_search_result or record.plan_item.segmented_analysis_result
     if quality is None:
         return False
 
@@ -133,11 +135,15 @@ def apply_quality_decision(record: QueueItemRecord, decision: DecisionOption) ->
     if decision.action_code == DecisionActionCode.REANALYZE:
         try:
             if quality.measurement_fingerprint:
-                delete_analysis_receipt(record.job_snapshot.workdir, quality.measurement_fingerprint)
+                if isinstance(quality, SegmentedAnalysisResult):
+                    delete_segmented_analysis_receipt(record.job_snapshot.workdir, quality.measurement_fingerprint)
+                else:
+                    delete_analysis_receipt(record.job_snapshot.workdir, quality.measurement_fingerprint)
         except (OSError, ValueError) as exc:
             record.error_summary = short_error(str(exc))
             return False
         record.plan_item.quality_search_result = None
+        record.plan_item.segmented_analysis_result = None
         reset_for_retry(record)
         return True
 
@@ -147,6 +153,16 @@ def apply_quality_decision(record: QueueItemRecord, decision: DecisionOption) ->
         quality,
         decision,
     )
+    if isinstance(reselected, SegmentedAnalysisResult):
+        record.plan_item.segmented_analysis_result = reselected
+        if reselected.success or decision.requires_analysis:
+            reset_for_retry(record)
+        else:
+            if record.result is not None:
+                record.result.segmented_analysis_result = reselected
+                record.result.error_message = reselected.reason
+            record.error_summary = reselected.reason
+        return True
     record.plan_item.quality_search_result = reselected
     if reselected.status == QualitySearchStatus.FOUND:
         record.plan_item.target_video_bitrate_bps = reselected.selected_video_bitrate_bps

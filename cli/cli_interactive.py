@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from core.i18n import Translator
 from core.media import human_kbps
-from core.models import CompressionMode, EncodePlan, EncodeResult
+from core.models import CompressionMode, EncodePlan, EncodeResult, SmartAlgorithm
 from core.smart import build_decision_options
 
 
@@ -32,6 +32,8 @@ def print_plan(plan: EncodePlan, tr: Translator) -> None:
         )
         print(f"  {tr.t('cli.target_bitrate')}: {target}")
         print(f"  {tr.t('cli.encoder')}: {encoder.encoder_name} ({encoder.backend.value})")
+        if item.options.compression_mode == CompressionMode.SMART and item.options.smart_algorithm == SmartAlgorithm.V2_EXPERIMENTAL:
+            print(f"  Smart v2 (experimental): whole-video mean VMAF target {item.options.min_vmaf:.1f}")
         print(f"  {tr.t('cli.output')}: {item.output_path}")
         for warning in item.warnings:
             print(f"  {tr.t('cli.note')}: {warning}")
@@ -47,8 +49,10 @@ def print_encode_results(results: list[EncodeResult], tr: Translator) -> None:
             print(f"  {tr.t('cli.reason')}: {result.error_message}")
             if result.rejected_output_path is not None:
                 print(f"  {tr.t('cli.rejected_output')}: {result.rejected_output_path}")
-            elif result.quality_search_result is not None:
-                for option in build_decision_options(result.quality_search_result):
+            elif result.quality_search_result is not None or result.segmented_analysis_result is not None:
+                decision_result = result.quality_search_result or result.segmented_analysis_result
+                assert decision_result is not None
+                for option in build_decision_options(decision_result):
                     suffix = f"={option.suggested_value}" if option.suggested_value is not None else ""
                     print(f"  {tr.t('cli.available_decision')}: {option.action_code.value}{suffix}")
         elif result.skipped:
@@ -60,6 +64,11 @@ def print_encode_results(results: list[EncodeResult], tr: Translator) -> None:
             print(f"[{tr.t('cli.result_failed')}] {result.source_path}")
             print(f"  {tr.t('cli.reason')}: {result.error_message}")
         quality = result.quality_search_result
+        segmented = result.segmented_analysis_result
+        if segmented is not None:
+            mean = segmented.final_mean_vmaf if segmented.final_mean_vmaf is not None else segmented.predicted_mean_vmaf
+            print(f"  Smart v2 (experimental): {len(segmented.shots)} shots; "
+                  f"{'measured' if segmented.final_mean_vmaf is not None else 'predicted'} mean VMAF={mean}")
         if quality is not None:
             if quality.min_vmaf is not None:
                 print(f"  {tr.t('cli.minimum_vmaf')}: {quality.min_vmaf:.2f}")

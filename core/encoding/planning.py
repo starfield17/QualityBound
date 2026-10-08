@@ -264,6 +264,8 @@ def reconfigure_plan_item(
         )
     )
     candidate.quality_search_result = None
+    candidate.segmented_analysis_result = None
+    candidate.segmented_video_budget_bytes = None
     candidate.skip_reason = None
     if resolved_options.compression_mode == CompressionMode.FIXED_BITRATE:
         if candidate.media_info is None:
@@ -314,6 +316,7 @@ def _successful_plan_item(
         encoder_info=encoder_info,
         options=options,
         target_video_bitrate_bps=target_bitrate,
+        ffprobe_path=ffprobe,
     )
     if options.copy_external_subtitles:
         sidecars = discover_external_subtitles(file_item.path)

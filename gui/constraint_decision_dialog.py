@@ -35,7 +35,7 @@ def choose_quality_decision(
     record: QueueItemRecord,
     options: list[DecisionOption],
 ) -> DecisionOption | None:
-    quality = record.plan_item.quality_search_result
+    quality = record.plan_item.quality_search_result or record.plan_item.segmented_analysis_result
     box = QMessageBox(parent)
     box.setIcon(QMessageBox.Icon.Warning)
     box.setWindowTitle(tr.t("gui.decision.title"))

@@ -303,5 +303,11 @@
   "gui.report.original_size": "Original total size",
   "gui.report.compressed_size": "Compressed total size",
   "gui.report.saved_space": "Saved space",
-  "gui.notification.batch_done": "Batch finished: {count} videos compressed, saved {saved} ({ratio}) space."
+  "gui.notification.batch_done": "Batch finished: {count} videos compressed, saved {saved} ({ratio}) space.",
+  "gui.label.smart_algorithm": "Smart algorithm",
+  "gui.value.smart_v1": "Smart v1 (default)",
+  "gui.value.smart_v2": "Smart v2 (experimental)",
+  "gui.tooltip.smart_v2": "Per-shot bitrate allocation. Candidate search uses samples; the final output is fully scored. May take substantially longer.",
+  "gui.label.mean_vmaf_v2": "Whole-video mean VMAF target",
+  "gui.tooltip.mean_vmaf_v2": "Time-weighted mean target; each shot mean must be at least target minus 4, and the worst one-second score at least target minus 8."
 }

@@ -38,6 +38,7 @@ from core.models import (
     BackendChoice,
     CodecChoice,
     CompressionMode,
+    SmartAlgorithm,
     ConstraintPolicy,
     QualityUnreachablePolicy,
     SizeBlockedPolicy,
@@ -92,6 +93,7 @@ def _merge_options(base: EncodeOptions, args: argparse.Namespace) -> EncodeOptio
     scalar_map = {
         "codec": lambda value: CodecChoice(value),
         "compression_mode": lambda value: CompressionMode(value),
+        "smart_algorithm": lambda value: SmartAlgorithm(value),
         "backend": lambda value: BackendChoice(value),
         "decode_acceleration": lambda value: DecodeAcceleration(value),
         "ratio": float,
@@ -207,6 +209,8 @@ def _add_encode_flags(parser: argparse.ArgumentParser) -> None:
         choices=[backend.value for backend in BackendChoice],
         help="Encoder backend",
     )
+    parser.add_argument("--smart-algorithm", choices=[algorithm.value for algorithm in SmartAlgorithm],
+                        help="Smart algorithm (default: v1; v2_experimental uses per-shot average quality)")
     parser.add_argument(
         "--decode-acceleration",
         dest="decode_acceleration",
@@ -218,7 +222,7 @@ def _add_encode_flags(parser: argparse.ArgumentParser) -> None:
         "--min-vmaf",
         dest="min_vmaf",
         type=float,
-        help="Lowest sampled-window VMAF v1 target for Smart mode (default: 90)",
+        help="VMAF target (default: 90): v1 sampled-window gate; experimental v2 whole-video mean",
     )
     parser.add_argument(
         "--analysis-profile",
@@ -260,6 +264,8 @@ def _add_encode_flags(parser: argparse.ArgumentParser) -> None:
 
 
 def _validate_compression_options(options: EncodeOptions, args: argparse.Namespace) -> None:
+    if options.compression_mode != CompressionMode.SMART and options.smart_algorithm != SmartAlgorithm.V1:
+        raise ValueError("--smart-algorithm v2_experimental requires --compression-mode smart")
     if not 0 < float(options.min_vmaf) <= 100:
         raise ValueError("--min-vmaf must be greater than 0 and at most 100")
     if options.max_output_ratio is not None and not 0 < float(options.max_output_ratio) <= 1:
@@ -426,12 +432,14 @@ def _run_encode(args: argparse.Namespace, config_dir: Path, catalog: Translation
             plan,
             workdir,
             max_workers=args.jobs,
+            log_callback=print if options.smart_algorithm == SmartAlgorithm.V2_EXPERIMENTAL else None,
             constraint_policy=constraint_policy_from_size_blocked(options.size_blocked_policy),
         )
     else:
         results = execute_plan(
             plan,
             workdir,
+            log_callback=print if options.smart_algorithm == SmartAlgorithm.V2_EXPERIMENTAL else None,
             constraint_policy=constraint_policy_from_size_blocked(options.size_blocked_policy),
         )
     print_encode_results(results, tr)
