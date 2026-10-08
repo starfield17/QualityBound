@@ -28,6 +28,12 @@ from core.models import (
     MediaInfo,
     OperationCancelledError,
 )
+from gui.queue_state import (
+    QueueItemRecord,
+    QueueItemStatus,
+    QueueJobSnapshot,
+    compute_metrics,
+)
 
 
 def _fixed_bitrate_item(root: Path, output: Path, *, overwrite: bool = True) -> EncodePlanItem:
@@ -178,6 +184,104 @@ class SkippedOutputCollisionTestCase(unittest.TestCase):
 
             with self.assertRaisesRegex(RuntimeError, "collision"):
                 self._build(folder, probe)
+
+
+class SavedBytesEstimateTestCase(unittest.TestCase):
+    def _record(
+        self,
+        folder: Path,
+        name: str,
+        *,
+        mode: CompressionMode,
+        status: QueueItemStatus,
+        target_bps: int,
+        size_bytes: int,
+    ) -> QueueItemRecord:
+        source = folder / f"{name}.mkv"
+        source.write_bytes(b"x" * size_bytes)
+        media = MediaInfo(
+            path=source,
+            duration=10.0,
+            format_bitrate_bps=8_000_000,
+            video_bitrate_bps=7_000_000,
+            audio_bitrate_bps=128_000,
+            width=1920,
+            height=1080,
+            fps=30.0,
+            video_codec="h264",
+            audio_codec="aac",
+        )
+        item = EncodePlanItem(
+            source_path=source,
+            output_path=folder / f"{name}.mp4",
+            media_info=media,
+            encoder_info=None,
+            options=EncodeOptions(compression_mode=mode, max_output_ratio=0.5),
+            target_video_bitrate_bps=target_bps,
+        )
+        return QueueItemRecord(
+            item_id=name,
+            plan_item=item,
+            job_snapshot=QueueJobSnapshot(
+                workdir=folder,
+                ffmpeg_path=Path("ffmpeg"),
+                ffprobe_path=Path("ffprobe"),
+                output_root=folder,
+            ),
+            status=status,
+            total_passes=1,
+        )
+
+    def test_smart_item_without_analysis_reports_a_floor_estimate(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            record = self._record(
+                folder,
+                "smart",
+                mode=CompressionMode.SMART,
+                status=QueueItemStatus.WAITING_ANALYSIS,
+                target_bps=0,
+                size_bytes=1_000_000,
+            )
+
+            metrics = compute_metrics([record])
+
+            self.assertEqual(metrics.estimated_saved_bytes, 500_000)
+            self.assertTrue(metrics.estimated_saved_is_floor)
+
+    def test_fixed_bitrate_estimate_is_not_flagged_as_a_floor(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            record = self._record(
+                folder,
+                "fixed",
+                mode=CompressionMode.FIXED_BITRATE,
+                status=QueueItemStatus.QUEUED,
+                target_bps=800_000,
+                size_bytes=20_000_000,
+            )
+
+            metrics = compute_metrics([record])
+
+            self.assertIsNotNone(metrics.estimated_saved_bytes)
+            self.assertFalse(metrics.estimated_saved_is_floor)
+
+    def test_skipped_smart_item_does_not_contribute_a_floor(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            record = self._record(
+                folder,
+                "skipped",
+                mode=CompressionMode.SMART,
+                status=QueueItemStatus.SKIPPED,
+                target_bps=0,
+                size_bytes=1_000_000,
+            )
+
+            metrics = compute_metrics([record])
+
+            self.assertIsNone(metrics.estimated_saved_bytes)
+            self.assertFalse(metrics.estimated_saved_is_floor)
 
 
 class AppConfigRobustnessTestCase(unittest.TestCase):

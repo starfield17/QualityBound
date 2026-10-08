@@ -133,23 +133,23 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
 
     def test_can_edit_record_status_filtering(self) -> None:
         rec_queued = self._record("ready", QueueItemStatus.QUEUED)
-        rec_draft = self._record("draft", QueueItemStatus.DRAFT)
+        rec_analyzing = self._record("analyzing", QueueItemStatus.ANALYZING)
         rec_failed = self._record("failed", QueueItemStatus.FAILED)
         rec_skipped = self._record("skipped", QueueItemStatus.SKIPPED)
         rec_done = self._record("done", QueueItemStatus.DONE)
         rec_decision = self._record("decision", QueueItemStatus.NEEDS_DECISION)
         rec_cancelled = self._record("cancelled", QueueItemStatus.CANCELLED)
-        rec_running = self._record("running", QueueItemStatus.RUNNING)
+        rec_validating = self._record("validating", QueueItemStatus.VALIDATING)
         rec_encoding = self._record("encoding", QueueItemStatus.ENCODING)
 
         self.assertTrue(can_edit_record(rec_queued))
-        self.assertFalse(can_edit_record(rec_draft))
+        self.assertFalse(can_edit_record(rec_analyzing))
         self.assertFalse(can_edit_record(rec_failed))
         self.assertFalse(can_edit_record(rec_cancelled))
         self.assertFalse(can_edit_record(rec_skipped))
         self.assertFalse(can_edit_record(rec_done))
         self.assertFalse(can_edit_record(rec_decision))
-        self.assertFalse(can_edit_record(rec_running))
+        self.assertFalse(can_edit_record(rec_validating))
         self.assertFalse(can_edit_record(rec_encoding))
 
     def test_apply_options_to_record_fixed_bitrate(self) -> None:
@@ -202,7 +202,7 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
     def test_queue_table_model_batch_actions(self) -> None:
         model = QueueTableModel(self.tr)
         r0 = self._record("file0", QueueItemStatus.QUEUED)
-        r1 = self._record("file1", QueueItemStatus.RUNNING)
+        r1 = self._record("file1", QueueItemStatus.ENCODING)
         r2 = self._record("file2", QueueItemStatus.WAITING_ANALYSIS)
         model.add_records([r0, r1, r2])
 

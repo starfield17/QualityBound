@@ -12,17 +12,15 @@ from typing import Mapping
 from core.i18n import Translator
 from core.models import CompressionMode, EncodePlan, EncodePlanItem, EncodeResult, MediaInfo, QualitySearchResult, SegmentedAnalysisResult
 from core.progress_events import ProgressEvent
+from core.smart import resolve_max_output_ratio
 
 
 class QueueItemStatus(str, Enum):
-    DRAFT = "draft"
     QUEUED = "queued"
-    RUNNING = "running"
     WAITING_ANALYSIS = "waiting_analysis"
     ANALYZING = "analyzing"
     ENCODING = "encoding"
     VALIDATING = "validating"
-    PAUSED = "paused"
     DONE = "done"
     FAILED = "failed"
     NEEDS_DECISION = "needs_decision"
@@ -31,14 +29,11 @@ class QueueItemStatus(str, Enum):
 
 
 STATUS_KEY_BY_VALUE = {
-    QueueItemStatus.DRAFT: "gui.status.draft",
     QueueItemStatus.QUEUED: "gui.status.ready",
-    QueueItemStatus.RUNNING: "gui.status.running",
     QueueItemStatus.WAITING_ANALYSIS: "gui.status.waiting_analysis",
     QueueItemStatus.ANALYZING: "gui.status.analyzing",
     QueueItemStatus.ENCODING: "gui.status.encoding",
     QueueItemStatus.VALIDATING: "gui.status.validating",
-    QueueItemStatus.PAUSED: "gui.status.paused",
     QueueItemStatus.DONE: "gui.status.done",
     QueueItemStatus.FAILED: "gui.status.failed",
     QueueItemStatus.NEEDS_DECISION: "gui.status.needs_decision",
@@ -47,7 +42,6 @@ STATUS_KEY_BY_VALUE = {
 }
 
 ACTIVE_ITEM_STATUSES = {
-    QueueItemStatus.RUNNING,
     QueueItemStatus.ANALYZING,
     QueueItemStatus.ENCODING,
     QueueItemStatus.VALIDATING,
@@ -138,6 +132,7 @@ class QueueMetrics:
     eta_sec: float | None = None
     completed_items: int = 0
     estimated_saved_bytes: int | None = None
+    estimated_saved_is_floor: bool = False
     current_item_id: str | None = None
     current_file_name: str = "-"
     current_file_percent: float | None = None
@@ -302,31 +297,67 @@ def parse_bitrate_to_bps(raw: str) -> int | None:
     return int(number * scale)
 
 
-def estimate_saved_bytes(records: list[QueueItemRecord]) -> int | None:
+def estimate_saved_bytes(records: list[QueueItemRecord]) -> tuple[int | None, bool]:
+    """Estimate saved bytes, plus whether the value is only a lower bound.
+
+    A Smart item before analysis has no selected bitrate yet, but the executor
+    still enforces the codec's output-size ceiling at publication. Its saving is
+    therefore at least ``source - ceiling``, which marks the total as a floor.
+    Items that produced no output contribute nothing.
+    """
+
+    no_output_statuses = {
+        QueueItemStatus.SKIPPED,
+        QueueItemStatus.FAILED,
+        QueueItemStatus.CANCELLED,
+        QueueItemStatus.NEEDS_DECISION,
+    }
     total_saved = 0
     has_estimate = False
+    is_floor = False
     for record in records:
         media = record.media_info
-        if media is None or media.duration <= 0 or record.plan_item.target_video_bitrate_bps <= 0:
+        if media is None or media.duration <= 0 or record.plan_item.skip_reason:
             continue
-
-        if record.plan_item.options.audio_mode.value == "copy":
-            audio_bitrate_bps = max(int(media.audio_bitrate_bps or 0), 0)
-        else:
-            parsed_audio = parse_bitrate_to_bps(record.plan_item.options.audio_bitrate)
-            audio_bitrate_bps = max(parsed_audio or 0, 0)
-        estimated_output_bytes = int(media.duration * (record.plan_item.target_video_bitrate_bps + audio_bitrate_bps) / 8.0)
 
         try:
             source_bytes = record.source_path.stat().st_size
         except OSError:
             source_bytes = int(media.duration * max(int(media.format_bitrate_bps or 0), 0) / 8.0)
+        if source_bytes <= 0:
+            continue
 
-        if source_bytes <= 0 or estimated_output_bytes <= 0:
+        target_video_bitrate_bps = record.plan_item.target_video_bitrate_bps
+        if target_video_bitrate_bps > 0:
+            if record.plan_item.options.audio_mode.value == "copy":
+                audio_bitrate_bps = max(int(media.audio_bitrate_bps or 0), 0)
+            else:
+                parsed_audio = parse_bitrate_to_bps(record.plan_item.options.audio_bitrate)
+                audio_bitrate_bps = max(parsed_audio or 0, 0)
+            estimated_output_bytes = int(
+                media.duration * (target_video_bitrate_bps + audio_bitrate_bps) / 8.0
+            )
+        elif (
+            record.plan_item.options.compression_mode == CompressionMode.SMART
+            and record.status not in no_output_statuses
+        ):
+            try:
+                ceiling_ratio = resolve_max_output_ratio(
+                    record.plan_item.options.codec,
+                    record.plan_item.options.max_output_ratio,
+                )
+            except ValueError:
+                continue
+            estimated_output_bytes = min(int(source_bytes * ceiling_ratio), source_bytes)
+            is_floor = True
+        else:
+            continue
+
+        if estimated_output_bytes <= 0:
             continue
         total_saved += source_bytes - estimated_output_bytes
         has_estimate = True
-    return total_saved if has_estimate else None
+    return (total_saved if has_estimate else None, is_floor)
 
 
 def output_will_be_written(record: QueueItemRecord) -> bool:
@@ -355,7 +386,7 @@ def compute_metrics(records: list[QueueItemRecord]) -> QueueMetrics:
     metrics = QueueMetrics()
     metrics.total_items = len(records)
     metrics.total_duration_sec = sum(record.duration_sec for record in records if record.duration_sec > 0)
-    metrics.estimated_saved_bytes = estimate_saved_bytes(records)
+    metrics.estimated_saved_bytes, metrics.estimated_saved_is_floor = estimate_saved_bytes(records)
 
     total_weight = 0.0
     completed_weight = 0.0

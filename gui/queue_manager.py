@@ -311,7 +311,6 @@ class QueueManager(QObject):
             if record.status in {
                 QueueItemStatus.QUEUED,
                 QueueItemStatus.WAITING_ANALYSIS,
-                QueueItemStatus.RUNNING,
                 QueueItemStatus.ANALYZING,
                 QueueItemStatus.ENCODING,
                 QueueItemStatus.VALIDATING,
@@ -327,7 +326,6 @@ class QueueManager(QObject):
             if record.status in {
                 QueueItemStatus.QUEUED,
                 QueueItemStatus.WAITING_ANALYSIS,
-                QueueItemStatus.RUNNING,
                 QueueItemStatus.ANALYZING,
                 QueueItemStatus.ENCODING,
                 QueueItemStatus.VALIDATING,

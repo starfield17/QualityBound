@@ -232,7 +232,6 @@ class QueueTableModel(QAbstractTableModel):
                 if record.status in {
                     QueueItemStatus.QUEUED,
                     QueueItemStatus.WAITING_ANALYSIS,
-                    QueueItemStatus.DRAFT,
                 }:
                     return "-"
                 return f"{max(0.0, min(100.0, record.file_progress)):.1f}%"
@@ -255,7 +254,6 @@ class QueueTableModel(QAbstractTableModel):
                 return int(Qt.AlignmentFlag.AlignCenter)
         elif role == Qt.ItemDataRole.ForegroundRole and column in {QueueColumn.STATUS, QueueColumn.PROGRESS}:
             palette = {
-                QueueItemStatus.RUNNING: QColor("#0B5394"),
                 QueueItemStatus.WAITING_ANALYSIS: QColor("#666666"),
                 QueueItemStatus.ANALYZING: QColor("#674EA7"),
                 QueueItemStatus.ENCODING: QColor("#0B5394"),
@@ -265,7 +263,6 @@ class QueueTableModel(QAbstractTableModel):
                 QueueItemStatus.NEEDS_DECISION: QColor("#B45F06"),
                 QueueItemStatus.CANCELLED: QColor("#7F6000"),
                 QueueItemStatus.SKIPPED: QColor("#666666"),
-                QueueItemStatus.PAUSED: QColor("#7F6000"),
             }
             return palette.get(record.status)
         elif role == Qt.ItemDataRole.DecorationRole and column == QueueColumn.STATUS:
@@ -284,8 +281,6 @@ class QueueTableModel(QAbstractTableModel):
                 return style.standardIcon(QStyle.StandardPixmap.SP_DialogCancelButton)
             if record.status == QueueItemStatus.SKIPPED:
                 return style.standardIcon(QStyle.StandardPixmap.SP_MessageBoxWarning)
-            if record.status == QueueItemStatus.PAUSED:
-                return style.standardIcon(QStyle.StandardPixmap.SP_MediaPause)
         elif role == Qt.ItemDataRole.UserRole:
             return record.item_id
         return None

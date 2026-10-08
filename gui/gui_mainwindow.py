@@ -781,9 +781,18 @@ class MainWindow(QMainWindow):
             )
         )
         self.total_duration_value.setText(format_duration(metrics.total_duration_sec))
-        self.saved_space_value.setText(
-            format_size(metrics.estimated_saved_bytes) if metrics.estimated_saved_bytes is not None else self.translator.t("gui.value.unknown")
-        )
+        saved_bytes = metrics.estimated_saved_bytes
+        if saved_bytes is None:
+            self.saved_space_value.setText(self.translator.t("gui.value.unknown"))
+        elif metrics.estimated_saved_is_floor:
+            self.saved_space_value.setText(
+                self.translator.t(
+                    "gui.summary.saved_at_least",
+                    value=format_size(saved_bytes),
+                )
+            )
+        else:
+            self.saved_space_value.setText(format_size(saved_bytes))
         eta_text = format_duration(metrics.eta_sec) if metrics.eta_sec else self.translator.t("gui.value.unknown")
         self.queue_progress_text.setText(
             self.translator.t(
