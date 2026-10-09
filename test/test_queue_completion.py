@@ -9,7 +9,7 @@ from PySide6.QtCore import QEventLoop, QTimer
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
 from core.i18n import get_translator
-from core.media import PostEncodeAction, SystemPowerResult
+from core.media import PostEncodeAction, SystemPowerResult, publish_skipped_source
 from core.models import EncodeOptions, EncodePlanItem, EncodeResult, SkipOrigin, SkippedOutputPolicy, SkippedOutputOutcome
 from gui.queue_completion import QueueCompletionHandler
 from gui.queue_state import QueueItemRecord, QueueItemStatus, QueueJobSnapshot
@@ -103,9 +103,7 @@ class QueueCompletionTestCase(unittest.TestCase):
 
     def test_skipped_publication_is_not_repeated_when_run_resumes(self) -> None:
         record = self._record("copy-once", QueueItemStatus.SKIPPED, SkippedOutputPolicy.COPY)
-        with patch("gui.queue_completion.publish_skipped_source", wraps=__import__(
-            "core.media", fromlist=["publish_skipped_source"]
-        ).publish_skipped_source) as publish:
+        with patch("gui.queue_completion.publish_skipped_source", wraps=publish_skipped_source) as publish:
             self.handler.handle([record], self.tr, {"desktop_notifications": False})
             self.handler.handle([record], self.tr, {"desktop_notifications": False})
         publish.assert_called_once()

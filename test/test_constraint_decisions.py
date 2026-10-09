@@ -206,6 +206,22 @@ class ConstraintDecisionTestCase(unittest.TestCase):
             self.assertTrue(terminal.needs_decision)
             self.assertFalse(terminal.skipped)
 
+    def test_lower_quality_policy_can_resolve_oversize_before_skip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            item = _item(root)
+            item.options.size_blocked_policy = SizeBlockedPolicy.RELAX_QUALITY
+            blocked = reselect_from_candidates([
+                QualityCandidateResult(video_bitrate_bps=1_000_000, min_vmaf=94.0),
+                QualityCandidateResult(video_bitrate_bps=16_000_000, min_vmaf=96.0),
+            ], item)
+            self.assertGreater(blocked.required_output_ratio, 1.0)
+            with patch("core.encoding.analysis.analyze_quality", return_value=blocked):
+                terminal = analyze_plan_item(root / "ffmpeg", item, root)
+            self.assertIsNone(terminal)
+            self.assertTrue(item.quality_search_result.success)
+            self.assertEqual(item.options.min_vmaf, 94.0)
+
     def test_predicted_oversize_skip_after_policy_selection(self) -> None:
         for policy in SizeBlockedPolicy:
             for ratio in (None, 1.0, 1.01):

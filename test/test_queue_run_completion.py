@@ -144,6 +144,23 @@ class QueueRunCompletionTestCase(unittest.TestCase):
         self.assertEqual(stopped, [completion])
         self.assertEqual(completed, [])
 
+    def test_postprocessing_handoff_never_publishes_an_idle_gap(self) -> None:
+        record = _record(self.root, "done", QueueItemStatus.DONE)
+        self.model.add_records([record])
+        self.manager._pending_run = QueueRunCompletion("handoff", (record.item_id,))
+        self.manager._worker_outcome = "finished"
+        busy = []
+        completed = []
+        self.manager.busyChanged.connect(busy.append)
+        self.manager.runCompleted.connect(completed.append)
+        self.manager.executionStopped.connect(lambda _completion: self.manager.begin_postprocessing())
+        self.manager._on_worker_thread_finished()
+        self.assertEqual(busy, [True])
+        self.assertEqual(completed, [])
+        self.manager.finish_postprocessing()
+        self.assertEqual(busy, [True, False])
+        self.assertEqual(len(completed), 1)
+
 
     def test_resume_includes_new_queue_items_in_the_pending_run(self) -> None:
         retry = _record(self.root, "retry", QueueItemStatus.WAITING_ANALYSIS)

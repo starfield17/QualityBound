@@ -18,9 +18,10 @@ from core.models import (
     AnalysisProfileName, AudioMode, BackendChoice, CodecChoice, DecodeAcceleration, DecisionActionCode, DecisionOption, EncodeOptions, EncodePlanItem,
     EncodeResult, EncoderInfo, MediaInfo, OperationCancelledError, QualitySearchStatus,
     SegmentedAnalysisResult, ShotAnalysis, ShotCandidate, ShotRange, SmartAlgorithm,
+    ConstraintFailureKind, SizeBlockedPolicy, SkipOrigin,
 )
 from core.config.store import encode_options_to_preset_data, preset_data_to_encode_options
-from core.encoding.segmented import _validate_auxiliary, execute_segmented_item, validate_scores
+from core.encoding.segmented import _validate_auxiliary, analyze_segmented_plan_item, execute_segmented_item, validate_scores
 from core.smart.v1.decisions import prepare_size_miss_retry, reselect_after_quality_decision
 from core.smart.v2.optimizer import SETTINGS, allocate, sample_windows, worst_one_second
 from core.smart.v2.receipts import fingerprint, load, receipt_root, save
@@ -128,6 +129,25 @@ def analysis() -> SegmentedAnalysisResult:
 
 
 class V2ContractTests(unittest.TestCase):
+    def test_analysis_oversize_threshold_matches_v1(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for ratio in (None, 1.0, 1.01):
+                with self.subTest(ratio=ratio):
+                    item = plan(root)
+                    item.options.size_blocked_policy = SizeBlockedPolicy.ASK
+                    quality = SegmentedAnalysisResult(
+                        QualitySearchStatus.CONSTRAINT_UNSATISFIED, "libx265", BackendChoice.CPU,
+                        failure_kind=ConstraintFailureKind.SIZE_BLOCKED, required_output_ratio=ratio,
+                    )
+                    with patch("core.encoding.segmented.analyze_segmented_quality", return_value=quality):
+                        result = analyze_segmented_plan_item(root / "ffmpeg", item, root)
+                    assert result is not None
+                    oversize = ratio is not None and ratio > 1.0
+                    self.assertEqual(result.skipped, oversize)
+                    self.assertEqual(result.needs_decision, not oversize)
+                    self.assertEqual(result.skip_origin, SkipOrigin.SMART_PREDICTED_OVERSIZE if oversize else None)
+
     def test_old_and_new_presets_roundtrip(self) -> None:
         old = encode_options_to_preset_data(EncodeOptions())
         old.pop("smart_algorithm")

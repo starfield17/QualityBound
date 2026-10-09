@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import unittest
+import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from PySide6.QtWidgets import QApplication, QDialog
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
+from PySide6.QtCore import QEventLoop, QTimer
 
 from core.media import PostEncodeAction, SystemPowerResult
 from core.models import (
@@ -15,6 +17,12 @@ from core.models import (
     EncodeResult,
     EncoderInfo,
     MediaInfo,
+    ConstraintFailureKind,
+    QualitySearchResult,
+    QualitySearchStatus,
+    SkipOrigin,
+    SkippedOutputPolicy,
+    SkippedOutputOutcome,
 )
 from gui.gui_mainwindow import MainWindow
 from gui.queue_manager import QueueRunCompletion
@@ -27,6 +35,66 @@ from gui.queue_state import (
 
 
 class MainWindowMaintenanceTestCase(unittest.TestCase):
+    def test_fresh_default_mixed_batch_prompts_then_copies_despite_cancelled_decisions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch("core.config.store.app_config_path", return_value=root / "app_config.json"):
+                window = MainWindow(self.repo_root, language="en")
+                window.app_config["desktop_notifications"] = False
+                options = window.options_panel.read_options()
+                self.assertEqual(options.size_blocked_policy.value, "relax_size")
+                self.assertEqual(options.quality_unreachable_policy.value, "skip")
+                self.assertEqual(options.skipped_output_policy.value, "copy")
+                pending = []
+                for kind in (ConstraintFailureKind.SIZE_BLOCKED, ConstraintFailureKind.QUALITY_UNREACHABLE):
+                    record = self._record(root, kind.value, QueueItemStatus.NEEDS_DECISION)
+                    record.result.needs_decision = True
+                    record.plan_item.quality_search_result = QualitySearchResult(
+                        encoder_name="libx265", backend=BackendChoice.CPU,
+                        status=QualitySearchStatus.CONSTRAINT_UNSATISFIED,
+                        failure_kind=kind, reason=kind.value,
+                    )
+                    pending.append(record)
+                copied = self._record(root, "copy", QueueItemStatus.SKIPPED)
+                asked = self._record(root, "ask", QueueItemStatus.SKIPPED)
+                for record in (copied, asked):
+                    record.result.skipped = True
+                    record.result.skip_origin = SkipOrigin.SMART_PREDICTED_OVERSIZE
+                asked.plan_item.options.skipped_output_policy = SkippedOutputPolicy.ASK
+                records = pending + [copied, asked]
+                window.queue_model.add_records(records)
+                completion = QueueRunCompletion("mixed", tuple(record.item_id for record in records))
+                window.queue_manager._pending_run = completion
+                loop = QEventLoop()
+                timer = QTimer()
+                timer.setSingleShot(True)
+                timer.timeout.connect(loop.quit)
+                window.queue_manager.busyChanged.connect(lambda busy: loop.quit() if not busy else None)
+                try:
+                    with (
+                        patch("gui.gui_mainwindow.choose_quality_decision", return_value=None) as choose,
+                        patch("gui.queue_completion.QMessageBox.question", return_value=QMessageBox.StandardButton.No) as copy_ask,
+                    ):
+                        window.queue_manager._worker_outcome = "finished"
+                        window.queue_manager._on_worker_thread_finished()
+                        timer.start(5000)
+                        loop.exec()
+                        timer.stop()
+                        self.assertFalse(window._postprocessing)
+                        self.assertEqual(choose.call_count, 2)
+                        self.assertEqual(copied.output_path.read_bytes(), copied.source_path.read_bytes())
+                        self.assertEqual(copied.result.skipped_output_outcome, SkippedOutputOutcome.COPIED)
+                        self.assertEqual(asked.result.skipped_output_outcome, SkippedOutputOutcome.IGNORED)
+                        self.assertTrue(window.queue_manager.has_pending_run())
+                        self.assertTrue(all(record.status == QueueItemStatus.NEEDS_DECISION for record in pending))
+                        window.queue_manager._worker_outcome = "finished"
+                        window.queue_manager._on_worker_thread_finished()
+                        self.assertEqual(choose.call_count, 2)
+                        copy_ask.assert_called_once()
+                finally:
+                    window.queue_manager.abandon_run()
+                    window.close()
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
@@ -314,9 +382,25 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                 record = self._record(Path(temp_dir), "queued", QueueItemStatus.QUEUED)
                 window.queue_model.add_records([record])
                 window.queue_manager._pending_run = QueueRunCompletion("run", (record.item_id,))
+                window._asked_analysis_decisions[("run", record.item_id)] = record.result
                 window._stop_active_task()
                 self.assertFalse(window.queue_manager.has_pending_run())
+                self.assertFalse(window._asked_analysis_decisions)
         finally:
+            window.close()
+
+    def test_closing_after_execution_does_not_start_postprocessing(self) -> None:
+        window = MainWindow(self.repo_root, language="en")
+        try:
+            completion = QueueRunCompletion("closing", ())
+            window.queue_manager._pending_run = completion
+            window._close_after_running_task_stops = True
+            with patch.object(window, "_process_stopped_records") as process:
+                window._on_queue_execution_stopped(completion)
+            process.assert_not_called()
+            self.assertFalse(window.queue_manager.has_pending_run())
+        finally:
+            window._close_after_running_task_stops = False
             window.close()
 
 
