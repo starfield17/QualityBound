@@ -158,10 +158,16 @@ class DeferredQueueTestCase(unittest.TestCase):
 
     def test_prepare_lock_blocks_edit_and_decision_resume(self) -> None:
         from gui.queue_manager import QueueManager
+        from PySide6.QtCore import QModelIndex
+        another = copy.deepcopy(self.record)
+        another.item_id = "another"
+        self.model.add_records([another])
         manager = QueueManager(self.model)
         manager.begin_preparation()
         self.assertFalse(manager.start())
         self.assertFalse(self.model.can_sort())
+        self.assertFalse(self.model.moveRows(QModelIndex(), 0, 1, QModelIndex(), 2))
+        self.assertEqual(self.model.remove_rows_by_index([0]), 0)
         with self.assertRaisesRegex(RuntimeError, "preparation"):
             self.model.apply_options_to_rows([0], EncodeOptions())
         manager.finish_preparation()
@@ -331,6 +337,42 @@ class DeferredQueueTestCase(unittest.TestCase):
                 wrong.source_path = self.root / "wrong.mov"
                 with self.assertRaisesRegex(ValueError, "identity"):
                     runner(plan, self.root / "work", analysis_results=[wrong], **kwargs)
+
+    def test_mixed_context_decision_callback_and_pause_keep_item_identity(self) -> None:
+        from core.models import EncodeResult
+        from gui.queue_state import create_queue_records
+        plan = self.prepare([self.request(EncodeOptions(backend=BackendChoice.CPU))])
+        first = create_queue_records(plan, self.root / "work-a")[0]
+        second = copy.deepcopy(first)
+        second.item_id = "second"
+        second.plan_item.source_path = self.root / "second.mov"
+        second.plan_item.output_path = self.root / "second.mp4"
+        second.job_snapshot.ffmpeg_path = self.root / "other-ffmpeg"
+        worker = QueueExecuteWorker([QueueExecutionItem(first.item_id, first), QueueExecutionItem(second.item_id, second)], 2)
+        received, paused = [], []
+        worker.item_finished.connect(lambda item_id, result: received.append((item_id, result)))
+        worker.paused.connect(lambda: paused.append(True))
+        terminal = EncodeResult(second.source_path, second.output_path, False, needs_decision=True)
+
+        def analyze(tool, items, workdir, **kwargs):
+            if tool == second.job_snapshot.ffmpeg_path:
+                kwargs["item_result_callback"](0, terminal)
+                worker.pause_after_current()
+                return [terminal]
+            return [None]
+
+        def encode(bound, workdir, **kwargs):
+            self.assertTrue(kwargs["pause_check"]())
+            return [result for result in kwargs["analysis_results"] if result is not None]
+
+        with (
+            patch("gui.queue_manager.run_analysis_phase", side_effect=analyze),
+            patch("gui.queue_manager.execute_plan_concurrent", side_effect=encode),
+        ):
+            worker.run()
+        self.assertEqual(received, [("second", terminal)])
+        self.assertEqual(paused, [True])
+        self.assertIsNone(first.plan_item.quality_search_result)
 
 
 if __name__ == "__main__":
