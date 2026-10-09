@@ -166,12 +166,11 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
             rec, new_opts, runtime_capabilities=self.capabilities
         )
         self.assertTrue(changed)
-        self.assertEqual(rec.plan_item.options.ratio, 0.3)
-        self.assertEqual(rec.plan_item.options.encoder_preset, "fast")
-        self.assertEqual(rec.total_passes, 2)
-        # 5000000 bps * 0.3 = 1500000 bps
-        self.assertEqual(rec.plan_item.target_video_bitrate_bps, 1500000)
-        self.assertEqual(rec.status, QueueItemStatus.QUEUED)
+        self.assertEqual(rec.draft.options_override.ratio, 0.3)
+        self.assertEqual(rec.draft.options_override.encoder_preset, "fast")
+        self.assertTrue(rec.draft.options_override.two_pass)
+        self.assertIsNone(rec.plan_item)
+        self.assertEqual(rec.status, QueueItemStatus.AWAITING_START)
         self.assertIsNone(rec.result)
 
     def test_apply_options_to_record_smart_clears_search_result(self) -> None:
@@ -189,17 +188,18 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
             rec, new_opts, runtime_capabilities=self.capabilities
         )
         self.assertTrue(changed)
-        self.assertEqual(rec.plan_item.options.compression_mode, CompressionMode.SMART)
-        self.assertEqual(rec.plan_item.options.min_vmaf, 93.0)
-        self.assertIsNone(rec.plan_item.quality_search_result)
-        self.assertEqual(rec.status, QueueItemStatus.WAITING_ANALYSIS)
+        self.assertEqual(rec.draft.options_override.compression_mode, CompressionMode.SMART)
+        self.assertEqual(rec.draft.options_override.min_vmaf, 93.0)
+        self.assertIsNone(rec.plan_item)
+        self.assertEqual(rec.status, QueueItemStatus.AWAITING_START)
 
     def test_apply_output_dir_to_record(self) -> None:
         rec = self._record("test3", QueueItemStatus.QUEUED)
         new_dir = self.root / "custom" / "output_directory"
         changed = apply_output_dir_to_record(rec, new_dir)
         self.assertTrue(changed)
-        self.assertEqual(rec.plan_item.output_path, new_dir.resolve() / "test3.mp4")
+        self.assertEqual(rec.draft.output_dir_override, new_dir.resolve())
+        self.assertIsNone(rec.plan_item)
 
     def test_queue_table_model_batch_actions(self) -> None:
         model = QueueTableModel(self.tr)
@@ -233,8 +233,10 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
         new_dir = self.root / "batch" / "out"
         updated_dirs = model.apply_output_dir_to_rows([0, 2], new_dir)
         self.assertEqual(updated_dirs, 2)
-        self.assertEqual(model.record_for_row(0).plan_item.output_path, new_dir.resolve() / "file0_hevc.mp4")
-        self.assertEqual(model.record_for_row(2).plan_item.output_path, new_dir.resolve() / "file2_hevc.mp4")
+        self.assertEqual(model.record_for_row(0).draft.output_dir_override, new_dir.resolve())
+        self.assertEqual(model.record_for_row(0).draft.options_override.ratio, 0.8)
+        self.assertEqual(model.record_for_row(2).draft.output_dir_override, new_dir.resolve())
+        self.assertEqual(model.record_for_row(2).draft.options_override.ratio, 0.8)
 
     def test_planning_skipped_record_is_excluded_from_output_collision_check(self) -> None:
         model = QueueTableModel(self.tr)
@@ -288,7 +290,7 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
         self.assertEqual(model.record_for_row(0).source_path.name, "a.mov")
         self.assertEqual(view.horizontalHeader().sortIndicatorSection(), int(QueueColumn.NAME))
 
-    def test_codec_change_rebinds_encoder_and_clears_smart_result(self) -> None:
+    def test_codec_override_defers_binding_and_clears_smart_result(self) -> None:
         rec = self._record("switch", QueueItemStatus.WAITING_ANALYSIS)
         rec.plan_item.quality_search_result = QualitySearchResult(
             status=QualitySearchStatus.FOUND,
@@ -307,10 +309,11 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
                 rec, options, runtime_capabilities=self.capabilities
             )
         )
-        assert rec.plan_item.encoder_info is not None
-        self.assertEqual(rec.plan_item.encoder_info.encoder_name, "libsvtav1")
-        self.assertEqual(rec.output_path.name, "switch_av1.mp4")
-        self.assertIsNone(rec.plan_item.quality_search_result)
+        self.assertIsNone(rec.plan_item)
+        self.assertIsNone(rec.job_snapshot)
+        self.assertEqual(rec.draft.options_override.codec, CodecChoice.AV1)
+        self.assertEqual(rec.draft.options_override.encoder_preset, "5")
+        self.assertIsNone(rec.plan_item)
         self.assertEqual(rec.total_passes, 1)
 
     def test_needs_decision_edit_is_rejected_without_stranding_file(self) -> None:
@@ -333,32 +336,23 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
         self.assertTrue(rejected.exists())
         self.assertIsNotNone(rec.result)
 
-    def test_output_collision_rolls_back_entire_batch(self) -> None:
+    def test_batch_option_override_defers_output_validation_until_start(self) -> None:
         model = QueueTableModel(self.tr)
         first = self._record("same", QueueItemStatus.QUEUED)
         second = self._record("other", QueueItemStatus.WAITING_ANALYSIS)
         second.plan_item.source_path = self.root / "other" / "same.mov"
         model.add_records([first, second])
-        original_paths = [record.output_path for record in model.records()]
+        self.assertEqual(model.apply_options_to_rows([0, 1], EncodeOptions(ratio=0.4)), 2)
+        for record in model.records():
+            self.assertIsNone(record.plan_item)
+            self.assertEqual(record.draft.options_override.ratio, 0.4)
+            self.assertEqual(record.status, QueueItemStatus.AWAITING_START)
 
-        with self.assertRaisesRegex(RuntimeError, "collision"):
-            model.apply_options_to_rows(
-                [0, 1],
-                EncodeOptions(
-                    compression_mode=CompressionMode.FIXED_BITRATE,
-                    ratio=0.4,
-                ),
-                runtime_capabilities=self.capabilities,
-            )
-
-        self.assertEqual(
-            [record.output_path for record in model.records()], original_paths
-        )
-
-    def test_reconfiguration_requires_capability_snapshot(self) -> None:
+    def test_option_override_does_not_require_capability_snapshot(self) -> None:
         rec = self._record("no-capabilities", QueueItemStatus.QUEUED)
-        with self.assertRaisesRegex(RuntimeError, "capabilities are not ready"):
-            apply_options_to_record(rec, EncodeOptions(), runtime_capabilities=None)
+        self.assertTrue(apply_options_to_record(rec, EncodeOptions(), runtime_capabilities=None))
+        self.assertIsNone(rec.plan_item)
+        self.assertIsNotNone(rec.draft.options_override)
 
     def test_capability_snapshot_reconfiguration_never_probes_ffmpeg(self) -> None:
         rec = self._record("amf", QueueItemStatus.QUEUED)
@@ -391,8 +385,8 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
         self.assertTrue(changed)
         encoder_probe.assert_not_called()
         planning_probe.assert_not_called()
-        assert rec.plan_item.encoder_info is not None
-        self.assertEqual(rec.plan_item.encoder_info.encoder_name, "hevc_amf")
+        self.assertIsNone(rec.plan_item)
+        self.assertEqual(rec.draft.options_override.backend, BackendChoice.AMF)
 
     def test_failed_and_cancelled_records_are_terminal_for_batch_edits(self) -> None:
         model = QueueTableModel(self.tr)
@@ -405,7 +399,7 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Every selected"):
             model.apply_output_dir_to_rows([0, 1], self.root / "new-output")
 
-    def test_failed_atomic_edit_does_not_create_candidate_directories(self) -> None:
+    def test_output_override_does_not_create_directories_before_start(self) -> None:
         model = QueueTableModel(self.tr)
         first = self._record("same", QueueItemStatus.QUEUED)
         second = self._record("other", QueueItemStatus.WAITING_ANALYSIS)
@@ -414,10 +408,11 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
         model.add_records([first, second])
         candidate_output_dir = self.root / "not-created" / "nested"
 
-        with self.assertRaisesRegex(RuntimeError, "collision"):
-            model.apply_output_dir_to_rows([0, 1], candidate_output_dir)
-
+        self.assertEqual(model.apply_output_dir_to_rows([0, 1], candidate_output_dir), 2)
         self.assertFalse(candidate_output_dir.exists())
+        for record in model.records():
+            self.assertIsNone(record.plan_item)
+            self.assertEqual(record.draft.output_dir_override, candidate_output_dir.resolve())
 
 
 if __name__ == "__main__":
