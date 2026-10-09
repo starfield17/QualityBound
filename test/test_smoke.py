@@ -11,7 +11,7 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, QGuiApplication
 from PySide6.QtWidgets import QAbstractButton, QApplication, QMessageBox, QScrollArea
 from PySide6.QtWidgets import QComboBox, QGroupBox, QHeaderView, QLabel, QLineEdit
 
@@ -165,7 +165,7 @@ class SmokeTestCase(unittest.TestCase):
         window = MainWindow(self.repo_root, language="en")
         try:
             self.assertIn("QualityBoundTheme", window.styleSheet())
-            self.assertEqual(window.toolbar.toolButtonStyle(), Qt.ToolButtonTextBesideIcon)
+            self.assertEqual(window.toolbar.toolButtonStyle(), Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
             for action in [
                 window.add_files_action,
                 window.add_folder_action,
@@ -209,7 +209,7 @@ class SmokeTestCase(unittest.TestCase):
     def test_main_window_initial_size_is_clamped_to_available_screen(self) -> None:
         window = MainWindow(self.repo_root, language="en")
         try:
-            available = self.app.primaryScreen().availableGeometry()
+            available = QGuiApplication.primaryScreen().availableGeometry()
             self.assertLessEqual(window.width(), available.width())
             self.assertLessEqual(window.height(), available.height())
         finally:
@@ -218,7 +218,7 @@ class SmokeTestCase(unittest.TestCase):
     def test_auxiliary_window_initial_sizes_are_clamped_to_available_screen(self) -> None:
         window = MainWindow(self.repo_root, language="en")
         try:
-            available = self.app.primaryScreen().availableGeometry()
+            available = QGuiApplication.primaryScreen().availableGeometry()
             for child_window in [window.queue_window, window.activity_log_window]:
                 self.assertLessEqual(child_window.width(), available.width())
                 self.assertLessEqual(child_window.height(), available.height())
@@ -276,7 +276,7 @@ class SmokeTestCase(unittest.TestCase):
         try:
             window.queue_busy = True
             event = QCloseEvent()
-            with patch("gui.gui_mainwindow.QMessageBox.question", return_value=QMessageBox.No):
+            with patch("gui.gui_mainwindow.QMessageBox.question", return_value=QMessageBox.StandardButton.No):
                 window.closeEvent(event)
             self.assertFalse(event.isAccepted())
         finally:
@@ -288,7 +288,7 @@ class SmokeTestCase(unittest.TestCase):
         try:
             window.queue_busy = True
             event = QCloseEvent()
-            with patch("gui.gui_mainwindow.QMessageBox.question", return_value=QMessageBox.Yes), patch.object(
+            with patch("gui.gui_mainwindow.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes), patch.object(
                 window, "_stop_active_task"
             ) as stop_active_task:
                 window.closeEvent(event)
@@ -326,9 +326,9 @@ class SmokeTestCase(unittest.TestCase):
         view.setModel(model)
         try:
             header = view.horizontalHeader()
-            self.assertEqual(header.sectionResizeMode(int(QueueColumn.NAME)), QHeaderView.Interactive)
-            self.assertEqual(header.sectionResizeMode(int(QueueColumn.FOLDER)), QHeaderView.Interactive)
-            self.assertEqual(header.sectionResizeMode(int(QueueColumn.RESOLUTION)), QHeaderView.Fixed)
+            self.assertEqual(header.sectionResizeMode(int(QueueColumn.NAME)), QHeaderView.ResizeMode.Interactive)
+            self.assertEqual(header.sectionResizeMode(int(QueueColumn.FOLDER)), QHeaderView.ResizeMode.Interactive)
+            self.assertEqual(header.sectionResizeMode(int(QueueColumn.RESOLUTION)), QHeaderView.ResizeMode.Fixed)
         finally:
             view.close()
 

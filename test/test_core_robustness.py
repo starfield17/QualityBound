@@ -16,6 +16,7 @@ from core.ffmpeg.commands import build_encode_commands
 from core.ffmpeg.probe import _run_command
 from core.media.discovery import collect_video_files
 from core.media.subtitles import discover_external_subtitles
+from core.progress_events import ProgressEvent
 from core.models import (
     BackendChoice,
     CodecChoice,
@@ -129,7 +130,7 @@ class SkippedOutputCollisionTestCase(unittest.TestCase):
             audio_codec="aac",
         )
 
-    def _build(self, folder: Path, probe: object) -> object:
+    def _build(self, folder: Path, probe: object) -> EncodePlan:
         from core.encoding import build_encode_plan
 
         with (
@@ -405,6 +406,8 @@ class ProcessPipeCleanupTestCase(unittest.TestCase):
                 )
         proc = captured[0]
         assert isinstance(proc, subprocess.Popen)
+        assert proc.stdout is not None
+        assert proc.stdin is not None
         self.assertTrue(proc.stdout.closed)
         self.assertTrue(proc.stdin.closed)
 
@@ -463,7 +466,7 @@ class EncodePhaseEventTestCase(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
-            events: list[dict[str, object]] = []
+            events: list[ProgressEvent] = []
             with patch("core.encoding.executor.run_analysis_phase", return_value=[None]):
                 results = execute_plan(
                     self._plan(folder),
@@ -487,7 +490,7 @@ class EncodePhaseEventTestCase(unittest.TestCase):
                 success=True,
             )
             logs: list[str] = []
-            events: list[dict[str, object]] = []
+            events: list[ProgressEvent] = []
             with patch("core.encoding.parallel.run_analysis_phase", return_value=[finished]):
                 results = execute_plan_concurrent(
                     plan,

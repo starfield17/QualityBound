@@ -66,9 +66,11 @@ class FFmpegManifestTestCase(unittest.TestCase):
         self.assertEqual(manifest["schema_version"], 2)
         self.assertEqual(manifest["verification_contract_version"], 4)
         self.assertEqual(manifest["ffmpeg_version"], "9.0.2")
-        self.assertEqual(set(manifest["targets"]), EXPECTED_TARGETS)
-        self.assertNotIn("macos-x86_64", manifest["targets"])
-        for target in manifest["targets"].values():
+        targets = manifest["targets"]
+        assert isinstance(targets, dict)
+        self.assertEqual(set(targets), EXPECTED_TARGETS)
+        self.assertNotIn("macos-x86_64", targets)
+        for target in targets.values():
             self.assertIn(target["source_kind"], {"build", "mirror"})
             self.assertRegex(target["ffmpeg_commit"], r"^[0-9a-f]{40}$")
             self.assertRegex(target["libvmaf_commit"], r"^[0-9a-f]{40}$")

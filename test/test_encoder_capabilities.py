@@ -183,8 +183,11 @@ class EncoderCapabilityCacheTestCase(unittest.TestCase):
         with patch("core.ffmpeg.capabilities.subprocess.run", side_effect=fake_run):
             self.assertTrue(smoke_test_encoder(Path("ffmpeg"), "hevc_nvenc"))
 
-        self.assertIn("testsrc2=size=256x256:rate=1", captured["cmd"])
-        self.assertIs(captured["kwargs"]["stdin"], subprocess.DEVNULL)
+        command = captured["cmd"]
+        run_kwargs = captured["kwargs"]
+        assert isinstance(command, list) and isinstance(run_kwargs, dict)
+        self.assertIn("testsrc2=size=256x256:rate=1", command)
+        self.assertIs(run_kwargs["stdin"], subprocess.DEVNULL)
 
     def test_ffmpeg_version_query_uses_noninteractive_stdin(self) -> None:
         completed = subprocess.CompletedProcess(

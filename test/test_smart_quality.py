@@ -16,7 +16,8 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QStandardItem, QStandardItemModel
+from PySide6.QtWidgets import QApplication, QComboBox
 
 from cli.cli_entry import run_cli
 from core.encoding import execute_plan_concurrent, execute_plan_item
@@ -49,6 +50,16 @@ from core.smart.v1.measurement import run_logged as _run_logged
 from core.smart.v1.measurement import score_candidate as _score_candidate
 from gui.gui_mainwindow import MainWindow
 from gui.queue_state import QueueItemStatus, create_queue_records
+
+
+def _combo_item(combo: QComboBox, index: int) -> QStandardItem:
+    """Return a combo box's item, which the panel builds from a standard model."""
+
+    model = combo.model()
+    assert isinstance(model, QStandardItemModel)
+    item = model.item(index)
+    assert item is not None
+    return item
 
 
 def _media(path: Path, *, duration: float = 60.0, audio_streams: int = 1) -> MediaInfo:
@@ -320,6 +331,7 @@ class SmartSamplingAndBudgetTestCase(unittest.TestCase):
             ffmpeg = root / "ffmpeg"
             ffmpeg.write_bytes(b"binary")
             item = _item(source, root / "out.mp4", EncodeOptions())
+            assert item.media_info is not None
             item.media_info.color_transfer = "smpte2084"
             with patch(
                 "core.smart.v1.workflow.select_vmaf_runtime",
@@ -635,7 +647,7 @@ class SmartCommandAndMeasurementTestCase(unittest.TestCase):
                     self.assertEqual(Path(json_name).name, json_name)
                     self.assertNotIn(str(root), filter_graph)
                     cwd = kwargs["cwd"]
-                    self.assertIsInstance(cwd, Path)
+                    assert isinstance(cwd, Path)
                     (cwd / json_name).write_text(
                         json.dumps(
                             {
@@ -1107,7 +1119,7 @@ class SmartGuiTestCase(unittest.TestCase):
             )
             panel = window.options_panel
             smart_index = panel.compression_mode_combo.findData(CompressionMode.SMART.value)
-            smart_item = panel.compression_mode_combo.model().item(smart_index)
+            smart_item = _combo_item(panel.compression_mode_combo, smart_index)
             self.assertFalse(smart_item.isEnabled())
             self.assertEqual(
                 panel.compression_mode_combo.currentData(),

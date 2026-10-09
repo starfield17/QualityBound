@@ -28,8 +28,23 @@ from gui.queue_actions import (
     can_edit_record,
 )
 from gui.queue_model import QueueColumn, QueueTableModel
-from gui.queue_state import QueueItemRecord, QueueItemStatus, QueueJobSnapshot
+from gui.queue_state import QueueItemRecord, QueueSourceDraft, QueueItemStatus, QueueJobSnapshot
 from gui.queue_view import create_queue_view
+
+
+def draft_of(record: QueueItemRecord) -> QueueSourceDraft:
+    """Return a record's source draft; a record without one fails the test."""
+
+    assert record.draft is not None
+    return record.draft
+
+
+def override_of(record: QueueItemRecord) -> EncodeOptions:
+    """Return the per-item options override an action has just applied."""
+
+    override = draft_of(record).options_override
+    assert override is not None
+    return override
 
 
 def _get_qapp():
@@ -166,16 +181,16 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
             rec, new_opts, runtime_capabilities=self.capabilities
         )
         self.assertTrue(changed)
-        self.assertEqual(rec.draft.options_override.ratio, 0.3)
-        self.assertEqual(rec.draft.options_override.encoder_preset, "fast")
-        self.assertTrue(rec.draft.options_override.two_pass)
+        self.assertEqual(override_of(rec).ratio, 0.3)
+        self.assertEqual(override_of(rec).encoder_preset, "fast")
+        self.assertTrue(override_of(rec).two_pass)
         self.assertIsNone(rec.plan_item)
         self.assertEqual(rec.status, QueueItemStatus.AWAITING_START)
         self.assertIsNone(rec.result)
 
     def test_apply_options_to_record_smart_clears_search_result(self) -> None:
         rec = self._record("test2", QueueItemStatus.WAITING_ANALYSIS)
-        rec.plan_item.quality_search_result = QualitySearchResult(
+        rec.bound_plan_item.quality_search_result = QualitySearchResult(
             status=QualitySearchStatus.FOUND,
             encoder_name="libx265",
             backend=BackendChoice.CPU,
@@ -188,8 +203,8 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
             rec, new_opts, runtime_capabilities=self.capabilities
         )
         self.assertTrue(changed)
-        self.assertEqual(rec.draft.options_override.compression_mode, CompressionMode.SMART)
-        self.assertEqual(rec.draft.options_override.min_vmaf, 93.0)
+        self.assertEqual(override_of(rec).compression_mode, CompressionMode.SMART)
+        self.assertEqual(override_of(rec).min_vmaf, 93.0)
         self.assertIsNone(rec.plan_item)
         self.assertEqual(rec.status, QueueItemStatus.AWAITING_START)
 
@@ -198,7 +213,7 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
         new_dir = self.root / "custom" / "output_directory"
         changed = apply_output_dir_to_record(rec, new_dir)
         self.assertTrue(changed)
-        self.assertEqual(rec.draft.output_dir_override, new_dir.resolve())
+        self.assertEqual(draft_of(rec).output_dir_override, new_dir.resolve())
         self.assertIsNone(rec.plan_item)
 
     def test_queue_table_model_batch_actions(self) -> None:
@@ -221,9 +236,9 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
                 new_opts,
                 runtime_capabilities=self.capabilities,
             )
-        self.assertNotEqual(model.record_for_row(0).plan_item.options.ratio, 0.8)
-        self.assertNotEqual(model.record_for_row(2).plan_item.options.ratio, 0.8)
-        self.assertNotEqual(model.record_for_row(1).plan_item.options.ratio, 0.8)
+        self.assertNotEqual(model.records()[0].bound_plan_item.options.ratio, 0.8)
+        self.assertNotEqual(model.records()[2].bound_plan_item.options.ratio, 0.8)
+        self.assertNotEqual(model.records()[1].bound_plan_item.options.ratio, 0.8)
 
         updated = model.apply_options_to_rows(
             [0, 2], new_opts, runtime_capabilities=self.capabilities
@@ -233,23 +248,23 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
         new_dir = self.root / "batch" / "out"
         updated_dirs = model.apply_output_dir_to_rows([0, 2], new_dir)
         self.assertEqual(updated_dirs, 2)
-        self.assertEqual(model.record_for_row(0).draft.output_dir_override, new_dir.resolve())
-        self.assertEqual(model.record_for_row(0).draft.options_override.ratio, 0.8)
-        self.assertEqual(model.record_for_row(2).draft.output_dir_override, new_dir.resolve())
-        self.assertEqual(model.record_for_row(2).draft.options_override.ratio, 0.8)
+        self.assertEqual(draft_of(model.records()[0]).output_dir_override, new_dir.resolve())
+        self.assertEqual(override_of(model.records()[0]).ratio, 0.8)
+        self.assertEqual(draft_of(model.records()[2]).output_dir_override, new_dir.resolve())
+        self.assertEqual(override_of(model.records()[2]).ratio, 0.8)
 
     def test_planning_skipped_record_is_excluded_from_output_collision_check(self) -> None:
         model = QueueTableModel(self.tr)
         planned = self._record("clip", QueueItemStatus.QUEUED)
         skipped = self._record("clip_skipped", QueueItemStatus.SKIPPED)
-        skipped.plan_item.output_path = planned.output_path
-        skipped.plan_item.skip_reason = "probe failed"
+        skipped.bound_plan_item.output_path = planned.output_path
+        skipped.bound_plan_item.skip_reason = "probe failed"
 
         model.add_records([planned, skipped])
         self.assertEqual(model.rowCount(), 2)
 
         colliding = self._record("clip_other", QueueItemStatus.QUEUED)
-        colliding.plan_item.output_path = planned.output_path
+        colliding.bound_plan_item.output_path = planned.output_path
         with self.assertRaisesRegex(RuntimeError, "collision"):
             model.add_records([colliding])
 
@@ -260,13 +275,13 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
 
         model.sort(int(QueueColumn.NAME), Qt.SortOrder.AscendingOrder)
         self.assertEqual(
-            [model.record_for_row(row).source_path.name for row in range(3)],
+            [model.records()[row].source_path.name for row in range(3)],
             ["a.mov", "b.mov", "c.mov"],
         )
 
         model.sort(int(QueueColumn.NAME), Qt.SortOrder.DescendingOrder)
         self.assertEqual(
-            [model.record_for_row(row).source_path.name for row in range(3)],
+            [model.records()[row].source_path.name for row in range(3)],
             ["c.mov", "b.mov", "a.mov"],
         )
 
@@ -276,7 +291,7 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
         self.assertFalse(model.can_sort())
 
         model.sort(int(QueueColumn.NAME), Qt.SortOrder.AscendingOrder)
-        self.assertEqual(model.record_for_row(0).source_path.name, "b.mov")
+        self.assertEqual(model.records()[0].source_path.name, "b.mov")
 
     def test_header_click_sorts_the_model(self) -> None:
         model = QueueTableModel(self.tr)
@@ -287,12 +302,12 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
 
         view.horizontalHeader().sectionClicked.emit(int(QueueColumn.NAME))
 
-        self.assertEqual(model.record_for_row(0).source_path.name, "a.mov")
+        self.assertEqual(model.records()[0].source_path.name, "a.mov")
         self.assertEqual(view.horizontalHeader().sortIndicatorSection(), int(QueueColumn.NAME))
 
     def test_codec_override_defers_binding_and_clears_smart_result(self) -> None:
         rec = self._record("switch", QueueItemStatus.WAITING_ANALYSIS)
-        rec.plan_item.quality_search_result = QualitySearchResult(
+        rec.bound_plan_item.quality_search_result = QualitySearchResult(
             status=QualitySearchStatus.FOUND,
             encoder_name="libx265",
             backend=BackendChoice.CPU,
@@ -311,8 +326,8 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
         )
         self.assertIsNone(rec.plan_item)
         self.assertIsNone(rec.job_snapshot)
-        self.assertEqual(rec.draft.options_override.codec, CodecChoice.AV1)
-        self.assertEqual(rec.draft.options_override.encoder_preset, "5")
+        self.assertEqual(override_of(rec).codec, CodecChoice.AV1)
+        self.assertEqual(override_of(rec).encoder_preset, "5")
         self.assertIsNone(rec.plan_item)
         self.assertEqual(rec.total_passes, 1)
 
@@ -340,19 +355,19 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
         model = QueueTableModel(self.tr)
         first = self._record("same", QueueItemStatus.QUEUED)
         second = self._record("other", QueueItemStatus.WAITING_ANALYSIS)
-        second.plan_item.source_path = self.root / "other" / "same.mov"
+        second.bound_plan_item.source_path = self.root / "other" / "same.mov"
         model.add_records([first, second])
         self.assertEqual(model.apply_options_to_rows([0, 1], EncodeOptions(ratio=0.4)), 2)
         for record in model.records():
             self.assertIsNone(record.plan_item)
-            self.assertEqual(record.draft.options_override.ratio, 0.4)
+            self.assertEqual(override_of(record).ratio, 0.4)
             self.assertEqual(record.status, QueueItemStatus.AWAITING_START)
 
     def test_option_override_does_not_require_capability_snapshot(self) -> None:
         rec = self._record("no-capabilities", QueueItemStatus.QUEUED)
         self.assertTrue(apply_options_to_record(rec, EncodeOptions(), runtime_capabilities=None))
         self.assertIsNone(rec.plan_item)
-        self.assertIsNotNone(rec.draft.options_override)
+        self.assertIsNotNone(draft_of(rec).options_override)
 
     def test_capability_snapshot_reconfiguration_never_probes_ffmpeg(self) -> None:
         rec = self._record("amf", QueueItemStatus.QUEUED)
@@ -386,7 +401,7 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
         encoder_probe.assert_not_called()
         planning_probe.assert_not_called()
         self.assertIsNone(rec.plan_item)
-        self.assertEqual(rec.draft.options_override.backend, BackendChoice.AMF)
+        self.assertEqual(override_of(rec).backend, BackendChoice.AMF)
 
     def test_failed_and_cancelled_records_are_terminal_for_batch_edits(self) -> None:
         model = QueueTableModel(self.tr)
@@ -403,8 +418,8 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
         model = QueueTableModel(self.tr)
         first = self._record("same", QueueItemStatus.QUEUED)
         second = self._record("other", QueueItemStatus.WAITING_ANALYSIS)
-        second.plan_item.source_path = self.root / "other" / "same.mov"
-        second.plan_item.output_path = self.root / "other-output" / "same.mp4"
+        second.bound_plan_item.source_path = self.root / "other" / "same.mov"
+        second.bound_plan_item.output_path = self.root / "other-output" / "same.mp4"
         model.add_records([first, second])
         candidate_output_dir = self.root / "not-created" / "nested"
 
@@ -412,7 +427,7 @@ class QueueBatchOperationsTestCase(unittest.TestCase):
         self.assertFalse(candidate_output_dir.exists())
         for record in model.records():
             self.assertIsNone(record.plan_item)
-            self.assertEqual(record.draft.output_dir_override, candidate_output_dir.resolve())
+            self.assertEqual(draft_of(record).output_dir_override, candidate_output_dir.resolve())
 
 
 if __name__ == "__main__":

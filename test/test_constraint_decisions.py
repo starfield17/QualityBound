@@ -48,6 +48,7 @@ from core.smart.v1.bitrate import reselect_from_candidates
 from core.smart.v1.sampling.planner import PlannedWindow, SamplePlan
 from core.smart.v1.sampling.scout import SamplingResult
 from core.i18n import get_translator
+from core.progress_events import ProgressEvent
 from gui.queue_model import QueueTableModel
 from gui.queue_manager import QueueManager
 from gui.queue_state import QueueItemRecord, QueueItemStatus, compute_metrics, mark_finished
@@ -190,6 +191,7 @@ class ConstraintDecisionTestCase(unittest.TestCase):
             with patch("core.encoding.analysis.analyze_quality", return_value=blocked):
                 terminal = analyze_plan_item(root / "ffmpeg", item, root)
             self.assertIsNone(terminal)
+            assert item.quality_search_result is not None
             self.assertEqual(item.quality_search_result.status, QualitySearchStatus.FOUND)
             self.assertEqual(item.target_video_bitrate_bps, 1_500_000)
 
@@ -215,10 +217,12 @@ class ConstraintDecisionTestCase(unittest.TestCase):
                 QualityCandidateResult(video_bitrate_bps=1_000_000, min_vmaf=94.0),
                 QualityCandidateResult(video_bitrate_bps=16_000_000, min_vmaf=96.0),
             ], item)
+            assert blocked.required_output_ratio is not None
             self.assertGreater(blocked.required_output_ratio, 1.0)
             with patch("core.encoding.analysis.analyze_quality", return_value=blocked):
                 terminal = analyze_plan_item(root / "ffmpeg", item, root)
             self.assertIsNone(terminal)
+            assert item.quality_search_result is not None
             self.assertTrue(item.quality_search_result.success)
             self.assertEqual(item.options.min_vmaf, 94.0)
 
@@ -231,6 +235,7 @@ class ConstraintDecisionTestCase(unittest.TestCase):
                     root = Path(directory)
                     item = _item(root)
                     item.options.size_blocked_policy = policy
+                    assert item.encoder_info is not None
                     blocked = QualitySearchResult(
                         status=QualitySearchStatus.CONSTRAINT_UNSATISFIED,
                         encoder_name=item.encoder_info.encoder_name,
@@ -242,6 +247,7 @@ class ConstraintDecisionTestCase(unittest.TestCase):
                     with patch("core.encoding.analysis.analyze_quality", return_value=blocked):
                         terminal = analyze_plan_item(root / "ffmpeg", item, root)
                     self.assertIsNotNone(terminal)
+                    assert terminal is not None
                     self.assertEqual(terminal.skipped, ratio is not None and ratio > 1.0)
                     self.assertEqual(terminal.needs_decision, not terminal.skipped)
 
@@ -375,8 +381,8 @@ class ConstraintDecisionTestCase(unittest.TestCase):
 
             mark_finished(record, result)
 
-            self.assertEqual(record.plan_item.options.min_vmaf, 91.5)
-            self.assertEqual(record.plan_item.options.max_output_ratio, 0.42)
+            self.assertEqual(record.bound_plan_item.options.min_vmaf, 91.5)
+            self.assertEqual(record.bound_plan_item.options.max_output_ratio, 0.42)
 
     def test_queue_manager_reconciles_idle_after_last_decision_skip(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -445,7 +451,9 @@ class ConstraintDecisionTestCase(unittest.TestCase):
 
             self.assertTrue(model.apply_quality_decision(0, relax_size))
             self.assertEqual(record.status, QueueItemStatus.WAITING_ANALYSIS)
-            self.assertEqual(record.plan_item.quality_search_result.status, QualitySearchStatus.FOUND)
+            bound = record.bound_plan_item.quality_search_result
+            assert bound is not None
+            self.assertEqual(bound.status, QualitySearchStatus.FOUND)
 
     def test_queue_analysis_skip_decision_records_eligible_origin(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -694,7 +702,7 @@ class AnalysisReceiptTestCase(unittest.TestCase):
                 patch("core.smart.v1.session.run_logged"),
                 patch("core.smart.v1.session.score_candidate", side_effect=score) as first_score,
             ):
-                progress_events: list[dict[str, object]] = []
+                progress_events: list[ProgressEvent] = []
                 first = analyze_quality(
                     ffmpeg,
                     item,
@@ -708,15 +716,14 @@ class AnalysisReceiptTestCase(unittest.TestCase):
             candidate_events = [
                 event for event in progress_events if event.get("state") == "candidate_finished"
             ]
-            for tier in {event["candidate_tier"] for event in candidate_events}:
-                tier_events = [event for event in candidate_events if event["candidate_tier"] == tier]
-                self.assertEqual(tier_events[0]["candidate_index"], 1)
-                self.assertTrue(
-                    all(
-                        int(event["candidate_index"]) <= int(event["candidate_limit"])
-                        for event in tier_events
-                    )
-                )
+            for tier in {event.get("candidate_tier") for event in candidate_events}:
+                tier_events = [event for event in candidate_events if event.get("candidate_tier") == tier]
+                self.assertEqual(tier_events[0].get("candidate_index"), 1)
+                for event in tier_events:
+                    index = event.get("candidate_index")
+                    limit = event.get("candidate_limit")
+                    assert index is not None and limit is not None
+                    self.assertLessEqual(index, limit)
             receipt = load_analysis_receipt(root, first.measurement_fingerprint)
             self.assertIsNotNone(receipt)
 

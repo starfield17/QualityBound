@@ -38,7 +38,7 @@ from gui.queue_state import (
 
 def _get_qapp() -> QApplication:
     app = QApplication.instance()
-    if app is None:
+    if not isinstance(app, QApplication):
         app = QApplication([])
     return app
 

@@ -53,7 +53,8 @@ from core.smart.v1.concurrency import SMART_ANALYSIS_SEMAPHORE
 from core.smart.v1.workflow import analyze_quality
 from core.smart.v1.decisions import build_decision_options
 from core.smart.v1.bitrate import calculate_smart_bitrate_budget, search_bitrate_candidates
-from core.smart.v1.measurement import SmartCommandError
+from core.smart.v1.measurement import SampleWindow, SmartCommandError
+from core.progress_events import ProgressEvent
 from core.smart.v1.session import AnalysisSession
 from core.smart.v1.measurement import build_loopback_score_command as _build_loopback_score_command
 from core.smart.v1.measurement import build_reference as _build_reference
@@ -70,7 +71,7 @@ from core.smart.v1.vmaf import (
 
 
 def _capabilities(**overrides: object) -> AnalysisCapabilities:
-    payload = dict(
+    payload: dict[str, object] = dict(
         libvmaf=True,
         libvmaf_cuda=False,
         loopback_decoder=False,
@@ -206,6 +207,7 @@ class AnalysisSessionTestCase(unittest.TestCase):
 
     def _session(self, root: Path) -> AnalysisSession:
         item = _analysis_item(root)
+        assert item.encoder_info is not None
         plans = {
             tier: build_analysis_execution_plan(
                 tier=tier,
@@ -559,11 +561,11 @@ class SmartAnalyseV2TestCase(unittest.TestCase):
             encoder_info=_encoder("hevc_videotoolbox", BackendChoice.VIDEOTOOLBOX),
             options=EncodeOptions(),
         )
-        software = _build_reference(Path("ffmpeg"), item, type("W", (), {"start_sec": 1.0, "duration_sec": 5.0})(), Path("ref.mkv"))
+        software = _build_reference(Path("ffmpeg"), item, SampleWindow(1.0, 5.0), Path("ref.mkv"))
         hardware = _build_reference(
             Path("ffmpeg"),
             item,
-            type("W", (), {"start_sec": 1.0, "duration_sec": 5.0})(),
+            SampleWindow(1.0, 5.0),
             Path("ref.mkv"),
             decode_acceleration=SOURCE_DECODE_VIDEOTOOLBOX,
         )
@@ -594,7 +596,7 @@ class SmartAnalyseV2TestCase(unittest.TestCase):
         command = _build_loopback_score_command(
             Path("ffmpeg"),
             item,
-            type("W", (), {"start_sec": 0.0, "duration_sec": 5.0})(),
+            SampleWindow(0.0, 5.0),
             Path("cand.mkv"),
             plan,
             model_spec=VMAF_STANDARD_MODEL,
@@ -910,7 +912,7 @@ class SmartAnalyseV2TestCase(unittest.TestCase):
                     observed_video_bitrate_bps=bitrate,
                 )
 
-            progress: list[dict[str, object]] = []
+            progress: list[ProgressEvent] = []
             with (
                 patch(
                     "core.smart.v1.workflow.select_vmaf_runtime",
@@ -940,7 +942,10 @@ class SmartAnalyseV2TestCase(unittest.TestCase):
             assert receipt is not None
             self.assertEqual(len(receipt.search_windows), 5)
             self.assertEqual(len(receipt.holdout_windows), 1)
-            self.assertIn("fresh_reserve_holdout", receipt.holdout_windows[0]["reasons"])
+            holdout_reasons = receipt.holdout_windows[0].get("reasons")
+            if not isinstance(holdout_reasons, list):
+                self.fail("holdout window receipt has no reasons list")
+            self.assertIn("fresh_reserve_holdout", holdout_reasons)
             self.assertTrue(receipt.independent_final_holdout)
             self.assertEqual(
                 receipt.refinement_rounds[0]["promoted_window_ids"],
@@ -953,7 +958,7 @@ class SmartAnalyseV2TestCase(unittest.TestCase):
                 quality_search_result=None,
             )
             reference_counts.clear()
-            reused_progress: list[dict[str, object]] = []
+            reused_progress: list[ProgressEvent] = []
             with (
                 patch(
                     "core.smart.v1.workflow.select_vmaf_runtime",
@@ -1145,6 +1150,7 @@ class SmartAnalyseV2TestCase(unittest.TestCase):
                 patch("core.smart.v1.session.score_candidate", side_effect=fake_score),
             ):
                 def plan_for(*, tier, **kwargs):
+                    assert item.encoder_info is not None
                     return build_analysis_execution_plan(
                         tier=tier,
                         encoder_info=item.encoder_info,
@@ -1179,6 +1185,7 @@ class SmartAnalyseV2TestCase(unittest.TestCase):
             decode_acceleration=SOURCE_DECODE_VIDEOTOOLBOX,
         )
         self.assertEqual(command[command.index("-hwaccel") + 1], "videotoolbox")
+        assert item.encoder_info is not None
         fallback = software_source_plan(
             build_analysis_execution_plan(
                 tier=AnalysisTier.EXACT,

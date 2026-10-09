@@ -34,6 +34,13 @@ from gui.queue_state import (
 )
 
 
+def result_of(record: QueueItemRecord) -> EncodeResult:
+    """Return a fixture record's encode result; a record without one fails the test."""
+
+    assert record.result is not None
+    return record.result
+
+
 class MainWindowMaintenanceTestCase(unittest.TestCase):
     def test_fresh_default_mixed_batch_prompts_then_copies_despite_cancelled_decisions(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -48,8 +55,8 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                 pending = []
                 for kind in (ConstraintFailureKind.SIZE_BLOCKED, ConstraintFailureKind.QUALITY_UNREACHABLE):
                     record = self._record(root, kind.value, QueueItemStatus.NEEDS_DECISION)
-                    record.result.needs_decision = True
-                    record.plan_item.quality_search_result = QualitySearchResult(
+                    result_of(record).needs_decision = True
+                    record.bound_plan_item.quality_search_result = QualitySearchResult(
                         encoder_name="libx265", backend=BackendChoice.CPU,
                         status=QualitySearchStatus.CONSTRAINT_UNSATISFIED,
                         failure_kind=kind, reason=kind.value,
@@ -58,9 +65,9 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                 copied = self._record(root, "copy", QueueItemStatus.SKIPPED)
                 asked = self._record(root, "ask", QueueItemStatus.SKIPPED)
                 for record in (copied, asked):
-                    record.result.skipped = True
-                    record.result.skip_origin = SkipOrigin.SMART_PREDICTED_OVERSIZE
-                asked.plan_item.options.skipped_output_policy = SkippedOutputPolicy.ASK
+                    result_of(record).skipped = True
+                    result_of(record).skip_origin = SkipOrigin.SMART_PREDICTED_OVERSIZE
+                asked.bound_plan_item.options.skipped_output_policy = SkippedOutputPolicy.ASK
                 records = pending + [copied, asked]
                 window.queue_model.add_records(records)
                 completion = QueueRunCompletion("mixed", tuple(record.item_id for record in records))
@@ -83,8 +90,8 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                         self.assertFalse(window._postprocessing)
                         self.assertEqual(choose.call_count, 2)
                         self.assertEqual(copied.output_path.read_bytes(), copied.source_path.read_bytes())
-                        self.assertEqual(copied.result.skipped_output_outcome, SkippedOutputOutcome.COPIED)
-                        self.assertEqual(asked.result.skipped_output_outcome, SkippedOutputOutcome.IGNORED)
+                        self.assertEqual(result_of(copied).skipped_output_outcome, SkippedOutputOutcome.COPIED)
+                        self.assertEqual(result_of(asked).skipped_output_outcome, SkippedOutputOutcome.IGNORED)
                         self.assertTrue(window.queue_manager.has_pending_run())
                         self.assertTrue(all(record.status == QueueItemStatus.NEEDS_DECISION for record in pending))
                         window.queue_manager._worker_outcome = "finished"
@@ -382,7 +389,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                 record = self._record(Path(temp_dir), "queued", QueueItemStatus.QUEUED)
                 window.queue_model.add_records([record])
                 window.queue_manager._pending_run = QueueRunCompletion("run", (record.item_id,))
-                window._asked_analysis_decisions[("run", record.item_id)] = record.result
+                window._asked_analysis_decisions[("run", record.item_id)] = result_of(record)
                 window._stop_active_task()
                 self.assertFalse(window.queue_manager.has_pending_run())
                 self.assertFalse(window._asked_analysis_decisions)

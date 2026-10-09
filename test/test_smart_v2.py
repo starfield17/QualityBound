@@ -384,6 +384,7 @@ class V2PublicationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             item, result = self.execute(Path(directory), publish_error=True)
             assert result is not None
+            assert result.error_message is not None
             self.assertIn("publish denied", result.error_message)
             self.assertEqual(item.output_path.read_bytes(), b"original")
             self.assertFalse(list(Path(directory).glob(".*smart-v2*")))

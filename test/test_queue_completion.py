@@ -15,6 +15,13 @@ from gui.queue_completion import QueueCompletionHandler
 from gui.queue_state import QueueItemRecord, QueueItemStatus, QueueJobSnapshot
 
 
+def result_of(record: QueueItemRecord) -> EncodeResult:
+    """Return a fixture record's encode result; a record without one fails the test."""
+
+    assert record.result is not None
+    return record.result
+
+
 class QueueCompletionTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -73,7 +80,7 @@ class QueueCompletionTestCase(unittest.TestCase):
                 asked = self._record(f"{prefix}-ask", QueueItemStatus.SKIPPED, SkippedOutputPolicy.ASK)
                 ignored = self._record(f"{prefix}-ignore", QueueItemStatus.SKIPPED)
                 discarded = self._record(f"{prefix}-discard", QueueItemStatus.SKIPPED, SkippedOutputPolicy.COPY)
-                discarded.result.skip_origin = SkipOrigin.SIZE_MISS_DISCARD
+                result_of(discarded).skip_origin = SkipOrigin.SIZE_MISS_DISCARD
                 with (
                     patch("gui.queue_completion.QMessageBox.question", return_value=answer) as question,
                     patch("gui.queue_completion.PowerActionCountdownDialog") as countdown,
@@ -160,10 +167,10 @@ class QueueCompletionTestCase(unittest.TestCase):
             timer.stop()
             self.assertEqual(completions, [False])
             self.assertEqual(copied.output_path.read_bytes(), copied.source_path.read_bytes())
-            self.assertEqual(copied.result.skipped_output_outcome, SkippedOutputOutcome.COPIED)
-            self.assertEqual(asked.result.skipped_output_outcome, SkippedOutputOutcome.IGNORED)
-            self.assertEqual(ignored.result.skipped_output_outcome, SkippedOutputOutcome.IGNORED)
-            self.assertTrue(pending.result.needs_decision)
+            self.assertEqual(result_of(copied).skipped_output_outcome, SkippedOutputOutcome.COPIED)
+            self.assertEqual(result_of(asked).skipped_output_outcome, SkippedOutputOutcome.IGNORED)
+            self.assertEqual(result_of(ignored).skipped_output_outcome, SkippedOutputOutcome.IGNORED)
+            self.assertTrue(result_of(pending).needs_decision)
             self.handler.process_stopped(records, self.tr, apply_result, finished)
             self.assertEqual(completions, [False, False])
             question.assert_called_once()

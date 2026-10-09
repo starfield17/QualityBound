@@ -504,7 +504,7 @@ class ArchitectureTestCase(unittest.TestCase):
 
     def test_queue_view_depends_on_model(self) -> None:
         view_path = _app_modules().get("gui.queue_view")
-        self.assertIsNotNone(view_path)
+        assert view_path is not None
         self.assertTrue(
             any(
                 imported.startswith("gui.queue_model")

@@ -50,16 +50,18 @@ pyright
 python -m unittest discover -s test -p "test_*.py" -v
 ```
 
-`pyright` runs in `strict` mode over `core`, `cli`, `main.py` and `gui`. Six
-inference-precision rules (`reportMissingTypeArgument` and the five
-`reportUnknown*`) stay off in `pyproject.toml` because capability snapshots,
+`pyright` runs in `strict` mode over `core`, `cli`, `main.py` and `gui`; `pyright
+-p pyright.tests.json` covers `test/` in `basic` mode and fails on an unnecessary
+`type: ignore`. Six inference-precision rules (`reportMissingTypeArgument` and the
+five `reportUnknown*`) stay off in `pyproject.toml` because capability snapshots,
 presets and analysis receipts cross those boundaries as `dict[str, object]` and
 JSON-decoded values; closing them is its own reviewed change. `ruff` gates the
 bug-finding subset (`E4`, `E7`, `E9`, `F`, `B023`) and deliberately not the style
 families. Deferred check work — the residue behind those six rules, which
-`scripts/check_strict_debt.py` ratchets, and the `scripts/` scope decision — is
-itemised with its measurements in `docs/development.md` (Deferred check work);
-record new deferred checks there rather than only in a commit message.
+`scripts/check_strict_debt.py` ratchets, the test suite's `basic`-mode ceiling, and
+the `scripts/` scope decision — is itemised with its measurements in
+`docs/development.md` (Deferred check work); record new deferred checks there
+rather than only in a commit message.
 
 Run architecture checks alone with
 `python -m unittest discover -s test -p "test_architecture.py" -v`.

@@ -11,7 +11,8 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QStandardItem, QStandardItemModel
+from PySide6.QtWidgets import QApplication, QComboBox
 
 from cli.cli_entry import _build_parser, _merge_options
 from core.ffmpeg.commands import (
@@ -45,6 +46,16 @@ from core.models import (
 from core.encoding.planning import _validate_decode_acceleration
 from core.config.store import encode_options_to_preset_data, preset_data_to_encode_options
 from gui.gui_mainwindow import MainWindow
+
+
+def combo_item(combo: QComboBox, index: int) -> QStandardItem:
+    """Return a combo box's item, which the panel builds from a standard model."""
+
+    model = combo.model()
+    assert isinstance(model, QStandardItemModel)
+    item = model.item(index)
+    assert item is not None
+    return item
 
 
 def _preset_data(**overrides) -> dict:
@@ -260,6 +271,7 @@ class VideoToolboxHardwareCapabilityTestCase(unittest.TestCase):
         with patch("core.ffmpeg.capabilities.subprocess.run", side_effect=fake_run):
             self.assertTrue(smoke_test_encoder(Path("ffmpeg"), "hevc_videotoolbox"))
         cmd = captured["cmd"]
+        assert isinstance(cmd, list)
         self.assertIn("-allow_sw", cmd)
         self.assertEqual(cmd[cmd.index("-allow_sw") + 1], "0")
 
@@ -353,7 +365,7 @@ class VideoToolboxCliAndGuiTestCase(unittest.TestCase):
                 [panel.decode_acceleration_combo.itemData(i) for i in range(panel.decode_acceleration_combo.count())],
                 ["software", "videotoolbox"],
             )
-            self.assertTrue(panel.decode_acceleration_combo.model().item(1).isEnabled())
+            self.assertTrue(combo_item(panel.decode_acceleration_combo, 1).isEnabled())
 
             panel.apply_options(
                 EncodeOptions(
@@ -378,7 +390,7 @@ class VideoToolboxCliAndGuiTestCase(unittest.TestCase):
             panel = window.options_panel
             panel.apply_options(EncodeOptions(decode_acceleration=DecodeAcceleration.VIDEOTOOLBOX))
             self.assertEqual(panel.decode_acceleration_combo.currentData(), "software")
-            self.assertFalse(panel.decode_acceleration_combo.model().item(1).isEnabled())
+            self.assertFalse(combo_item(panel.decode_acceleration_combo, 1).isEnabled())
         finally:
             window.close()
 

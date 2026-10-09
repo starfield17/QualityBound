@@ -8,10 +8,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 from core.smart.v1.measurement import score_candidate
-from core.smart.v1.runtime import AnalysisTier
+from core.smart.v1.runtime import AnalysisExecutionPlan, AnalysisTier
 from core.smart.v1.vmaf import VmafWindowScore
 import test_analysis_runtime as runtime_tests
-from core.models import OperationCancelledError
+from core.models import OperationCancelledError, QualityCandidateResult
 
 
 class WindowMeasurementCacheTest(unittest.TestCase):
@@ -47,15 +47,21 @@ class WindowMeasurementCacheTest(unittest.TestCase):
                 if kwargs["phase"] == "candidate encode":
                     Path(command[-1]).write_bytes(b"encoded" * 100)
 
-            def measure(refs, **overrides):
-                options = dict(
+            def measure(
+                refs: list[Path],
+                *,
+                force_remeasure: bool = False,
+                plan: AnalysisExecutionPlan | None = None,
+            ) -> QualityCandidateResult:
+                return score_candidate(
+                    session.ffmpeg_path, session.item, refs, 900_000,
+                    root, root, io.StringIO(),
                     cancel_check=None, process_callback=None,
-                    window_durations_sec=[5.0] * len(refs), plan=session.exact_plan,
+                    window_durations_sec=[5.0] * len(refs),
+                    plan=plan if plan is not None else session.exact_plan,
                     measurement_cache=cache,
+                    force_remeasure=force_remeasure,
                 )
-                options.update(overrides)
-                return score_candidate(session.ffmpeg_path, session.item, refs, 900_000,
-                                       root, root, io.StringIO(), **options)
 
             with patch("core.smart.v1.measurement.run_logged", side_effect=run), patch(
                 "core.smart.v1.measurement.parse_vmaf_json",
@@ -92,13 +98,15 @@ class WindowMeasurementCacheTest(unittest.TestCase):
                 side_effect=[VmafWindowScore(80, 79, 78, 80), VmafWindowScore(96, 95, 94, 96),
                              VmafWindowScore(97, 96, 95, 97)],
             ) as parse:
-                options = dict(cancel_check=None, process_callback=None, plan=session.exact_plan,
-                               window_durations_sec=[5.0] * 3, measurement_cache=cache)
                 rejected = score_candidate(session.ffmpeg_path, session.item, references, 900_000,
-                                           root, root, io.StringIO(), min_vmaf_target=90,
-                                           window_order=[2, 0, 1], **options)
+                                           root, root, io.StringIO(), cancel_check=None,
+                                           process_callback=None, plan=session.exact_plan,
+                                           window_durations_sec=[5.0] * 3, measurement_cache=cache,
+                                           min_vmaf_target=90, window_order=[2, 0, 1])
                 self.assertEqual(rejected.segment_vmaf, [80])
                 completed = score_candidate(session.ffmpeg_path, session.item, references, 900_000,
-                                            root, root, io.StringIO(), **options)
+                                            root, root, io.StringIO(), cancel_check=None,
+                                            process_callback=None, plan=session.exact_plan,
+                                            window_durations_sec=[5.0] * 3, measurement_cache=cache)
                 self.assertEqual(completed.segment_vmaf, [96, 97, 80])
                 self.assertEqual(parse.call_count, 3)

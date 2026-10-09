@@ -117,7 +117,7 @@ not real-world VMAF accuracy.
 
 ## Deferred check work
 
-Two known gaps are left open on purpose. None of them blocks a release. Each is
+Three known gaps are left open on purpose. None of them blocks a release. Each is
 recorded with the measurement that produced it, so it can be picked up without
 re-running the audit.
 
@@ -151,6 +151,33 @@ The annotations added for the strict adoption (`gui/qt_optionals.maybe_none`,
 the `__all__` lists in `core/encoding`) are not suppressions. They stay checked by
 the remaining strict rules, and the `__all__` lists keep working after the six rules
 come back on.
+
+### The test suite is type-checked in `basic` mode, not `strict`
+
+`pyright.tests.json` includes `test/` and runs the project config in `basic` mode
+with `reportUnnecessaryTypeIgnoreComment`, so an unnecessary `type: ignore` in a
+test is an error rather than an unchecked comment. The Quality job runs it after
+the strict pass over the application.
+
+`strict` is not available for `test/` from the project config: pyright resolves
+`typeCheckingMode` per configuration file, not per directory, so a stricter pass
+would apply the same rules to both scopes. A strict pass over `test/` reports
+findings in three classes, and the first two are intrinsic to testing rather than
+fixable defects:
+
+- `reportPrivateUsage` — tests deliberately call the module-private helpers they
+  cover (`_run_command`, `_validate_decode_acceleration`, `_imports`);
+- `reportMissingParameterType` — fixture helpers and fake callbacks annotate
+  nothing when the value is a throwaway;
+- `reportArgumentType` and `reportOptionalMemberAccess` on the `dict[str, object]`
+  receipt and event payloads, the same boundary the application's strict pass
+  leaves to the disabled inference rules.
+
+Re-measure with `pyright -p pyright.tests.json` after temporarily raising
+`typeCheckingMode` in that file to `strict`. Closing the gap means either a
+per-directory rule policy (not supported today) or splitting the test tree across
+two configuration files, so the decision is recorded here rather than taken
+silently.
 
 ### `scripts/` is outside the type-check scope
 

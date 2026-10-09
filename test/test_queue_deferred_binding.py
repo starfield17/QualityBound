@@ -14,14 +14,42 @@ from core.encoding import prepare_encode_requests
 from core.i18n import get_translator
 from core.models import (
     BackendChoice, CodecChoice, CompressionMode, ContainerChoice, EncodeOptions,
-    EncodeRequest, MediaInfo, VideoFileItem,
+    EncodePlanItem, EncodeRequest, MediaInfo, VideoFileItem,
 )
 from gui.gui_workers import QueueIntakeWorker
 from gui.gui_mainwindow import MainWindow
 from gui.queue_manager import QueueExecuteWorker, QueueExecutionItem
 from gui.queue_actions import apply_options_to_record, apply_output_dir_to_record
 from gui.queue_model import QueueColumn, QueueTableModel
-from gui.queue_state import QueueSourceDraft, QueueItemStatus, create_draft_record, unbind_for_retry
+from gui.queue_state import (
+    QueueItemRecord,
+    QueueSourceDraft,
+    QueueItemStatus,
+    create_draft_record,
+    unbind_for_retry,
+)
+
+
+def draft_of(record: QueueItemRecord) -> QueueSourceDraft:
+    """Return a fixture record's source draft; a record without one fails the test."""
+
+    assert record.draft is not None
+    return record.draft
+
+
+def override_of(record: QueueItemRecord) -> EncodeOptions:
+    """Return the per-item options override a test has just applied."""
+
+    override = draft_of(record).options_override
+    assert override is not None
+    return override
+
+
+def encoder_name(item: EncodePlanItem) -> str:
+    """Return a planned item's bound encoder name."""
+
+    assert item.encoder_info is not None
+    return item.encoder_info.encoder_name
 
 
 def media(path: Path) -> MediaInfo:
@@ -58,7 +86,8 @@ class DeferredQueueTestCase(unittest.TestCase):
             return prepare_encode_requests(requests, workdir=self.root / "work")
 
     def request(self, options: EncodeOptions, output: Path | None = None) -> EncodeRequest:
-        return EncodeRequest(self.record.draft.file_item, options, output, self.record.draft.input_root)
+        draft = draft_of(self.record)
+        return EncodeRequest(draft.file_item, options, output, draft.input_root)
 
     def test_added_file_has_no_execution_binding_or_final_output(self) -> None:
         self.assertEqual(self.record.status, QueueItemStatus.AWAITING_START)
@@ -81,28 +110,28 @@ class DeferredQueueTestCase(unittest.TestCase):
         self.model.apply_prepared_plan([self.record.item_id], plan, self.root / "work")
         bound = self.model.records()[0]
         self.assertEqual(bound.output_path, output / "source_av1.mkv")
-        self.assertEqual(bound.plan_item.encoder_info.encoder_name, "libsvtav1")
-        self.assertEqual(bound.plan_item.target_video_bitrate_bps, 720_000)
+        self.assertEqual(encoder_name(bound.bound_plan_item), "libsvtav1")
+        self.assertEqual(bound.bound_plan_item.target_video_bitrate_bps, 720_000)
         self.assertEqual(bound.status, QueueItemStatus.QUEUED)
         options.ratio = 0.9
-        self.assertEqual(bound.plan_item.options.ratio, 0.4)
+        self.assertEqual(bound.bound_plan_item.options.ratio, 0.4)
 
     def test_custom_options_and_directory_are_independent_drafts(self) -> None:
         options = EncodeOptions(backend=BackendChoice.NVENC, two_pass=True)
         self.assertTrue(apply_options_to_record(self.record, options))
         self.assertTrue(apply_output_dir_to_record(self.record, self.root / "custom"))
         options.two_pass = False
-        self.assertTrue(self.record.draft.options_override.two_pass)
-        self.assertEqual(self.record.draft.output_dir_override, self.root / "custom")
+        self.assertTrue(override_of(self.record).two_pass)
+        self.assertEqual(draft_of(self.record).output_dir_override, self.root / "custom")
         self.assertIsNone(self.record.plan_item)
         self.model.restore_global_options([0])
-        self.assertIsNone(self.model.records()[0].draft.options_override)
-        self.assertIsNotNone(self.model.records()[0].draft.output_dir_override)
+        self.assertIsNone(draft_of(self.model.records()[0]).options_override)
+        self.assertIsNotNone(draft_of(self.model.records()[0]).output_dir_override)
         self.model.restore_global_output([0])
-        self.assertIsNone(self.model.records()[0].draft.output_dir_override)
+        self.assertIsNone(draft_of(self.model.records()[0]).output_dir_override)
 
     def test_invalid_old_backend_does_not_affect_intake(self) -> None:
-        worker = QueueIntakeWorker(None, False, None, [self.record.draft.file_item])
+        worker = QueueIntakeWorker(None, False, None, [draft_of(self.record).file_item])
         received = []
         worker.completed.connect(received.append)
         with (
@@ -117,7 +146,7 @@ class DeferredQueueTestCase(unittest.TestCase):
 
     def test_manual_retry_returns_to_draft_and_preserves_overrides(self) -> None:
         options = EncodeOptions(backend=BackendChoice.CPU)
-        self.record.draft.options_override = copy.deepcopy(options)
+        draft_of(self.record).options_override = copy.deepcopy(options)
         plan = self.prepare([self.request(options)])
         self.model.apply_prepared_plan([self.record.item_id], plan, self.root / "work")
         bound = self.model.records()[0]
@@ -126,7 +155,7 @@ class DeferredQueueTestCase(unittest.TestCase):
         self.assertEqual(bound.status, QueueItemStatus.AWAITING_START)
         self.assertIsNone(bound.plan_item)
         self.assertIsNone(bound.job_snapshot)
-        self.assertEqual(bound.draft.options_override.backend, BackendChoice.CPU)
+        self.assertEqual(override_of(bound).backend, BackendChoice.CPU)
 
     def test_batch_preparation_accepts_distinct_per_item_options(self) -> None:
         other = self.root / "other.mov"
@@ -135,7 +164,7 @@ class DeferredQueueTestCase(unittest.TestCase):
             self.request(EncodeOptions(backend=BackendChoice.CPU)),
             EncodeRequest(VideoFileItem(other, Path("other.mov")), EncodeOptions(codec=CodecChoice.AV1, backend=BackendChoice.CPU), self.root / "custom"),
         ])
-        self.assertEqual([item.encoder_info.encoder_name for item in plan.items], ["libx265", "libsvtav1"])
+        self.assertEqual([encoder_name(item) for item in plan.items], ["libx265", "libsvtav1"])
         self.assertEqual(plan.items[1].output_path, self.root / "custom" / "other_av1.mp4")
         self.assertIsNot(plan.items[0].options, plan.items[1].options)
 
@@ -212,6 +241,7 @@ class DeferredQueueTestCase(unittest.TestCase):
             ):
                 window._start_queue()
                 worker = window.active_worker
+                assert worker is not None
                 worker.finished.connect(loop.quit)
                 self.assertTrue(window.queue_manager.is_busy())
                 self.assertFalse(window.queue_model.can_sort())
@@ -253,8 +283,8 @@ class DeferredQueueTestCase(unittest.TestCase):
         first = create_queue_records(plan, self.root / "work-a")[0]
         second = copy.deepcopy(first)
         second.item_id = "second"
-        second.job_snapshot.ffmpeg_path = self.root / "other-ffmpeg"
-        second.job_snapshot.workdir = self.root / "work-b"
+        second.bound_job_snapshot.ffmpeg_path = self.root / "other-ffmpeg"
+        second.bound_job_snapshot.workdir = self.root / "work-b"
         worker = QueueExecuteWorker([QueueExecutionItem(first.item_id, first), QueueExecutionItem(second.item_id, second)], 2)
         events = []
 
@@ -286,6 +316,7 @@ class DeferredQueueTestCase(unittest.TestCase):
             self.request(EncodeOptions(backend=BackendChoice.CPU)),
             EncodeRequest(VideoFileItem(other, Path("other.mov")), EncodeOptions(backend=BackendChoice.CPU)),
         ])
+        assert plan.items[0].skip_reason is not None
         self.assertIn("already exists", plan.items[0].skip_reason)
         self.assertIsNone(plan.items[1].skip_reason)
         self.model.apply_prepared_plan([self.record.item_id], type(plan)([plan.items[0]], plan.ffmpeg_path, plan.ffprobe_path, plan.input_root, plan.output_root), self.root / "work")
@@ -293,7 +324,7 @@ class DeferredQueueTestCase(unittest.TestCase):
         self.assertEqual(output.read_bytes(), b"existing")
 
     def test_explicit_probe_pair_honors_selected_ffmpeg(self) -> None:
-        worker = QueueIntakeWorker(None, False, None, [self.record.draft.file_item], ffmpeg_path="selected-ffmpeg")
+        worker = QueueIntakeWorker(None, False, None, [draft_of(self.record).file_item], ffmpeg_path="selected-ffmpeg")
         with (
             patch("gui.gui_workers.discover_ffmpeg_tools", return_value=(self.root / "ffmpeg", self.root / "paired-ffprobe")) as discover,
             patch("gui.gui_workers.find_binary") as fallback,
@@ -316,7 +347,7 @@ class DeferredQueueTestCase(unittest.TestCase):
                 patch.object(window.queue_manager, "start", return_value=True),
             ):
                 window._start_queue()
-            self.assertEqual(window.queue_model.records()[0].plan_item.options.min_vmaf, 91)
+            self.assertEqual(window.queue_model.records()[0].bound_plan_item.options.min_vmaf, 91)
         finally:
             window.close()
 
@@ -326,17 +357,22 @@ class DeferredQueueTestCase(unittest.TestCase):
         options = EncodeOptions(backend=BackendChoice.CPU, compression_mode=CompressionMode.FIXED_BITRATE)
         plan = self.prepare([self.request(options)])
         terminal = EncodeResult(self.source, plan.items[0].output_path, False, skipped=True)
+
+        def run(analysis_results: list[EncodeResult | None], *, concurrent: bool) -> list[EncodeResult]:
+            if concurrent:
+                return execute_plan_concurrent(plan, self.root / "work", analysis_results=analysis_results, max_workers=2)
+            return execute_plan(plan, self.root / "work", analysis_results=analysis_results)
+
         for concurrent in (False, True):
-            runner = execute_plan_concurrent if concurrent else execute_plan
-            kwargs = {"max_workers": 2} if concurrent else {}
-            with patch("core.encoding.parallel.run_analysis_phase" if concurrent else "core.encoding.executor.run_analysis_phase") as analyze:
-                result = runner(plan, self.root / "work", analysis_results=[terminal], **kwargs)
+            phase = "core.encoding.parallel.run_analysis_phase" if concurrent else "core.encoding.executor.run_analysis_phase"
+            with patch(phase) as analyze:
+                result = run([terminal], concurrent=concurrent)
                 self.assertEqual(result, [terminal])
                 analyze.assert_not_called()
                 wrong = copy.deepcopy(terminal)
                 wrong.source_path = self.root / "wrong.mov"
                 with self.assertRaisesRegex(ValueError, "identity"):
-                    runner(plan, self.root / "work", analysis_results=[wrong], **kwargs)
+                    run([wrong], concurrent=concurrent)
 
     def test_mixed_context_decision_callback_and_pause_keep_item_identity(self) -> None:
         from core.models import EncodeResult
@@ -345,9 +381,9 @@ class DeferredQueueTestCase(unittest.TestCase):
         first = create_queue_records(plan, self.root / "work-a")[0]
         second = copy.deepcopy(first)
         second.item_id = "second"
-        second.plan_item.source_path = self.root / "second.mov"
-        second.plan_item.output_path = self.root / "second.mp4"
-        second.job_snapshot.ffmpeg_path = self.root / "other-ffmpeg"
+        second.bound_plan_item.source_path = self.root / "second.mov"
+        second.bound_plan_item.output_path = self.root / "second.mp4"
+        second.bound_job_snapshot.ffmpeg_path = self.root / "other-ffmpeg"
         worker = QueueExecuteWorker([QueueExecutionItem(first.item_id, first), QueueExecutionItem(second.item_id, second)], 2)
         received, paused = [], []
         worker.item_finished.connect(lambda item_id, result: received.append((item_id, result)))
@@ -355,7 +391,7 @@ class DeferredQueueTestCase(unittest.TestCase):
         terminal = EncodeResult(second.source_path, second.output_path, False, needs_decision=True)
 
         def analyze(tool, items, workdir, **kwargs):
-            if tool == second.job_snapshot.ffmpeg_path:
+            if tool == second.bound_job_snapshot.ffmpeg_path:
                 kwargs["item_result_callback"](0, terminal)
                 worker.pause_after_current()
                 return [terminal]
@@ -372,7 +408,7 @@ class DeferredQueueTestCase(unittest.TestCase):
             worker.run()
         self.assertEqual(received, [("second", terminal)])
         self.assertEqual(paused, [True])
-        self.assertIsNone(first.plan_item.quality_search_result)
+        self.assertIsNone(first.bound_plan_item.quality_search_result)
 
 
 if __name__ == "__main__":
