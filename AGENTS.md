@@ -10,6 +10,11 @@ entrypoint and is the composition root. Build and packaging helpers live in
 For release workflow ownership, artifact contracts, and platform-specific
 verification, read `docs/release-map.md` before changing those three areas.
 
+`SPEC.md` states what the product is, what it must not become, the definition of
+done, and the prohibitions with their checks. The invariants below are the
+mechanisms that hold those prohibitions; cite the ID from `SPEC.md` where a rule
+exists only because of a spec entry.
+
 ## Dependency policy and invariants
 
 - `core` may import only the Python standard library and other `core` modules.
@@ -20,17 +25,19 @@ verification, read `docs/release-map.md` before changing those three areas.
   layer rather than reaching upward into an entrypoint or UI layer.
 - Parallel workers must deep-copy and bind an item to one concrete encoder
   before Smart analysis. Never share a mutable `EncodePlanItem` between workers.
+  (`# F4 ← S2`)
 - Analysis receipts are keyed by the source, FFmpeg, bound encoder, measurement
   settings, and sample scheme. Quality and size policy changes may reuse the
-  measured candidates; encoder or measurement changes may not.
+  measured candidates; encoder or measurement changes may not. (`# F2 ← S1, S3`)
 - Publish an encoded file only through its validated temporary path. A Smart
   size miss is a user-visible `NEEDS_DECISION` result, not success or a silent
   skip, and its preserved file must not overwrite the requested output.
+  (`# N3, N4 ← S2`)
 - Keep committed code and documentation portable: no personal environment,
   executable bundle or font paths. Evaluation tools accept explicit paths;
   honor a user-specified FFmpeg without falling back to a system installation.
 - Smart reference and measurement reuse must identify actual window coordinates
-  and measurement settings, never a window's position in a list.
+  and measurement settings, never a window's position in a list. (`# F3 ← S1`)
 
 ## Canonical commands
 
@@ -49,10 +56,10 @@ inference-precision rules (`reportMissingTypeArgument` and the five
 presets and analysis receipts cross those boundaries as `dict[str, object]` and
 JSON-decoded values; closing them is its own reviewed change. `ruff` gates the
 bug-finding subset (`E4`, `E7`, `E9`, `F`, `B023`) and deliberately not the style
-families. Deferred check work — the residue behind those six rules, the two
-unreferenced `gui_workers` threads, and the `scripts/` scope decision — is itemised
-with its measurements in `docs/development.md` (Deferred check work); record new
-deferred checks there rather than only in a commit message.
+families. Deferred check work — the residue behind those six rules and the
+`scripts/` scope decision — is itemised with its measurements in
+`docs/development.md` (Deferred check work); record new deferred checks there
+rather than only in a commit message.
 
 Run architecture checks alone with
 `python -m unittest discover -s test -p "test_architecture.py" -v`.
