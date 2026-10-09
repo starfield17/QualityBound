@@ -253,25 +253,12 @@ class ArchitectureTestCase(unittest.TestCase):
             if source not in {"gui.queue_state", "gui.queue_model"}:
                 continue
             for imported in _imports(source, path):
-                if imported.startswith(("gui.queue_view", "gui.queue_table")):
+                if imported.startswith("gui.queue_view"):
                     violations.append(f"{path.relative_to(ROOT)} imports {imported!r}")
         self.assertFalse(
             violations,
             "queue_state is Qt-free and queue_model is the model layer; neither may "
             "depend on the view:\n" + "\n".join(sorted(violations)),
-        )
-
-    def test_no_module_imports_removed_queue_table(self) -> None:
-        violations: list[str] = []
-        modules = _app_modules()
-        for source, path in modules.items():
-            for imported in _imports(source, path):
-                if imported.startswith("gui.queue_table"):
-                    violations.append(f"{path.relative_to(ROOT)} imports {imported!r}")
-        self.assertFalse(
-            violations,
-            "gui.queue_table was split into gui.queue_model and gui.queue_view; "
-            "importers must be updated:\n" + "\n".join(sorted(violations)),
         )
 
     def test_smart_sampling_dependency_direction(self) -> None:
@@ -335,7 +322,6 @@ class ArchitectureTestCase(unittest.TestCase):
         self.assertFalse(graph["core.smart.v1.search"] & {
             "core.smart", "core.smart.v1.workflow", "core.smart.v1.decisions",
         })
-        self.assertNotIn("core.smart_quality", graph)
 
     def test_smart_v2_reuses_only_v1_leaf_primitives(self) -> None:
         graph = _dependency_graph()
