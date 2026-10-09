@@ -59,6 +59,7 @@ def _fixed_bitrate_item(root: Path, output: Path, *, overwrite: bool = True) -> 
 
 
 class FixedBitratePublicationTestCase(unittest.TestCase):
+    # N3 ← S2
     def test_successful_encode_is_published_from_a_temporary_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

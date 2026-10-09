@@ -251,6 +251,7 @@ class SmartSamplingAndBudgetTestCase(unittest.TestCase):
             for left, right in zip(windows, windows[1:]):
                 self.assertLessEqual(left.start_sec + left.duration_sec, right.start_sec + 1e-9)
 
+    # F1 ← S1
     def test_just_over_thirty_seconds_has_non_overlapping_windows(self) -> None:
         windows = choose_smart_sample_windows(31.0)
         self.assertEqual(len(windows), 4)
@@ -726,6 +727,7 @@ class SmartExecutionSafetyTestCase(unittest.TestCase):
         self.assertIn(str(result.log_path), failure_messages[0])
         self.assertNotIn("x" * 100, failure_messages[0])
 
+    # F2 ← S1, S3
     def test_analysis_from_a_different_encoder_is_never_published(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 
+# N2 ← S1 — the layer, package and public-contract boundaries this project commits to.
 ROOT = Path(__file__).resolve().parent.parent
 APP_PACKAGES = ("core", "cli", "gui")
 QT_ROOTS = {"PySide2", "PySide6", "PyQt5", "PyQt6", "qtpy", "Qt"}

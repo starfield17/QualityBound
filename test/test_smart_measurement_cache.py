@@ -73,6 +73,7 @@ class WindowMeasurementCacheTest(unittest.TestCase):
                 measure(references, plan=replace(session.exact_plan, tier=AnalysisTier.COARSE, vmaf_subsample=3))
                 self.assertEqual(calls.count("VMAF scoring"), 9)
 
+    # F3 ← S1
     def test_partial_rejection_is_cached_by_window_not_list_position(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

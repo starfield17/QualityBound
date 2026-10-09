@@ -56,6 +56,7 @@ class V2OptimizerTests(unittest.TestCase):
         shots[0].candidates = [candidate(1, 90, 1, 81)]
         self.assertIsNone(allocate(shots, 90, 100, 100))
 
+    # F1 ← S1
     def test_samples_leave_independent_nonoverlapping_holdout(self) -> None:
         windows, holdout = sample_windows(ShotRange(40, 940), 30, SETTINGS[AnalysisProfileName.BALANCE])
         assert holdout is not None
@@ -155,6 +156,7 @@ class V2ContractTests(unittest.TestCase):
         new = EncodeOptions(smart_algorithm=SmartAlgorithm.V2_EXPERIMENTAL)
         self.assertEqual(preset_data_to_encode_options(encode_options_to_preset_data(new)).smart_algorithm, new.smart_algorithm)
 
+    # F2 ← S1, S3
     def test_measurement_identity_excludes_policy_includes_production_settings(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             item = plan(Path(directory))
@@ -244,6 +246,7 @@ class V2ContractTests(unittest.TestCase):
             with patch.object(runtime, "probe", side_effect=[original, final]):
                 _validate_auxiliary(runtime, Path("output.mp4"), 10)
 
+    # N5 ← S3
     def test_vfr_is_rejected_without_resampling(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             runtime = Runtime(Path("ffmpeg"), Path("ffprobe"), plan(Path(directory)), Path(directory), io.StringIO())
@@ -352,6 +355,7 @@ class V2PublicationTests(unittest.TestCase):
                 result = execute_segmented_item(Path("ffmpeg"), item, root, smart_analysis_validated=True)
         return item, result
 
+    # N4 ← S2
     def test_size_miss_preserves_file_and_does_not_replace_destination(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             item, result = self.execute(Path(directory), size=600)

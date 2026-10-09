@@ -159,6 +159,7 @@ class ConcurrentConfigTestCase(unittest.TestCase):
 
 
 class ConcurrentSchedulerTestCase(unittest.TestCase):
+    # F4 ← S2
     def test_workers_preserve_bound_encoders_limit_concurrency_and_result_order(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
