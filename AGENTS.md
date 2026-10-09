@@ -56,10 +56,10 @@ inference-precision rules (`reportMissingTypeArgument` and the five
 presets and analysis receipts cross those boundaries as `dict[str, object]` and
 JSON-decoded values; closing them is its own reviewed change. `ruff` gates the
 bug-finding subset (`E4`, `E7`, `E9`, `F`, `B023`) and deliberately not the style
-families. Deferred check work — the residue behind those six rules and the
-`scripts/` scope decision — is itemised with its measurements in
-`docs/development.md` (Deferred check work); record new deferred checks there
-rather than only in a commit message.
+families. Deferred check work — the residue behind those six rules, which
+`scripts/check_strict_debt.py` ratchets, and the `scripts/` scope decision — is
+itemised with its measurements in `docs/development.md` (Deferred check work);
+record new deferred checks there rather than only in a commit message.
 
 Run architecture checks alone with
 `python -m unittest discover -s test -p "test_architecture.py" -v`.

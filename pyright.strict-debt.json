@@ -1,0 +1,9 @@
+{
+  "extends": "./pyproject.toml",
+  "reportMissingTypeArgument": "warning",
+  "reportUnknownArgumentType": "warning",
+  "reportUnknownLambdaType": "warning",
+  "reportUnknownMemberType": "warning",
+  "reportUnknownParameterType": "warning",
+  "reportUnknownVariableType": "warning"
+}

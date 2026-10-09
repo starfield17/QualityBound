@@ -126,24 +126,25 @@ re-running the audit.
 `pyproject.toml` turns off six strict rules: `reportMissingTypeArgument`,
 `reportUnknownArgumentType`, `reportUnknownLambdaType`, `reportUnknownMemberType`,
 `reportUnknownParameterType`, `reportUnknownVariableType`. Measured over the current
-scope (`core`, `cli`, `gui`, `main.py`) they hold back 434 diagnostics: 312 in
-`core`, 112 in `gui`, 10 in `cli`. The dominant pattern is capability snapshots,
+scope (`core`, `cli`, `gui`, `main.py`) they hold back 610 diagnostics: 483 in
+`core`, 116 in `gui`, 11 in `cli`. The dominant pattern is capability snapshots,
 preset documents and analysis receipts travelling as `dict[str, object]` or
 JSON-decoded mappings, so the checker cannot name the types that flow through them.
+
+That number is ratcheted rather than merely written down. `pyright.strict-debt.json`
+extends the project config and raises those six rules to warnings;
+`scripts/check_strict_debt.py` measures through it and fails the Quality job when
+the total or any package count grows above the baseline recorded in that script.
+Shrinking is always allowed, and the new numbers are recorded in both places:
+
+```bash
+python scripts/check_strict_debt.py
+```
 
 Closing it means naming those boundaries inside `core` — a `TypedDict` or dataclass
 per receipt kind, capability snapshot and preset document — and letting the adapters
 build them. A restructuring of that size needs its own diff and independent review,
 so it was not folded into the strict-mode adoption.
-
-Re-measure the residue with a throwaway config that copies the `include`/`exclude`
-lists from `pyproject.toml` and sets those six rules to `"warning"`, then read the
-summary:
-
-```bash
-python -m pyright -p .debt-probe.json --outputjson \
-  | python -c "import json,sys; print(json.load(sys.stdin)['summary'])"
-```
 
 The annotations added for the strict adoption (`gui/qt_optionals.maybe_none`,
 `QueueTableModel._transient_index`, `core.smart.v1.bitrate._SharedSearchResultFields`,
