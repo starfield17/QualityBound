@@ -25,6 +25,14 @@ class EscapeFilterValueTestCase(unittest.TestCase):
         self.assertEqual(escape_filter_value("a:b"), "a\\:b")
         self.assertEqual(escape_filter_value("a'b"), "a\\'b")
 
+    def test_only_the_backslash_rule_is_known_to_survive_ffmpeg(self) -> None:
+        # FFmpeg 9.0.2 consumes the colon and the quote regardless of escaping
+        # (docs/development.md, "A filter option value cannot carry a colon or a
+        # quote"), so the callers pass bare file names instead of relying on
+        # those two rules. The escaping stays because the value is still parsed
+        # as a filtergraph, and this pins the backslash case it does fix.
+        self.assertEqual(escape_filter_value("c\\d.txt"), "c\\\\d.txt")
+
     def test_backslash_is_doubled_before_the_other_escapes_are_added(self) -> None:
         # A literal backslash followed by a colon must not become "\\\:" ...
         self.assertEqual(escape_filter_value("\\:"), "\\\\\\:")

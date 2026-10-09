@@ -143,7 +143,7 @@ defect, that site is worth fixing whether or not the rule is adopted.
 
 ## Deferred check work
 
-Two known gaps are left open on purpose. Neither of them blocks a release. Each is
+Four known gaps are left open on purpose. None of them blocks a release. Each is
 recorded with the measurement that produced it, so it can be picked up without
 re-running the audit. The scope of each check — strict for the application, basic
 for `test/` and `scripts/` — is recorded with its reason in the same section.
@@ -205,6 +205,22 @@ Re-measure with `pyright -p pyright.tests.json` after temporarily raising
 per-directory rule policy (not supported today) or splitting the test tree across
 two configuration files, so the decision is recorded here rather than taken
 silently.
+
+### No CI job runs Smart analysis against a real FFmpeg
+
+`test/test_prepare_ffmpeg.py` holds the only integration test that invokes a real
+FFmpeg (`VMAF_INTEGRATION_FFMPEG`), and it skips when that variable is unset. No
+workflow sets it: `_package.yml` passes `--require-ffmpeg` to the Nuitka builder,
+which selects and verifies a bundled FFmpeg pair rather than measuring with it.
+Every other test that touches FFmpeg mocks the subprocess, so the argument
+vectors are checked and the emitted filtergraphs are not executed.
+
+The consequence is visible in this file: the Windows behaviour of the Scout
+metadata path is unmeasured (see "A filter option value cannot carry a colon or
+a quote" under Known limitations), and the segmented-VMAF absolute-path defect
+was found by a unit test decoding a command rather than by running one. Closing
+it means pointing `VMAF_INTEGRATION_FFMPEG` at the bundled pair in the native
+test job, which also needs a small generated fixture so the test stays fast.
 
 ### `scripts/` is type-checked in `basic` mode
 
@@ -271,6 +287,43 @@ MKV output is unaffected: it copies the stream with `-c:s copy`, so bitmap
 subtitles survive as they are. Users who need bitmap subtitles select MKV;
 disabling subtitle copying also plans for MP4, and that choice is the
 operator's, not a silent drop.
+
+### A filter option value cannot carry a colon or a quote
+
+`core/ffmpeg/filters.py` owns the escaping rule for values interpolated into a
+filtergraph. Escaping the backslash works; escaping the colon and the quote does
+not. Measured with FFmpeg 9.0.2 on macOS arm64, one invocation per case, using
+`-vf 'metadata=mode=print:file=<value>'` and listing the directory afterwards:
+
+| value passed to `file=` | exit | file written |
+| --- | --- | --- |
+| `out.txt` | 0 | `out.txt` |
+| `c\d.txt` (raw) | 0 | `cd.txt` — the backslash is consumed |
+| `c\\d.txt` (escaped) | 0 | `c\d.txt` |
+| `a:b.txt` (raw) | 234 | none — `Invalid argument` |
+| `a\:b.txt` (escaped) | 8 | none — `Protocol not found` |
+| `e'f.txt` (raw) | 0 | `ef.txt` — the quote is consumed |
+| `e\'f.txt` (escaped) | 0 | `ef.txt` |
+
+So only the backslash replacement makes a value survive. The colon is read as a
+protocol separator and the quote as filtergraph quoting before the value ever
+reaches the filter, and escaping moves the error without fixing the path. The
+replacement chain stays in `core/ffmpeg/filters.py` because the emitted value is
+still parsed as a filtergraph, and no caller may hand it a value needing either
+rule.
+
+That is why every libvmaf `log_path` call site now passes a bare file name
+(`json_path.name`, `log_path.name`) while running FFmpeg with `cwd` set to the
+directory holding it. `scripts/run_smart_case.py` passed an absolute path until
+that change; on Windows it embedded a drive path (`D:\a\...`), and the Windows
+test job failed decoding it. The Scout metadata file
+(`core/smart/v1/sampling/scout.py`) still embeds an absolute `temp_root` path,
+which on Windows contains a drive colon. **Not verified:** no CI job runs Smart
+analysis against a real FFmpeg — `test/test_prepare_ffmpeg.py` skips the only
+integration test unless `VMAF_INTEGRATION_FFMPEG` is set, and no workflow sets
+it — so the Windows behaviour of that path has never been observed. Verifying it
+means running one real Scout on Windows with `VMAF_INTEGRATION_FFMPEG` pointing
+at the bundled FFmpeg.
 
 ## Packaging
 
