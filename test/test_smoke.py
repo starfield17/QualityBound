@@ -136,7 +136,7 @@ class SmokeTestCase(unittest.TestCase):
             window.encoder_detection_worker = None
             window.close()
 
-    def test_build_context_reads_selected_paths_and_options(self) -> None:
+    def test_runtime_selection_reads_paths_without_binding_a_plan(self) -> None:
         window = MainWindow(self.repo_root, language="en")
         try:
             window.app_config["ffmpeg_path"] = ""
@@ -146,8 +146,12 @@ class SmokeTestCase(unittest.TestCase):
                 source.write_bytes(b"source")
                 window.source_combo.setEditText(str(source))
                 window.output_edit.setText(temp_dir)
-                with patch("gui.gui_mainwindow.update_app_config"):
-                    input_path, options, output_dir, workdir, ffmpeg_path, ffprobe_path = window._build_context()
+                input_path = window._selected_input()
+                options = window.options_panel.read_options()
+                output_dir = window._selected_output()
+                workdir = window._selected_workdir()
+                ffmpeg_path = window._selected_ffmpeg()
+                ffprobe_path = window._selected_ffprobe()
             self.assertEqual(input_path, source.resolve())
             self.assertEqual(output_dir, Path(temp_dir).resolve())
             self.assertEqual(workdir, window.default_workdir.resolve())
