@@ -264,7 +264,7 @@ class ArchitectureTestCase(unittest.TestCase):
     def test_smart_sampling_dependency_direction(self) -> None:
         graph = _dependency_graph()
         expected = {
-            "core.smart.v1.sampling.complexity": set(),
+            "core.smart.v1.sampling.complexity": {"core.ffmpeg.filters"},
             "core.smart.v1.sampling.planner": {"core.models"},
             "core.smart.v1.sampling.scout": {
                 "core.models",

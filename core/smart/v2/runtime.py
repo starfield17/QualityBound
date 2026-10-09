@@ -197,11 +197,10 @@ class Runtime:
         assert media is not None
         model = select_vmaf_model(media, self.item.options.viewing_context)
         csv_path = self.root / "vmaf.csv"
-        escaped = str(csv_path.resolve()).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
         command = build_cpu_vmaf_command(
             self.ffmpeg, distorted_path=distorted, reference_path=self.item.source_path,
             model_spec=model, encode_metadata=candidate_encode_metadata(media, self.item.options.pix_fmt),
-            log_name=escaped, n_threads=self.threads, n_subsample=1,
+            log_name=str(csv_path.resolve()), n_threads=self.threads, n_subsample=1,
         )
         inputs = [i for i, value in enumerate(command) if value == "-i"]
         command[inputs[1]:inputs[1]] = seek_args(reference, fps, origin)

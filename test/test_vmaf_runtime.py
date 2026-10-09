@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from core.models import MediaInfo, VmafBackend, VmafViewingContext
+from core.ffmpeg.filters import quote_filter_value
 from core.ffmpeg.probe import probe_media_info
 from core.smart.v1.vmaf import (
     COARSE_VMAF_SUBSAMPLE,
@@ -30,7 +31,6 @@ from core.smart.v1.vmaf import (
     parse_vmaf_json,
     parse_vmaf_score,
     probe_vmaf_runtime,
-    quote_libvmaf_model_config,
     select_vmaf_model,
     select_vmaf_runtime,
     validate_vmaf_subsample,
@@ -141,7 +141,7 @@ class VmafRuntimeTestCase(unittest.TestCase):
             "cambi.enc_height=720:cambi.enc_bitdepth=8",
         )
         self.assertEqual(
-            quote_libvmaf_model_config(config),
+            quote_filter_value(config),
             "'version=vmaf_v1.0.16_3d0h\\:cambi.enc_width=1280\\:"
             "cambi.enc_height=720\\:cambi.enc_bitdepth=8'",
         )

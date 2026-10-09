@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from core.ffmpeg.filters import quote_filter_value
 from core.ffmpeg.subprocess import noninteractive_run_kwargs
 from core.media.metadata import infer_bit_depth_from_pix_fmt
 from core.models import MediaInfo, VmafBackend, VmafRuntimeSupport, VmafViewingContext
@@ -157,12 +158,6 @@ def build_vmaf_model_config(
     return ":".join(parts)
 
 
-def quote_libvmaf_model_config(model_config: str) -> str:
-    """Quote a nested libvmaf model dictionary for an FFmpeg filter graph."""
-    escaped = model_config.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
-    return f"'{escaped}'"
-
-
 def build_libvmaf_option(
     *,
     model_spec: VmafModelSpec,
@@ -174,7 +169,7 @@ def build_libvmaf_option(
 ) -> str:
     subsample = validate_vmaf_subsample(n_subsample)
     threads = max(1, int(n_threads))
-    model_config = quote_libvmaf_model_config(
+    model_config = quote_filter_value(
         build_vmaf_model_config(model_spec, encode_metadata)
     )
     options = [
@@ -183,7 +178,7 @@ def build_libvmaf_option(
         f"n_subsample={subsample}",
     ]
     if log_path is not None:
-        options.extend(("log_fmt=json", f"log_path='{log_path}'"))
+        options.extend(("log_fmt=json", f"log_path={quote_filter_value(log_path)}"))
     return f"{filter_name}=" + ":".join(options)
 
 

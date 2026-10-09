@@ -12,6 +12,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from core.ffmpeg.filters import quote_filter_value
+
 
 SCOUT_FPS = 12
 SCENE_CHANGE_THRESHOLD = 10.0
@@ -37,14 +39,8 @@ class ScoutMetrics:
     luma_mean: float = 128.0
 
 
-def _filter_path(path: Path) -> str:
-    """Escape the small subset of FFmpeg filter-value metacharacters we use."""
-
-    return str(path).replace("\\", "\\\\").replace("'", "\\'").replace(":", "\\:")
-
-
 def _metadata_filter(metadata_path: Path) -> str:
-    return f"metadata=mode=print:file='{_filter_path(metadata_path)}'"
+    return f"metadata=mode=print:file={quote_filter_value(str(metadata_path))}"
 
 
 def _scout_prefix_filters() -> str:

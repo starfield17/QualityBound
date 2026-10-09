@@ -17,6 +17,7 @@ from core.models import (
 )
 from core.progress_events import ProgressCallback
 from core.smart.v1.bitrate import calculate_smart_bitrate_budget
+from core.ffmpeg.filters import quote_filter_value
 from core.smart.v2.optimizer import SETTINGS, allocate, sample_windows, worst_one_second
 from core.smart.v2.receipts import file_hash, fingerprint, load, receipt_root, save
 from core.smart.v2.runtime import Runtime, UnsupportedV2
@@ -25,9 +26,9 @@ from core.smart.v1.vmaf import select_vmaf_model, select_vmaf_runtime
 
 def detect_shots(runtime: Runtime, frames: int) -> list[ShotRange]:
     path = runtime.root / "scenes.txt"
-    escaped = str(path.resolve()).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
     filters = ("scale=w='min(480,trunc(iw/2)*2)':h='max(2,trunc(ow/dar/2)*2)',"
-               f"scdet=threshold=10,metadata=mode=print:key=lavfi.scd.score:file='{escaped}'")
+               "scdet=threshold=10,metadata=mode=print:key=lavfi.scd.score:file="
+               f"{quote_filter_value(str(path.resolve()))}")
     runtime.run([str(runtime.ffmpeg), "-hide_banner", "-nostdin", "-loglevel", "error", "-y",
                  "-i", str(runtime.item.source_path), "-map", "0:v:0", "-an", "-sn", "-vf", filters,
                  "-fps_mode", "passthrough", "-f", "null", "-"], "v2 shot detection")
