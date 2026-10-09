@@ -1,5 +1,10 @@
 # Smart evaluation
 
+Every measurement below was taken on 2026-09-09 on the v3.0.1 line, before the
+deferred queue binding and container/subtitle work. It describes that revision,
+not the current tree; the validation evidence is a single development case, not a
+calibrated corpus, and no profile budget was tuned against it.
+
 ## Implemented scope
 
 Smart retains ABR search, its VMAF model and its temporal quality gate. This
@@ -107,6 +112,7 @@ segments with one-second overlap. Overlap frames are removed before global mean
 and rolling worst-one-second pooling, bounding memory without hiding boundary
 intervals.
 
-Repository validation passed 542 tests, including the explicitly configured
-FFmpeg integration test, plus Ruff, Pyright, compileall and generated icon
-verification. Native Windows/Linux packaging was not run locally.
+Repository validation passed 542 tests at that revision, including the explicitly
+configured FFmpeg integration test, plus Ruff, Pyright, compileall and generated
+icon verification. Native Windows/Linux packaging was not run locally. The count
+is a snapshot of that revision; the current suite is a different size.
