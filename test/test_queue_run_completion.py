@@ -130,6 +130,21 @@ class QueueRunCompletionTestCase(unittest.TestCase):
 
         self.assertEqual(emitted, [completion])
 
+    def test_execution_stopped_is_emitted_even_with_pending_decisions(self) -> None:
+        record = _record(self.root, "decision", QueueItemStatus.NEEDS_DECISION)
+        self.model.add_records([record])
+        completion = QueueRunCompletion("pending", (record.item_id,))
+        self.manager._pending_run = completion
+        self.manager._worker_outcome = "finished"
+        stopped = []
+        completed = []
+        self.manager.executionStopped.connect(stopped.append)
+        self.manager.runCompleted.connect(completed.append)
+        self.manager._on_worker_thread_finished()
+        self.assertEqual(stopped, [completion])
+        self.assertEqual(completed, [])
+
+
     def test_resume_includes_new_queue_items_in_the_pending_run(self) -> None:
         retry = _record(self.root, "retry", QueueItemStatus.WAITING_ANALYSIS)
         newly_added = _record(self.root, "new", QueueItemStatus.WAITING_ANALYSIS)

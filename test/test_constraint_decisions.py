@@ -206,6 +206,30 @@ class ConstraintDecisionTestCase(unittest.TestCase):
             self.assertTrue(terminal.needs_decision)
             self.assertFalse(terminal.skipped)
 
+    def test_predicted_oversize_skip_after_policy_selection(self) -> None:
+        for policy in SizeBlockedPolicy:
+            for ratio in (None, 1.0, 1.01):
+                if policy != SizeBlockedPolicy.ASK and ratio != 1.01:
+                    continue
+                with self.subTest(policy=policy, ratio=ratio), tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    item = _item(root)
+                    item.options.size_blocked_policy = policy
+                    blocked = QualitySearchResult(
+                        status=QualitySearchStatus.CONSTRAINT_UNSATISFIED,
+                        encoder_name=item.encoder_info.encoder_name,
+                        backend=item.encoder_info.backend,
+                        failure_kind=ConstraintFailureKind.SIZE_BLOCKED,
+                        required_output_ratio=ratio,
+                        reason="Measured quality-passing candidate exceeds the limit.",
+                    )
+                    with patch("core.encoding.analysis.analyze_quality", return_value=blocked):
+                        terminal = analyze_plan_item(root / "ffmpeg", item, root)
+                    self.assertIsNotNone(terminal)
+                    self.assertEqual(terminal.skipped, ratio is not None and ratio > 1.0)
+                    self.assertEqual(terminal.needs_decision, not terminal.skipped)
+
+
     def test_unsupported_analysis_is_failed_not_skipped(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

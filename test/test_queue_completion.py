@@ -100,6 +100,17 @@ class QueueCompletionTestCase(unittest.TestCase):
         self.notify.assert_called_once()
         self.assertEqual(self.notify.call_args.args[0], chinese.t("app.title"))
 
+    def test_skipped_publication_is_not_repeated_when_run_resumes(self) -> None:
+        record = self._record("copy-once", QueueItemStatus.SKIPPED, SkippedOutputPolicy.COPY)
+        with patch("gui.queue_completion.publish_skipped_source", wraps=__import__(
+            "core.media", fromlist=["publish_skipped_source"]
+        ).publish_skipped_source) as publish:
+            self.handler.handle([record], self.tr, {"desktop_notifications": False})
+            self.handler.handle([record], self.tr, {"desktop_notifications": False})
+        publish.assert_called_once()
+        self.assertEqual(record.output_path.read_bytes(), record.source_path.read_bytes())
+
+
     def test_failed_run_reports_and_notifies_without_power_action(self) -> None:
         records = [
             self._record(status.value, status)
