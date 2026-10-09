@@ -122,10 +122,17 @@ from an encoder name alone.
 QualityBound does not silently publish a result that missed its constraints.
 
 - A predicted quality/size conflict follows the configured Smart policy.
-- `ask` leaves the item in **Needs decision** rather than reporting success.
+- Smart first tries the configured size or quality relaxation. If the remaining
+  size conflict predicts a file larger than its source, the item is skipped.
+- Intentional Smart skips follow the separate **Copy / Ask / Ignore** source
+  output setting. Copy publishes the original file to the requested output path.
+- In the GUI, size-conflict and quality-miss questions appear after executable
+  encodes finish. The source-copy question is separate; pending decisions do not
+  block copying skipped sources. Cancelling a constraint question leaves that
+  item in **Needs decision**.
 - A completed file that exceeds the size limit is preserved as a size-miss file
   for explicit accept, retry, or delete action; it does not overwrite the target.
-- CLI exit code `3` means a decision is required, `2` means analysis or encoding
+- CLI exit code `3` means a decision is required, `2` means analysis, encoding or copying
   failed, and intentional skips remain a successful batch outcome.
 
 Smart measurements are cached as versioned receipts. Quality and size policy

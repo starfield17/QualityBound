@@ -14,12 +14,11 @@ import uuid
 from core.ffmpeg.segmented import build_concat_command, build_mux_command, concat_manifest
 from core.media.paths import log_file_path
 from core.models import (
-    ConstraintFailureKind, ConstraintPolicy, DecisionActionCode, EncodePlanItem, EncodeResult,
-    OperationCancelledError, QualitySearchStatus, SegmentedAnalysisResult, ShotRange, SkipOrigin,
-    QualityUnreachablePolicy,
+    ConstraintFailureKind, ConstraintPolicy, EncodePlanItem, EncodeResult,
+    OperationCancelledError, QualitySearchStatus, SegmentedAnalysisResult, ShotRange,
 )
 from core.progress_events import ProgressCallback
-from core.smart.v1.decisions import build_decision_options, constraint_policy_from_size_blocked, reselect_after_quality_decision
+from core.smart.v1.decisions import resolve_analysis_policy
 from core.smart.v1.concurrency import analysis_concurrency_limit, analysis_slot
 from core.smart.v2.optimizer import SETTINGS, worst_one_second
 from core.smart.v2.receipts import file_hash, fingerprint, receipt_root, save
@@ -51,13 +50,7 @@ def analyze_segmented_plan_item(ffmpeg: Path, item: EncodePlanItem, workdir: Pat
         encoder = item.encoder_info
         quality = SegmentedAnalysisResult(QualitySearchStatus.FAILED, encoder.encoder_name if encoder else "",
                                           encoder.backend if encoder else item.options.backend, reason=str(exc))
-    policy = constraint_policy or constraint_policy_from_size_blocked(item.options.size_blocked_policy)
-    if quality.failure_kind == ConstraintFailureKind.SIZE_BLOCKED:
-        code = {ConstraintPolicy.RELAX_SIZE: DecisionActionCode.RELAX_SIZE,
-                ConstraintPolicy.RELAX_QUALITY: DecisionActionCode.RELAX_QUALITY}.get(policy)
-        decision = next((d for d in build_decision_options(quality) if d.action_code == code), None)
-        if decision is not None:
-            quality = reselect_after_quality_decision(ffmpeg, item, quality, decision)
+    quality, skip_origin = resolve_analysis_policy(ffmpeg, item, quality, constraint_policy)
     item.segmented_analysis_result = quality
     item.quality_search_result = None
     context = dict(extra_progress_context or {})
@@ -67,11 +60,10 @@ def analyze_segmented_plan_item(ffmpeg: Path, item: EncodePlanItem, workdir: Pat
         _emit_progress(progress_callback, stage="analysis", state="analysis_finished",
                        segmented_analysis_result=quality, **context)
         return None
-    skipped = (quality.failure_kind == ConstraintFailureKind.QUALITY_UNREACHABLE
-               and item.options.quality_unreachable_policy == QualityUnreachablePolicy.SKIP)
+    skipped = skip_origin is not None
     result = EncodeResult(item.source_path, item.output_path, False, log_path=log_path,
                           error_message=quality.reason, segmented_analysis_result=quality,
-                          skipped=skipped, skip_origin=SkipOrigin.SMART_ANALYSIS if skipped else None,
+                          skipped=skipped, skip_origin=skip_origin,
                           needs_decision=quality.status == QualitySearchStatus.CONSTRAINT_UNSATISFIED and not skipped,
                           effective_min_vmaf=item.options.min_vmaf,
                           effective_max_output_ratio=item.options.max_output_ratio)

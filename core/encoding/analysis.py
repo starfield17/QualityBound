@@ -12,25 +12,18 @@ from core.media.paths import log_file_path
 from core.media.validation import validate_workdir
 from core.models import (
     CompressionMode,
-    ConstraintFailureKind,
     ConstraintPolicy,
-    DecisionActionCode,
     EncodePlanItem,
     EncodeResult,
     OperationCancelledError,
-    QualitySearchResult,
     QualitySearchStatus,
-    QualityUnreachablePolicy,
-    SkipOrigin,
     SmartAlgorithm,
 )
 from core.progress_events import ProgressCallback, ProgressEvent
 from core.smart.v1.concurrency import analysis_concurrency_limit, analysis_slot
 from core.smart.v1.bitrate import resolve_max_output_ratio
 from core.smart.v1.decisions import (
-    build_decision_options,
-    constraint_policy_from_size_blocked,
-    reselect_after_quality_decision,
+    resolve_analysis_policy,
 )
 from core.smart.v1.workflow import analyze_quality
 
@@ -41,27 +34,6 @@ from .item_results import (
 )
 from .process import _emit, _emit_progress
 from .segmented import analyze_segmented_plan_item
-
-
-def _apply_constraint_policy(
-    ffmpeg_path: Path,
-    item: EncodePlanItem,
-    quality_result: QualitySearchResult,
-    policy: ConstraintPolicy,
-) -> QualitySearchResult:
-    action_code = {
-        ConstraintPolicy.RELAX_SIZE: DecisionActionCode.RELAX_SIZE,
-        ConstraintPolicy.RELAX_QUALITY: DecisionActionCode.RELAX_QUALITY,
-    }.get(policy)
-    if action_code is None:
-        return quality_result
-    decision = next(
-        (option for option in build_decision_options(quality_result) if option.action_code == action_code),
-        None,
-    )
-    if decision is None or decision.requires_analysis:
-        return quality_result
-    return reselect_after_quality_decision(ffmpeg_path, item, quality_result, decision)
 
 
 def item_needs_smart_analysis(item: EncodePlanItem) -> bool:
@@ -147,36 +119,15 @@ def analyze_plan_item(
     item.quality_search_result = quality_result
     result.quality_search_result = quality_result
     _assert_quality_encoder_matches_item(item, quality_result)
-    if quality_result.status == QualitySearchStatus.CONSTRAINT_UNSATISFIED:
-        size_policy = constraint_policy
-        if size_policy is None:
-            size_policy = constraint_policy_from_size_blocked(item.options.size_blocked_policy)
-        if quality_result.failure_kind == ConstraintFailureKind.SIZE_BLOCKED:
-            applied = _apply_constraint_policy(ffmpeg_path, item, quality_result, size_policy)
-            if applied.success and size_policy != ConstraintPolicy.FAIL:
-                _emit(
-                    log_callback,
-                    f"[{queue_index}/{queue_total}] Applied {size_policy.value} for "
-                    f"{item.source_path.name}: bitrate={applied.selected_video_bitrate_bps} "
-                    f"VMAF={applied.min_vmaf}",
-                )
-            quality_result = applied
-        item.quality_search_result = quality_result
-        result.quality_search_result = quality_result
+    quality_result, skip_origin = resolve_analysis_policy(ffmpeg_path, item, quality_result, constraint_policy)
+    item.quality_search_result = quality_result
+    result.quality_search_result = quality_result
     if not quality_result.success:
         result.success = False
         result.error_message = quality_result.reason or "Smart compression constraints could not be satisfied."
-        unreachable_skip = (
-            quality_result.status == QualitySearchStatus.CONSTRAINT_UNSATISFIED
-            and quality_result.failure_kind == ConstraintFailureKind.QUALITY_UNREACHABLE
-            and item.options.quality_unreachable_policy == QualityUnreachablePolicy.SKIP
-        )
-        result.needs_decision = (
-            quality_result.status == QualitySearchStatus.CONSTRAINT_UNSATISFIED and not unreachable_skip
-        )
-        result.skipped = unreachable_skip
-        if unreachable_skip:
-            result.skip_origin = SkipOrigin.SMART_ANALYSIS
+        result.skipped = skip_origin is not None
+        result.skip_origin = skip_origin
+        result.needs_decision = quality_result.status == QualitySearchStatus.CONSTRAINT_UNSATISFIED and not result.skipped
         _record_effective_smart_options(result, item)
         progress_state = "needs_decision" if result.needs_decision else ("skipped" if result.skipped else "failed")
         outcome = "requires a decision" if result.needs_decision else ("skipped" if result.skipped else "failed")

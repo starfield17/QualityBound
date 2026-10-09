@@ -57,6 +57,39 @@ Architecture checks can be run separately:
 python -m unittest discover -s test -p "test_architecture.py" -v
 ```
 
+## Smart analysis and queue completion
+
+Both Smart algorithms use the same analysis-policy resolver. A size conflict
+first applies the selected size or quality relaxation to measured candidates.
+If it remains size-blocked with a required output ratio greater than 1.0, it
+becomes an intentional `SMART_PREDICTED_OVERSIZE` skip. An unknown ratio or a
+ratio equal to 1.0 remains a decision when no configured relaxation succeeds.
+An unreachable quality target follows the separate Skip / Ask policy; a failed
+holdout quality check belongs to this outcome, while measurement and tool errors
+remain failures. Actual full-encode size misses retain their preserved-file
+decision lifecycle and never use the prediction skip rule.
+
+The queue emits an execution-stopped handoff even if some items need decisions.
+MainWindow asks the size-conflict and quality-miss questions, then the completion
+handler applies Copy / Ask / Ignore to intentional skips. Cancelling an analysis
+question leaves that item pending without blocking other source copies. The same
+analysis result is not automatically asked again during that run; reanalysis can
+produce a new question. A source-copy refusal records an ignored outcome.
+
+Copies operate on per-item snapshots in a background worker, through an adjacent
+temporary file and atomic publication. Exclusive publication protects an output
+that appears during copying when overwrite is disabled. Stop cancels the current
+copy and removes its temporary file; completed outcomes survive a resumed run.
+Copy failures update the item to Failed with a diagnostic. The GUI stays busy
+through this handoff, and only schedules newly executable items after it finishes.
+Final reports and post-run actions wait until decisions are resolved.
+
+Regression coverage includes fresh default configuration without opening Settings,
+mixed pending/skipped batches, the strict greater-than-source threshold in both
+algorithms, holdout policy routing, repeated completion, cancellation and output
+publication races. These synthetic tests verify control flow and file side effects,
+not real-world VMAF accuracy.
+
 ## Deferred check work
 
 Two known gaps are left open on purpose. None of them blocks a release. Each is

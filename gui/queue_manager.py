@@ -156,6 +156,7 @@ class QueueManager(QObject):
     error = Signal(str)
     workerFinished = Signal()
     runCompleted = Signal(object)
+    executionStopped = Signal(object)
 
     def __init__(self, model: QueueTableModel, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -166,9 +167,10 @@ class QueueManager(QObject):
         self._pending_run: QueueRunCompletion | None = None
         self._last_completed_run_id: str | None = None
         self._worker_outcome: str | None = None
+        self._postprocessing_pending = False
 
     def is_busy(self) -> bool:
-        return self._worker is not None
+        return self._worker is not None or self._postprocessing_pending
 
     def add_plan(self, plan: EncodePlan, workdir: Path) -> int:
         records = create_queue_records(plan, workdir)
@@ -176,7 +178,7 @@ class QueueManager(QObject):
         return len(records)
 
     def start(self, max_workers: int = 1) -> bool:
-        if self._worker is not None:
+        if self.is_busy():
             return False
         execution_records = self.model.execution_records()
         if not execution_records:
@@ -366,7 +368,18 @@ class QueueManager(QObject):
                 records.append(record)
         return records
 
+    def begin_postprocessing(self) -> None:
+        self._postprocessing_pending = True
+        self.busyChanged.emit(True)
+
+    def finish_postprocessing(self) -> None:
+        self._postprocessing_pending = False
+        self.busyChanged.emit(False)
+        self._reconcile_pending_run()
+
     def _reconcile_pending_run(self) -> None:
+        if self._postprocessing_pending:
+            return
         completion = self._pending_run
         if completion is None:
             self.stateChanged.emit("idle")
@@ -390,7 +403,12 @@ class QueueManager(QObject):
         self._active_item_ids.clear()
         self._pause_after_current_requested = False
         self._worker_outcome = None
-        self.busyChanged.emit(False)
         if outcome == "finished":
+            if self._pending_run is not None:
+                self.executionStopped.emit(self._pending_run)
+            if not self._postprocessing_pending:
+                self.busyChanged.emit(False)
             self._reconcile_pending_run()
+        else:
+            self.busyChanged.emit(False)
         self.workerFinished.emit()

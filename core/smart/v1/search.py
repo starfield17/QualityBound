@@ -320,7 +320,10 @@ def _refine_holdouts(session: AnalysisSession, settings: SearchSettings, result:
         if refinement_round >= session.profile.max_refinement_rounds:
             result.terminal_result = replace(
                 result.selection,
-                status=QualitySearchStatus.FAILED,
+                status=QualitySearchStatus.CONSTRAINT_UNSATISFIED,
+                failure_kind=ConstraintFailureKind.QUALITY_UNREACHABLE,
+                best_size_fitting_vmaf=None,
+                best_size_fitting_candidate_bps=0,
                 reason=("Holdout verification still failed after the configured refinement limit."),
             )
             break
@@ -416,7 +419,8 @@ def _refine_holdouts(session: AnalysisSession, settings: SearchSettings, result:
                 result.terminal_result = result.selection
             else:
                 result.terminal_result = QualitySearchResult(
-                    status=QualitySearchStatus.FAILED,
+                    status=QualitySearchStatus.CONSTRAINT_UNSATISFIED,
+                    failure_kind=ConstraintFailureKind.QUALITY_UNREACHABLE,
                     encoder_name=session.item.encoder_info.encoder_name,
                     backend=session.item.encoder_info.backend,
                     candidates=result.candidates or refined,
@@ -492,8 +496,12 @@ def run_search(
                                          result.remaining_holdouts, refinement_round=len(result.refinement_records))
         result.holdout_min_vmaf = min(scores)
         if failed:
-            result.terminal_result = replace(result.selection, status=QualitySearchStatus.FAILED,
-                                             reason="Final bitrate changed after ambiguity resolution and failed holdout validation.")
+            result.terminal_result = replace(
+                result.selection, status=QualitySearchStatus.CONSTRAINT_UNSATISFIED,
+                failure_kind=ConstraintFailureKind.QUALITY_UNREACHABLE,
+                best_size_fitting_vmaf=None, best_size_fitting_candidate_bps=0,
+                reason="Final bitrate changed after ambiguity resolution and failed holdout validation.",
+            )
     session.log_file.write(
         f"selected_bitrate_bps={result.selection.selected_video_bitrate_bps}\n"
         f"search_min_vmaf={result.selection.min_vmaf}\n"

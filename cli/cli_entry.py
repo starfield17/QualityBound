@@ -440,7 +440,6 @@ def _run_encode(args: argparse.Namespace, config_dir: Path, catalog: Translation
             log_callback=print if options.smart_algorithm == SmartAlgorithm.V2_EXPERIMENTAL else None,
             constraint_policy=constraint_policy_from_size_blocked(options.size_blocked_policy),
         )
-    print_encode_results(results, tr)
     if options.skipped_output_policy == SkippedOutputPolicy.COPY:
         by_source = {result.source_path: result for result in results}
         published = publish_skipped_sources(
@@ -453,6 +452,7 @@ def _run_encode(args: argparse.Namespace, config_dir: Path, catalog: Translation
                 print(f"Did not copy Smart-skipped source {item.source_path.name}: {item.reason}")
     elif options.skipped_output_policy == SkippedOutputPolicy.ASK:
         print("Skipped-output policy is ask; CLI leaves Smart-skipped sources in place.")
+    print_encode_results(results, tr)
     if any(result.needs_decision for result in results):
         return 3
     return 0 if all(result.success or result.skipped for result in results) else 2

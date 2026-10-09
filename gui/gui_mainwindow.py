@@ -46,6 +46,7 @@ from core.models import (
     DecisionActionCode,
     EncodeOptions,
     EncodePlan,
+    EncodeResult,
     VideoFileItem,
 )
 from core.config import (
@@ -144,6 +145,9 @@ class MainWindow(QMainWindow):
         self._startup_encoder_detection_started = False
         self._pending_encoder_detection_force_refresh = False
         self.queue_busy = False
+        self._postprocessing = False
+        self._postprocessing_cancel_requested = False
+        self._asked_analysis_decisions: dict[tuple[str, str], EncodeResult] = {}
         self._header_sync_guard = False
         self._queue_state = "idle"
         self._persisted_snapshot: tuple[object, ...] | None = None
@@ -529,6 +533,7 @@ class MainWindow(QMainWindow):
         self.queue_manager.busyChanged.connect(self._on_queue_busy_changed)
         self.queue_manager.stateChanged.connect(self._on_queue_state_changed)
         self.queue_manager.runCompleted.connect(self._on_queue_run_completed)
+        self.queue_manager.executionStopped.connect(self._on_queue_execution_stopped)
         self.queue_manager.workerFinished.connect(self._maybe_close_after_running_task)
         self.queue_manager.error.connect(self._on_queue_error)
 
@@ -1025,6 +1030,8 @@ class MainWindow(QMainWindow):
             or self.encoder_detection_worker is not None
             or self.queue_busy
             or queue_manager_busy
+            or self._postprocessing
+            or self.queue_completion_handler.is_busy()
         )
 
     def _has_unsaved_queue_work(self) -> bool:
@@ -1079,6 +1086,8 @@ class MainWindow(QMainWindow):
 
     def _on_queue_busy_changed(self, busy: bool) -> None:
         self.queue_busy = busy
+        if not busy and not self.queue_manager.has_pending_run():
+            self._asked_analysis_decisions.clear()
         self._refresh_action_state()
         self._maybe_close_after_running_task()
 
@@ -1140,6 +1149,10 @@ class MainWindow(QMainWindow):
         QMessageBox.critical(self, self.translator.t("gui.message.error"), message)
 
     def _stop_active_task(self) -> None:
+        if self._postprocessing:
+            self._postprocessing_cancel_requested = True
+            self.queue_completion_handler.cancel()
+            return
         if self.active_worker is not None and hasattr(self.active_worker, "cancel"):
             self._append_log(self.translator.t("gui.log.stop_requested"))
             self.active_worker.cancel()
@@ -1149,6 +1162,7 @@ class MainWindow(QMainWindow):
             self.queue_manager.stop()
             return
         if self.queue_manager.abandon_run():
+            self._asked_analysis_decisions.clear()
             self._append_log(self.translator.t("gui.log.queue_abandoned"))
 
     def _update_progress(self, event: dict[str, object]) -> None:
@@ -1434,6 +1448,8 @@ class MainWindow(QMainWindow):
             if record.result is not None:
                 for warning in record.result.external_subtitle_warnings:
                     self._append_log(warning)
+            if self._postprocessing:
+                return
             if choice == SizeMissDecision.RETRY:
                 self.queue_manager.resume_after_decision(
                     parse_encode_workers(self.app_config.get("encode_workers", 1))
@@ -1458,6 +1474,8 @@ class MainWindow(QMainWindow):
                 action=decision.action_code.value,
             )
         )
+        if self._postprocessing:
+            return
         if decision.action_code in {
             DecisionActionCode.RELAX_SIZE,
             DecisionActionCode.RELAX_QUALITY,
@@ -1468,7 +1486,7 @@ class MainWindow(QMainWindow):
                 parse_encode_workers(self.app_config.get("encode_workers", 1))
             )
         else:
-            self.queue_manager.reconcile_after_decision()
+            self._process_stopped_records(QueueRunCompletion("local-decision", (record.item_id,)), ask_analysis=False)
 
     def _report_decision_failure(self, record: QueueItemRecord) -> None:
         detail = record.error_summary or self.translator.t("gui.message.decision_failed")
@@ -1640,6 +1658,61 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
 
+    def _on_queue_execution_stopped(self, completion: QueueRunCompletion) -> None:
+        if self._close_after_running_task_stops:
+            self.queue_manager.abandon_run()
+            self._asked_analysis_decisions.clear()
+            return
+        self._process_stopped_records(completion, ask_analysis=True)
+
+    def _process_stopped_records(self, completion: QueueRunCompletion, *, ask_analysis: bool) -> None:
+        if self._postprocessing:
+            return
+        self._postprocessing = True
+        self._postprocessing_cancel_requested = False
+        self.queue_manager.begin_postprocessing()
+        records = self._records_for_ids(completion.item_ids)
+        if ask_analysis:
+            for record in records:
+                if self._postprocessing_cancel_requested or self._close_after_running_task_stops:
+                    self._on_postprocessing_finished(True)
+                    return
+                if (record.status == QueueItemStatus.NEEDS_DECISION and record.result is not None
+                        and record.result.rejected_output_path is None):
+                    key = (completion.run_id, record.item_id)
+                    if self._asked_analysis_decisions.get(key) is record.result:
+                        continue
+                    self._asked_analysis_decisions[key] = record.result
+                    row, current = self.queue_model.record_for_id(record.item_id)
+                    if row is not None and current is not None:
+                        self._resolve_queue_decision(row, current)
+        if self._postprocessing_cancel_requested or self._close_after_running_task_stops:
+            self._on_postprocessing_finished(True)
+            return
+        self.queue_completion_handler.process_stopped(
+            records, self.translator, self.queue_model.apply_result,
+            lambda cancelled: self._on_postprocessing_finished(cancelled),
+        )
+
+    def _on_postprocessing_finished(self, cancelled: bool) -> None:
+        self._postprocessing = False
+        if cancelled:
+            self.queue_manager.abandon_run()
+            self._asked_analysis_decisions.clear()
+        self.queue_manager.finish_postprocessing()
+        if not cancelled and not self._close_after_running_task_stops:
+            # The old worker's finished signal must return before another run starts.
+            QTimer.singleShot(0, self._resume_after_postprocessing)
+        self._refresh_action_state()
+        self._maybe_close_after_running_task()
+
+    def _resume_after_postprocessing(self) -> None:
+        if not self._postprocessing and not self._close_after_running_task_stops:
+            self.queue_manager.resume_after_decision(parse_encode_workers(self.app_config.get("encode_workers", 1)))
+
     def _on_queue_run_completed(self, completion: QueueRunCompletion) -> None:
+        self._asked_analysis_decisions = {
+            key: result for key, result in self._asked_analysis_decisions.items() if key[0] != completion.run_id
+        }
         records = self._records_for_ids(completion.item_ids)
         self.queue_completion_handler.handle(records, self.translator, self.app_config)

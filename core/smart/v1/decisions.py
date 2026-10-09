@@ -17,6 +17,8 @@ from core.models import (
     EncodePlanItem,
     EncodeResult,
     QualitySearchResult,
+    QualitySearchStatus,
+    QualityUnreachablePolicy,
     SegmentedAnalysisResult,
     SkipOrigin,
     SizeBlockedPolicy,
@@ -95,6 +97,43 @@ def apply_decision_to_options(options: EncodeOptions, decision: DecisionOption) 
     if decision.action_code == DecisionActionCode.CHANGE_MEDIA_BUDGET:
         return replace(options, audio_mode=AudioMode.AAC)
     return options
+
+
+@overload
+def resolve_analysis_policy(ffmpeg_path: Path, item: EncodePlanItem, quality: QualitySearchResult,
+                            policy: ConstraintPolicy | None = None) -> tuple[QualitySearchResult, SkipOrigin | None]: ...
+
+
+@overload
+def resolve_analysis_policy(ffmpeg_path: Path, item: EncodePlanItem, quality: SegmentedAnalysisResult,
+                            policy: ConstraintPolicy | None = None) -> tuple[SegmentedAnalysisResult, SkipOrigin | None]: ...
+
+
+def resolve_analysis_policy(
+    ffmpeg_path: Path, item: EncodePlanItem, quality: QualitySearchResult | SegmentedAnalysisResult,
+    policy: ConstraintPolicy | None = None,
+) -> tuple[QualitySearchResult | SegmentedAnalysisResult, SkipOrigin | None]:
+    """Apply configured selection first, then classify an intentional analysis skip.
+
+    Oversize is a prediction-only rule. Actual encoded size misses have their
+    own validated-publication lifecycle and never pass through this operation.
+    """
+    if quality.status != QualitySearchStatus.CONSTRAINT_UNSATISFIED:
+        return quality, None
+    if quality.failure_kind == ConstraintFailureKind.SIZE_BLOCKED:
+        effective = policy if policy is not None else constraint_policy_from_size_blocked(item.options.size_blocked_policy)
+        code = {ConstraintPolicy.RELAX_SIZE: DecisionActionCode.RELAX_SIZE,
+                ConstraintPolicy.RELAX_QUALITY: DecisionActionCode.RELAX_QUALITY}.get(effective)
+        decision = next((d for d in build_decision_options(quality) if d.action_code == code), None)
+        if decision is not None and not decision.requires_analysis:
+            quality = reselect_after_quality_decision(ffmpeg_path, item, quality, decision)
+        if (not quality.success and quality.failure_kind == ConstraintFailureKind.SIZE_BLOCKED
+                and quality.required_output_ratio is not None and quality.required_output_ratio > 1.0):
+            return quality, SkipOrigin.SMART_PREDICTED_OVERSIZE
+    if (quality.failure_kind == ConstraintFailureKind.QUALITY_UNREACHABLE
+            and item.options.quality_unreachable_policy == QualityUnreachablePolicy.SKIP):
+        return quality, SkipOrigin.SMART_ANALYSIS
+    return quality, None
 
 
 @overload

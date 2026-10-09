@@ -49,7 +49,11 @@ and Smart/Fixed control syncing.
 - `gui.gui_workers` — the one-shot threads `MainWindow` starts directly:
   `PlanWorker` and `EncoderCapabilityDetectWorker`.
 - `gui.queue_completion` — skipped-source publishing, reports, notifications and
-  confirmed post-run actions. `QueueCompletionHandler.handle(records, translator,
+  confirmed post-run actions. `process_stopped` handles skipped-source policy
+  independently of unresolved decisions and copies snapshots on a background
+  worker; result callbacks update the model on the GUI thread. Completed copy or
+  ignore outcomes are not processed again when the run resumes.
+  `QueueCompletionHandler.handle(records, translator,
   config)` receives only the completed run's records and current settings.
   MainWindow supplies log/notify/close callbacks; the handler uses its parent
   widget only for dialog ownership and never accesses MainWindow members.

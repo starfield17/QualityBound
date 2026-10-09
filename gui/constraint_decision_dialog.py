@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QAbstractButton, QMessageBox, QWidget
 
 from core.i18n import Translator
 from gui.qt_optionals import maybe_none
-from core.models import DecisionActionCode, DecisionOption
+from core.models import ConstraintFailureKind, DecisionActionCode, DecisionOption
 from gui.queue_state import QueueItemRecord
 
 
@@ -38,8 +38,13 @@ def choose_quality_decision(
     quality = record.plan_item.quality_search_result or record.plan_item.segmented_analysis_result
     box = QMessageBox(parent)
     box.setIcon(QMessageBox.Icon.Warning)
-    box.setWindowTitle(tr.t("gui.decision.title"))
-    box.setText(tr.t("gui.decision.quality_intro", file=record.source_path.name))
+    quality_miss = quality is not None and quality.failure_kind == ConstraintFailureKind.QUALITY_UNREACHABLE
+    if quality_miss:
+        box.setWindowTitle(tr.t("gui.decision.quality_miss_title"))
+        box.setText(tr.t("gui.decision.quality_miss_intro", file=record.source_path.name))
+    else:
+        box.setWindowTitle(tr.t("gui.decision.size_conflict_title"))
+        box.setText(tr.t("gui.decision.size_conflict_intro", file=record.source_path.name))
     box.setInformativeText(
         (quality.reason if quality is not None and quality.reason else record.error_summary)
         or tr.t("gui.decision.no_detail")

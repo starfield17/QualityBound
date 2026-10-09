@@ -42,6 +42,7 @@ class SkipOrigin(str, Enum):
     PLANNING = "planning"
     SMART_ANALYSIS = "smart_analysis"
     SMART_ANALYSIS_DECISION = "smart_analysis_decision"
+    SMART_PREDICTED_OVERSIZE = "smart_predicted_oversize"
     SIZE_MISS_DISCARD = "size_miss_discard"
 
 
@@ -49,6 +50,12 @@ class AnalysisProfileName(str, Enum):
     FAST = "fast"
     BALANCE = "balance"
     PRECISE = "precise"
+
+
+class SkippedOutputOutcome(str, Enum):
+    COPIED = "copied"
+    IGNORED = "ignored"
+    FAILED = "failed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,6 +235,7 @@ class EncodeResult:
     error_message: Optional[str] = None
     skipped: bool = False
     skip_origin: Optional[SkipOrigin] = None
+    skipped_output_outcome: Optional[SkippedOutputOutcome] = None
     needs_decision: bool = False
     effective_min_vmaf: Optional[float] = None
     effective_max_output_ratio: Optional[float] = None
