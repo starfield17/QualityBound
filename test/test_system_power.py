@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import unittest
 from dataclasses import FrozenInstanceError
@@ -14,6 +15,25 @@ from core.media import (
     parse_post_encode_action,
     post_encode_action_key,
 )
+
+
+def _expected_power_run_kwargs() -> dict[str, object]:
+    """Expected ``subprocess.run`` kwargs for a power command on this platform.
+
+    The interleaved flags are platform independent. Hiding the console window is
+    a Windows-only addition (`core.media.system_power._noninteractive_kwargs`),
+    so the expectation adds it only when the test actually runs on Windows.
+    """
+    kwargs: dict[str, object] = {
+        "check": False,
+        "capture_output": True,
+        "text": True,
+        "timeout": 5.0,
+        "stdin": subprocess.DEVNULL,
+    }
+    if os.name == "nt":
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    return kwargs
 
 
 class SystemPowerTestCase(unittest.TestCase):
@@ -33,6 +53,16 @@ class SystemPowerTestCase(unittest.TestCase):
         self.assertEqual(post_encode_action_key(PostEncodeAction.SHUTDOWN), "gui.power.action.shutdown")
         self.assertEqual(post_encode_action_key(PostEncodeAction.QUIT), "gui.power.action.quit")
 
+    def test_noninteractive_kwargs_are_platform_appropriate(self) -> None:
+        from core.media.system_power import _noninteractive_kwargs
+
+        kwargs = _noninteractive_kwargs()
+        self.assertEqual(kwargs["stdin"], subprocess.DEVNULL)
+        if os.name == "nt":
+            self.assertEqual(kwargs["creationflags"], subprocess.CREATE_NO_WINDOW)
+        else:
+            self.assertNotIn("creationflags", kwargs)
+
     @patch("subprocess.run")
     def test_execute_system_sleep_darwin_pmset_success(self, mock_run: MagicMock) -> None:
         mock_run.return_value = MagicMock(returncode=0, stdout="Sleep triggered", stderr="")
@@ -46,11 +76,7 @@ class SystemPowerTestCase(unittest.TestCase):
             self.assertFalse(result.timed_out)
             mock_run.assert_called_once_with(
                 ["pmset", "sleepnow"],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=5.0,
-                stdin=subprocess.DEVNULL,
+                **_expected_power_run_kwargs(),
             )
 
     @patch("subprocess.run")
@@ -73,11 +99,7 @@ class SystemPowerTestCase(unittest.TestCase):
             self.assertEqual(mock_run.call_count, 2)
             mock_run.assert_called_with(
                 ["osascript", "-e", 'tell application "System Events" to sleep'],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=5.0,
-                stdin=subprocess.DEVNULL,
+                **_expected_power_run_kwargs(),
             )
 
     @patch("subprocess.run")
@@ -107,11 +129,7 @@ class SystemPowerTestCase(unittest.TestCase):
             )
             mock_run.assert_called_once_with(
                 ["osascript", "-e", 'tell application "System Events" to shut down'],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=5.0,
-                stdin=subprocess.DEVNULL,
+                **_expected_power_run_kwargs(),
             )
 
     @patch("subprocess.run")
@@ -132,11 +150,7 @@ class SystemPowerTestCase(unittest.TestCase):
             self.assertEqual(result.action, PostEncodeAction.SLEEP)
             mock_run.assert_called_once_with(
                 ["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=5.0,
-                stdin=subprocess.DEVNULL,
+                **_expected_power_run_kwargs(),
             )
 
     @patch("subprocess.run")
@@ -148,11 +162,7 @@ class SystemPowerTestCase(unittest.TestCase):
             self.assertEqual(result.action, PostEncodeAction.SHUTDOWN)
             mock_run.assert_called_once_with(
                 ["shutdown", "/s", "/t", "0"],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=5.0,
-                stdin=subprocess.DEVNULL,
+                **_expected_power_run_kwargs(),
             )
 
     @patch("subprocess.run")
@@ -164,11 +174,7 @@ class SystemPowerTestCase(unittest.TestCase):
             self.assertEqual(result.action, PostEncodeAction.SLEEP)
             mock_run.assert_called_once_with(
                 ["systemctl", "suspend"],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=5.0,
-                stdin=subprocess.DEVNULL,
+                **_expected_power_run_kwargs(),
             )
 
     @patch("subprocess.run")
@@ -180,11 +186,7 @@ class SystemPowerTestCase(unittest.TestCase):
             self.assertEqual(result.action, PostEncodeAction.SHUTDOWN)
             mock_run.assert_called_once_with(
                 ["systemctl", "poweroff"],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=5.0,
-                stdin=subprocess.DEVNULL,
+                **_expected_power_run_kwargs(),
             )
 
     def test_unsupported_platform(self) -> None:
