@@ -428,12 +428,43 @@ class TestFullFrameGroundTruth(unittest.TestCase):
             source.write_bytes(b"source")
             distorted.write_bytes(b"distorted")
             scores = [{"metrics": {"vmaf": 95.0}}] * 60
+
             def fake_run(command: list[str], **kwargs: object) -> MagicMock:
-                log = Path(command[command.index("-filter_complex") + 1].split("log_path='")[1].split("'")[0])
-                log.write_text(json.dumps({"frames": scores}), encoding="utf-8")
+                # FFmpeg resolves a relative log_path against its working directory,
+                # which the runner sets to the workdir.
+                name = command[command.index("-filter_complex") + 1].split("log_path='")[1].split("'")[0]
+                cwd = kwargs["cwd"]
+                assert isinstance(cwd, Path)
+                (cwd / name).write_text(json.dumps({"frames": scores}), encoding="utf-8")
                 return MagicMock(returncode=0, stderr="")
+
             with patch("scripts.run_smart_case.subprocess.run", side_effect=fake_run):
                 self.assertEqual(compute_segmented_vmaf_metrics(Path("ffmpeg"), distorted, source, VMAF_STANDARD_MODEL, VmafEncodeMetadata(1920,1080,8), 30.0, 90, workdir, segment_duration_sec=2, overlap_sec=1), (95.0, 95.0, 95.0))
+
+    def test_segmented_vmaf_asks_for_a_bare_log_name(self) -> None:
+        # FFmpeg consumes a backslash inside a quoted filter value, so a Windows
+        # workdir path ("D:\a\...") would be written somewhere else if it were
+        # embedded. The runner asks for a relative name and sets cwd=workdir.
+        commands: list[list[str]] = []
+
+        def fake_run(command: list[str], **_kwargs: object) -> MagicMock:
+            commands.append(command)
+            return MagicMock(returncode=1, stderr="stop after the first segment")
+
+        with tempfile.TemporaryDirectory() as td, patch(
+            "scripts.run_smart_case.subprocess.run", side_effect=fake_run
+        ), self.assertRaisesRegex(RuntimeError, "Segmented VMAF failed"):
+            workdir = Path(td).resolve()
+            compute_segmented_vmaf_metrics(
+                Path("ffmpeg"), workdir / "d.mp4", workdir / "s.mkv",
+                VMAF_STANDARD_MODEL, VmafEncodeMetadata(1920, 1080, 8), 30.0, 90, workdir,
+                segment_duration_sec=2, overlap_sec=1,
+            )
+        graph = commands[0][commands[0].index("-filter_complex") + 1]
+        log_name = graph.split("log_path='")[1].split("'")[0]
+        self.assertEqual(log_name, "seg-vmaf-000000000.json")
+        self.assertNotIn(str(workdir), graph)
+
     def test_windows_completeness_probe_uses_sibling_executable(self) -> None:
         with patch("scripts.run_smart_case.subprocess.run", return_value=MagicMock(
             stdout=json.dumps({"streams": [{"nb_read_frames": "60"}]}),

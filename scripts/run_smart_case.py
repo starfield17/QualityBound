@@ -321,7 +321,7 @@ def compute_segmented_vmaf_metrics(
         command = build_cpu_vmaf_command(
             ffmpeg_path, distorted_path=distorted_path, reference_path=reference_path,
             model_spec=model_spec, encode_metadata=encode_metadata,
-            log_name=str(log_path), n_threads=2, n_subsample=1,
+            log_name=log_path.name, n_threads=2, n_subsample=1,
         )
         # Apply the same trim to both inputs before the filter graph.
         input_indices = [index for index, value in enumerate(command) if value == "-i"]
@@ -523,7 +523,7 @@ def run_oracle_search(
             reference_path=item.source_path,
             model_spec=model_spec,
             encode_metadata=encode_metadata,
-            log_name=str(vmaf_json),
+            log_name=vmaf_json.name,
             n_threads=min(2, MAX_VMAF_THREADS, vmaf_thread_budget()),
             n_subsample=1,
         )
@@ -931,7 +931,7 @@ def run_smart_case(argv: Sequence[str] | None = None) -> int:
             vmaf_cmd = align_cfr_command(build_cpu_vmaf_command(
                 ffmpeg_path, distorted_path=full_encode_path, reference_path=source_path,
                 model_spec=model_spec, encode_metadata=encode_metadata,
-                log_name=str(vmaf_json_path), n_threads=2, n_subsample=1,
+                log_name=vmaf_json_path.name, n_threads=2, n_subsample=1,
             ), validated_fps)
             executed_commands.append(vmaf_cmd)
             res_vmaf = subprocess.run(vmaf_cmd, check=False, cwd=workdir, capture_output=True, text=True, **noninteractive_run_kwargs())
