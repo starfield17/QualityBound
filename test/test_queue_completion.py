@@ -4,12 +4,13 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
+from PySide6.QtCore import QEventLoop, QTimer
 
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
 from core.i18n import get_translator
 from core.media import PostEncodeAction, SystemPowerResult
-from core.models import EncodeOptions, EncodePlanItem, EncodeResult, SkipOrigin, SkippedOutputPolicy
+from core.models import EncodeOptions, EncodePlanItem, EncodeResult, SkipOrigin, SkippedOutputPolicy, SkippedOutputOutcome
 from gui.queue_completion import QueueCompletionHandler
 from gui.queue_state import QueueItemRecord, QueueItemStatus, QueueJobSnapshot
 
@@ -136,6 +137,38 @@ class QueueCompletionTestCase(unittest.TestCase):
         self.close.assert_not_called()
         countdown.assert_not_called()
         power.assert_not_called()
+
+    def test_stopped_mixed_run_copies_and_asks_without_waiting_for_decisions(self) -> None:
+        copied = self._record("copy", QueueItemStatus.SKIPPED, SkippedOutputPolicy.COPY)
+        asked = self._record("ask", QueueItemStatus.SKIPPED, SkippedOutputPolicy.ASK)
+        ignored = self._record("ignore", QueueItemStatus.SKIPPED)
+        pending = self._record("decision", QueueItemStatus.NEEDS_DECISION)
+        records = [copied, asked, ignored, pending]
+        completions = []
+        loop = QEventLoop()
+        timer = QTimer()
+        timer.setSingleShot(True)
+        timer.timeout.connect(loop.quit)
+        def apply_result(item_id, result):
+            record = next(record for record in records if record.item_id == item_id)
+            record.result = result
+        def finished(cancelled):
+            completions.append(cancelled)
+            loop.quit()
+        with patch("gui.queue_completion.QMessageBox.question", return_value=QMessageBox.StandardButton.No) as question:
+            self.handler.process_stopped(records, self.tr, apply_result, finished)
+            timer.start(5000)
+            loop.exec()
+            timer.stop()
+            self.assertEqual(completions, [False])
+            self.assertEqual(copied.output_path.read_bytes(), copied.source_path.read_bytes())
+            self.assertEqual(copied.result.skipped_output_outcome, SkippedOutputOutcome.COPIED)
+            self.assertEqual(asked.result.skipped_output_outcome, SkippedOutputOutcome.IGNORED)
+            self.assertEqual(ignored.result.skipped_output_outcome, SkippedOutputOutcome.IGNORED)
+            self.assertTrue(pending.result.needs_decision)
+            self.handler.process_stopped(records, self.tr, apply_result, finished)
+            self.assertEqual(completions, [False, False])
+            question.assert_called_once()
 
     def test_power_actions_require_confirmation_and_quit_uses_close_callback(self) -> None:
         record = self._record("done", QueueItemStatus.DONE)

@@ -35,6 +35,8 @@ from core.models import (
     AnalysisReceipt,
     BackendChoice,
     CodecChoice,
+    ConstraintFailureKind,
+    DecisionActionCode,
     EncodeOptions,
     EncodePlanItem,
     EncoderInfo,
@@ -49,6 +51,7 @@ from core.models import (
 from core.smart.v1.cache import SMART_ANALYSIS_ALGORITHM_VERSION, SMART_SAMPLE_SCHEME_VERSION, measurement_configuration_fingerprint
 from core.smart.v1.concurrency import SMART_ANALYSIS_SEMAPHORE
 from core.smart.v1.workflow import analyze_quality
+from core.smart.v1.decisions import build_decision_options
 from core.smart.v1.bitrate import calculate_smart_bitrate_budget, search_bitrate_candidates
 from core.smart.v1.measurement import SmartCommandError
 from core.smart.v1.session import AnalysisSession
@@ -1045,7 +1048,7 @@ class SmartAnalyseV2TestCase(unittest.TestCase):
             calibrate.assert_called_once()
             self.assertEqual(result.status, QualitySearchStatus.FOUND)
 
-    def test_holdout_failure_at_refinement_limit_is_failed(self) -> None:
+    def test_holdout_failure_at_refinement_limit_requires_quality_policy(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             item = _analysis_item(root, max_refinement_rounds=0)
@@ -1075,7 +1078,10 @@ class SmartAnalyseV2TestCase(unittest.TestCase):
                 patch("core.smart.v1.session.score_candidate", side_effect=score),
             ):
                 result = analyze_quality(ffmpeg, item, root, root / "log.txt")
-            self.assertEqual(result.status, QualitySearchStatus.FAILED)
+            self.assertEqual(result.status, QualitySearchStatus.CONSTRAINT_UNSATISFIED)
+            self.assertEqual(result.failure_kind, ConstraintFailureKind.QUALITY_UNREACHABLE)
+            self.assertNotIn(DecisionActionCode.RELAX_QUALITY,
+                             [option.action_code for option in build_decision_options(result)])
             self.assertIn("refinement limit", result.reason or "")
 
     def test_loopback_failure_falls_back_to_legacy_scoring(self) -> None:

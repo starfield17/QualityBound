@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from core.models import (
@@ -12,6 +13,8 @@ from core.models import (
     EncodeResult,
     EncoderInfo,
     QualityUnreachablePolicy,
+    OperationCancelledError,
+    SkippedOutputOutcome,
     SkipOrigin,
     SkippedOutputPolicy,
 )
@@ -46,6 +49,32 @@ def _item(root: Path, *, skip_reason: str | None = None, overwrite: bool = True)
 
 
 class SkippedOutputPublishTestCase(unittest.TestCase):
+    def test_copy_cancel_keeps_destination_and_removes_temporary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            item = _item(Path(directory))
+            item.output_path.parent.mkdir()
+            item.output_path.write_bytes(b"existing")
+            with self.assertRaises(OperationCancelledError):
+                publish_skipped_source(item, cancel_check=lambda: True)
+            self.assertEqual(item.output_path.read_bytes(), b"existing")
+            self.assertFalse(list(item.output_path.parent.glob(".*.copy-*.tmp")))
+
+    def test_late_output_is_not_overwritten_and_failure_is_recorded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            item = _item(Path(directory), overwrite=False)
+            result = EncodeResult(item.source_path, item.output_path, False,
+                                  skipped=True, skip_origin=SkipOrigin.SMART_PREDICTED_OVERSIZE)
+            def late_output(*_args):
+                item.output_path.write_bytes(b"late-output")
+            with patch("core.media.skipped.shutil.copystat", side_effect=late_output):
+                published = publish_skipped_source(item, result)
+            self.assertFalse(published.copied)
+            self.assertEqual(item.output_path.read_bytes(), b"late-output")
+            self.assertEqual(result.skipped_output_outcome, SkippedOutputOutcome.FAILED)
+            self.assertFalse(result.skipped)
+            self.assertFalse(result.success)
+            self.assertFalse(list(item.output_path.parent.glob(".*.copy-*.tmp")))
+
     def test_analysis_skip_is_copied_to_planned_output(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
