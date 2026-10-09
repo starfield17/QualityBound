@@ -7,7 +7,7 @@ from core.encoding.analysis import (
 )
 from core.encoding.executor import execute_plan, execute_plan_item
 from core.encoding.parallel import execute_plan_concurrent
-from core.encoding.planning import build_encode_plan, reconfigure_plan_item
+from core.encoding.planning import build_encode_plan, prepare_encode_requests, reconfigure_plan_item
 
 __all__ = [
     "analyze_plan_item",
@@ -16,6 +16,7 @@ __all__ = [
     "execute_plan_item",
     "execute_plan_concurrent",
     "item_needs_smart_analysis",
+    "prepare_encode_requests",
     "run_analysis_phase",
     "reconfigure_plan_item",
 ]

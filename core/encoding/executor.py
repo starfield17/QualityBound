@@ -23,7 +23,7 @@ from core.models import (
 from core.progress_events import ProgressCallback
 from core.smart.v1.bitrate import resolve_max_output_ratio
 
-from .analysis import analyze_plan_item, run_analysis_phase
+from .analysis import analyze_plan_item, run_analysis_phase, _validate_prepared_analysis_results
 from .item_results import (
     _assert_quality_encoder_matches_item,
     _copy_external_subtitles_for_result,
@@ -274,6 +274,7 @@ def execute_plan(
     item_started_callback: Callable[[int], None] | None = None,
     item_result_callback: Callable[[int, EncodeResult], None] | None = None,
     extra_progress_contexts: list[dict[str, object]] | None = None,
+    analysis_results: list[EncodeResult | None] | None = None,
 ) -> list[EncodeResult]:
     workdir = validate_workdir(workdir)
     total = len(plan.items)
@@ -283,20 +284,23 @@ def execute_plan(
         if process_callback is not None:
             process_callback(proc)
 
-    results = run_analysis_phase(
-        plan.ffmpeg_path,
-        plan.items,
-        workdir,
-        log_callback=log_callback,
-        progress_callback=progress_callback,
-        cancel_check=cancel_check,
-        process_callback=analysis_process if process_callback is not None else None,
-        item_contexts=extra_progress_contexts,
-        pause_check=pause_check,
-        item_started_callback=item_started_callback,
-        item_result_callback=item_result_callback,
-        constraint_policy=constraint_policy,
-    )
+    if analysis_results is not None:
+        results = _validate_prepared_analysis_results(plan.items, analysis_results)
+    else:
+        results = run_analysis_phase(
+            plan.ffmpeg_path,
+            plan.items,
+            workdir,
+            log_callback=log_callback,
+            progress_callback=progress_callback,
+            cancel_check=cancel_check,
+            process_callback=analysis_process if process_callback is not None else None,
+            item_contexts=extra_progress_contexts,
+            pause_check=pause_check,
+            item_started_callback=item_started_callback,
+            item_result_callback=item_result_callback,
+            constraint_policy=constraint_policy,
+        )
     if pause_check is not None and pause_check():
         _emit(log_callback, "Encode execution paused after analysis.")
         _emit_progress(progress_callback, stage="encode", state="paused", percent=None)

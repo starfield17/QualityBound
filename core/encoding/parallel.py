@@ -9,7 +9,7 @@ from collections import deque
 from pathlib import Path
 from typing import Callable, Sequence
 
-from core.encoding.analysis import run_analysis_phase
+from core.encoding.analysis import run_analysis_phase, _validate_prepared_analysis_results
 from core.encoding.executor import execute_plan_item
 from core.media.validation import validate_workdir
 from core.models import (
@@ -74,6 +74,7 @@ def execute_plan_concurrent(
     item_started_callback: ItemStartedCallback | None = None,
     item_result_callback: ItemResultCallback | None = None,
     constraint_policy: ConstraintPolicy | None = None,
+    analysis_results: list[EncodeResult | None] | None = None,
 ) -> list[EncodeResult]:
     """Analyze Smart items first, then encode ready items concurrently.
 
@@ -100,20 +101,23 @@ def execute_plan_concurrent(
 
     if log_callback is not None:
         log_callback("Concurrent execution started; Smart analysis runs before full encoding.")
-    results = run_analysis_phase(
-        plan.ffmpeg_path,
-        items,
-        workdir,
-        log_callback=log_callback,
-        progress_callback=progress_callback,
-        cancel_check=cancel_check,
-        process_callback=process_callback,
-        item_contexts=contexts,
-        pause_check=pause_check,
-        item_started_callback=started,
-        item_result_callback=item_result_callback,
-        constraint_policy=constraint_policy,
-    )
+    if analysis_results is not None:
+        results = _validate_prepared_analysis_results(items, analysis_results)
+    else:
+        results = run_analysis_phase(
+            plan.ffmpeg_path,
+            items,
+            workdir,
+            log_callback=log_callback,
+            progress_callback=progress_callback,
+            cancel_check=cancel_check,
+            process_callback=process_callback,
+            item_contexts=contexts,
+            pause_check=pause_check,
+            item_started_callback=started,
+            item_result_callback=item_result_callback,
+            constraint_policy=constraint_policy,
+        )
     if pause_check is not None and pause_check():
         if log_callback is not None:
             log_callback("Concurrent encode execution paused after analysis.")

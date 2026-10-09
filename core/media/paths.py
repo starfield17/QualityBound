@@ -29,6 +29,7 @@ def build_output_path(
     output_root: Path,
     codec: CodecChoice,
     container: ContainerChoice,
+    *, create_directories: bool = True,
 ) -> Path:
     if input_root.is_dir():
         try:
@@ -38,7 +39,9 @@ def build_output_path(
             relative_parent = Path()
     else:
         relative_parent = Path()
-    destination_dir = ensure_dir(output_root / relative_parent)
+    destination_dir = output_root / relative_parent
+    if create_directories:
+        ensure_dir(destination_dir)
     return destination_dir / f"{source_path.stem}_{codec.value}.{container.value}"
 
 
@@ -48,6 +51,7 @@ def build_explicit_file_output_path(
     output_dir: Path | None,
     codec: CodecChoice,
     container: ContainerChoice,
+    *, create_directories: bool = True,
 ) -> Path:
     """Build an output path for an explicitly supplied file-list item."""
 
@@ -64,7 +68,8 @@ def build_explicit_file_output_path(
             raise ValueError(
                 f"Explicit file relative path escapes the output directory: {relative_path}"
             )
-    ensure_dir(destination_dir)
+    if create_directories:
+        ensure_dir(destination_dir)
     return destination_dir / f"{source_path.stem}_{codec.value}.{container.value}"
 
 

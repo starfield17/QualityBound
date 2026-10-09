@@ -46,6 +46,7 @@ from core.models import (
     DecisionActionCode,
     EncodeOptions,
     EncodePlan,
+    EncodeRequest,
     EncodeResult,
     VideoFileItem,
 )
@@ -72,7 +73,7 @@ from gui.constraint_decision_dialog import (
     choose_size_miss_decision,
 )
 from gui.encode_options_panel import EncodeOptionsPanel
-from gui.gui_workers import EncoderCapabilityDetectWorker, PlanWorker
+from gui.gui_workers import EncoderCapabilityDetectWorker, QueueIntakeWorker, QueuePrepareWorker
 from gui.preset_manager_dialog import PresetManagerDialog
 from gui.qt_optionals import maybe_none
 from gui.queue_completion import QueueCompletionHandler
@@ -1001,7 +1002,7 @@ class MainWindow(QMainWindow):
         plan_busy = self.active_worker is not None
         queue_busy = self.queue_busy
         any_busy = plan_busy or queue_busy
-        has_queued_items = bool(self.queue_model.execution_records())
+        has_queued_items = bool(self.queue_model.draft_records() or self.queue_model.execution_records())
         has_pending_run = self.queue_manager.has_pending_run()
         signature = (plan_busy, queue_busy, has_queued_items, has_pending_run)
         if signature == self._action_state:
@@ -1012,16 +1013,16 @@ class MainWindow(QMainWindow):
         self.add_folder_action.setEnabled(not any_busy)
         self.plan_action.setEnabled(not any_busy)
         self.start_queue_action.setEnabled(not any_busy and has_queued_items)
-        self.pause_after_current_action.setEnabled(queue_busy)
+        self.pause_after_current_action.setEnabled(queue_busy and not plan_busy)
         self.stop_action.setEnabled(any_busy or has_pending_run)
         self.presets_action.setEnabled(not any_busy)
         self.settings_action.setEnabled(not any_busy)
         self._set_controls_enabled(not any_busy)
-        drag_drop_mode = QAbstractItemView.DragDropMode.NoDragDrop if queue_busy else QAbstractItemView.DragDropMode.InternalMove
+        drag_drop_mode = QAbstractItemView.DragDropMode.NoDragDrop if any_busy else QAbstractItemView.DragDropMode.InternalMove
         for view in [self.table_view, self.queue_window.table_view]:
             view.setDragDropMode(drag_drop_mode)
-            view.setDragEnabled(not queue_busy)
-            view.setAcceptDrops(not queue_busy)
+            view.setDragEnabled(not any_busy)
+            view.setAcceptDrops(not any_busy)
 
     def _has_running_task(self) -> bool:
         queue_manager_busy = self.queue_manager.is_busy()
@@ -1040,6 +1041,7 @@ class MainWindow(QMainWindow):
         return any(
             record.status in {
                 QueueItemStatus.NEEDS_DECISION,
+                QueueItemStatus.AWAITING_START,
                 QueueItemStatus.QUEUED,
                 QueueItemStatus.WAITING_ANALYSIS,
             }
@@ -1062,13 +1064,16 @@ class MainWindow(QMainWindow):
 
     def _start_worker(
         self,
-        worker: PlanWorker,
+        worker: QueueIntakeWorker | QueuePrepareWorker,
         completed_slot: Callable[..., object],
+        finished_slot: Callable[[], object] | None = None,
     ) -> None:
         self.active_worker = worker
         self._refresh_action_state()
         worker.log.connect(self._append_log)
         worker.progress.connect(self._update_progress)
+        if finished_slot is not None:
+            worker.finished.connect(finished_slot)
         worker.finished.connect(lambda: self._set_worker_busy(False))
         worker.failed.connect(self._on_worker_failed)
         worker.cancelled.connect(self._on_worker_cancelled)
@@ -1191,64 +1196,34 @@ class MainWindow(QMainWindow):
 
         self._set_status_snapshot(f"{stage} / {state}", file_name, speed if speed else "-", elapsed_text, bounded_percent)
 
-    def _build_context(self) -> tuple[Path, EncodeOptions, Path | None, Path, str | None, str | None]:
+    def _plan_current_source(self) -> None:
         input_path = self._selected_input()
         if input_path is None:
-            raise ValueError(self.translator.t("gui.message.select_source"))
-        options = self.options_panel.read_options()
-        output_dir = self._selected_output()
-        workdir = self._selected_workdir()
-        ffmpeg_path = self._selected_ffmpeg()
-        ffprobe_path = self._selected_ffprobe()
-        self._persist_runtime_state()
-        return input_path, options, output_dir, workdir, ffmpeg_path, ffprobe_path
-
-    def _plan_current_source(self) -> None:
-        try:
-            input_path, options, output_dir, workdir, ffmpeg_path, ffprobe_path = self._build_context()
-        except Exception as exc:
-            QMessageBox.warning(self, self.translator.t("gui.message.warning"), str(exc))
+            QMessageBox.warning(self, self.translator.t("gui.message.warning"), self.translator.t("gui.message.select_source"))
             return
-
-        self._append_log(self.translator.t("gui.log.planning"))
-        self._set_status_snapshot("planning", "-", "-", "-", 0.0)
-        worker = PlanWorker(
-            input_path=input_path,
-            options=options,
-            output_dir=output_dir,
-            workdir=workdir,
-            ffmpeg_path=ffmpeg_path,
-            ffprobe_path=ffprobe_path,
-        )
-        self._start_worker(worker, lambda plan, workdir=workdir: self._on_plan_ready(plan, workdir))
+        self._persist_runtime_state()
+        worker = QueueIntakeWorker(input_path, self.options_panel.read_options().recursive, self._selected_ffprobe(), ffmpeg_path=self._selected_ffmpeg())
+        self._start_worker(worker, self._on_sources_ready)
 
     def _start_plan_for_files(self, files: Sequence[Path | VideoFileItem]) -> None:
         if not files:
             return
-        options = self.options_panel.read_options()
-        output_dir = self._selected_output()
-        workdir = self._selected_workdir()
-        ffmpeg_path = self._selected_ffmpeg()
-        ffprobe_path = self._selected_ffprobe()
         self._persist_runtime_state()
-        file_items = [
-            item
-            if isinstance(item, VideoFileItem)
-            else VideoFileItem(path=item.resolve(), relative_path=Path(item.name))
-            for item in files
-        ]
-        self._append_log(self.translator.t("gui.log.planning"))
-        self._set_status_snapshot("planning", "-", "-", "-", 0.0)
-        worker = PlanWorker(
-            input_path=None,
-            options=options,
-            output_dir=output_dir,
-            workdir=workdir,
-            ffmpeg_path=ffmpeg_path,
-            ffprobe_path=ffprobe_path,
-            files=file_items,
-        )
-        self._start_worker(worker, lambda plan, workdir=workdir: self._on_plan_ready(plan, workdir))
+        file_items = [item if isinstance(item, VideoFileItem) else VideoFileItem(item.resolve(), Path(item.name)) for item in files]
+        worker = QueueIntakeWorker(None, False, self._selected_ffprobe(), file_items, ffmpeg_path=self._selected_ffmpeg())
+        self._start_worker(worker, self._on_sources_ready)
+
+    def _on_sources_ready(self, records: list[QueueItemRecord]) -> None:
+        existing = {str(record.source_path).casefold() for record in self.queue_model.records()}
+        unique = []
+        for record in records:
+            key = str(record.source_path).casefold()
+            if key not in existing:
+                existing.add(key)
+                unique.append(record)
+        self.queue_model.add_records(unique)
+        self._append_log(self.translator.t("gui.log.sources_added", count=len(unique)))
+        self._refresh_action_state()
 
     def _add_files_dialog(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(self, self.translator.t("gui.dialog.select_source_file"))
@@ -1267,9 +1242,49 @@ class MainWindow(QMainWindow):
         self._plan_current_source()
 
     def _start_queue(self) -> None:
+        if self.active_worker is not None or self.queue_manager.is_busy():
+            return
         max_workers = parse_encode_workers(self.app_config.get("encode_workers", 1))
+        records = self.queue_model.draft_records()
+        if not records:
+            self._start_bound_queue(max_workers)
+            return
+        options = self.options_panel.read_options()
+        output = self._selected_output()
+        workdir = self._selected_workdir()
+        self._persist_runtime_state()
+        requests = []
+        for record in records:
+            draft = record.draft
+            assert draft is not None
+            requests.append(EncodeRequest(draft.file_item, draft.options_override or options,
+                                          draft.output_dir_override or output, draft.input_root))
+        worker = QueuePrepareWorker(requests, workdir, self._selected_ffmpeg(), self._selected_ffprobe())
+        plans: list[EncodePlan] = []
+        ids = [record.item_id for record in records]
+
+        def finish_preparation() -> None:
+            self.queue_manager.finish_preparation()
+            if not plans or worker.cancel_requested() or self._close_after_running_task_stops:
+                return
+            try:
+                self.queue_model.apply_prepared_plan(ids, plans[0], workdir)
+            except (RuntimeError, OSError, ValueError) as exc:
+                self._on_worker_failed(str(exc))
+                return
+            self.queue_manager.include_prepared_items(ids)
+            self._start_bound_queue(max_workers)
+
+        self._append_log(self.translator.t("gui.log.preparing_queue"))
+        self._set_status_snapshot(self.translator.t("gui.status.preparing_queue"), "-", "-", "-", 0.0)
+        self.queue_manager.begin_preparation()
+        self._start_worker(worker, plans.append, finish_preparation)
+
+    def _start_bound_queue(self, max_workers: int) -> None:
         if not self.queue_manager.start(max_workers=max_workers):
-            QMessageBox.information(self, self.translator.t("gui.message.info"), self.translator.t("gui.message.no_queued_items"))
+            self.queue_manager.reconcile_after_decision()
+            if not self.queue_model.execution_records():
+                QMessageBox.information(self, self.translator.t("gui.message.info"), self.translator.t("gui.message.no_queued_items"))
             return
         self._append_log(self.translator.t("gui.log.encoding"))
         self._set_status_snapshot("queue / starting", "-", "-", "-", 0.0)
@@ -1290,24 +1305,6 @@ class MainWindow(QMainWindow):
         self.activity_log_window.raise_()
         self.activity_log_window.activateWindow()
 
-    def _on_plan_ready(self, plan: EncodePlan, workdir: Path) -> None:
-        try:
-            added = self.queue_manager.add_plan(plan, workdir)
-        except Exception as exc:
-            QMessageBox.critical(self, self.translator.t("gui.message.error"), str(exc))
-            return
-        valid_items = [item for item in plan.items if not item.skip_reason]
-        skipped_items = [item for item in plan.items if item.skip_reason]
-        self._append_log(
-            self.translator.t(
-                "gui.log.items_added_to_queue",
-                total=added,
-                ready=len(valid_items),
-                skipped=len(skipped_items),
-            )
-        )
-        self._set_status_snapshot(self.translator.t("gui.status.done"), "-", "-", "-", 100.0)
-
     def _selected_rows_from_view(self, view: ResponsiveQueueTableView) -> list[int]:
         return sorted(index.row() for index in view.selectionModel().selectedRows())
 
@@ -1317,8 +1314,9 @@ class MainWindow(QMainWindow):
         selected_record = self.queue_model.record_for_row(rows[0]) if rows else None
 
         has_selection = bool(rows)
-        can_edit = has_selection and self.queue_model.can_edit_rows(rows) and not self.queue_busy
-        can_reconfigure = can_edit and self._encoder_capabilities_ready
+        busy = self.active_worker is not None or self.queue_manager.is_busy()
+        can_edit = has_selection and self.queue_model.can_edit_rows(rows) and not busy
+        can_reconfigure = can_edit
 
         open_source_action = menu.addAction(self.translator.t("gui.menu.open_source_folder"))
         open_output_action = menu.addAction(self.translator.t("gui.menu.open_output_folder"))
@@ -1328,6 +1326,8 @@ class MainWindow(QMainWindow):
 
         apply_options_action = menu.addAction(self.translator.t("gui.menu.apply_current_options"))
         preset_sub_menu = menu.addMenu(self.translator.t("gui.menu.apply_preset"))
+        follow_options_action = menu.addAction(self.translator.t("gui.menu.follow_global_options"))
+        follow_output_action = menu.addAction(self.translator.t("gui.menu.follow_global_output"))
         change_output_action = menu.addAction(self.translator.t("gui.menu.change_output_dir"))
         menu.addSeparator()
 
@@ -1337,12 +1337,15 @@ class MainWindow(QMainWindow):
         clear_completed_action = menu.addAction(self.translator.t("gui.menu.clear_completed"))
 
         open_source_action.setEnabled(has_selection)
-        open_output_action.setEnabled(has_selection)
+        has_output = selected_record is not None and selected_record.plan_item is not None
+        open_output_action.setEnabled(has_output)
         copy_source_action.setEnabled(has_selection)
-        copy_output_action.setEnabled(has_selection)
+        copy_output_action.setEnabled(has_output)
         apply_options_action.setEnabled(can_reconfigure)
         preset_sub_menu.setEnabled(can_reconfigure)
         change_output_action.setEnabled(can_edit)
+        follow_options_action.setEnabled(can_edit)
+        follow_output_action.setEnabled(can_edit)
 
         available_presets = list_presets(self.config_dir)
         preset_actions: dict[object, str] = {}
@@ -1350,17 +1353,17 @@ class MainWindow(QMainWindow):
             p_action = preset_sub_menu.addAction(p_name)
             preset_actions[p_action] = p_name
 
-        retry_action.setEnabled(has_selection and self.queue_model.can_retry_rows(rows) and not self.queue_busy)
+        retry_action.setEnabled(has_selection and self.queue_model.can_retry_rows(rows) and not busy)
         resolve_action.setEnabled(
-            len(rows) == 1 and self.queue_model.can_resolve_row(rows[0]) and not self.queue_busy
+            len(rows) == 1 and self.queue_model.can_resolve_row(rows[0]) and not busy
         )
         remove_action.setEnabled(
             has_selection
             and self.queue_manager.can_remove_rows(rows)
-            and not self.queue_busy
+            and not busy
         )
         clear_completed_action.setEnabled(
-            not self.queue_busy
+            not busy
             and any(record.status in TERMINAL_ITEM_STATUSES for record in self.queue_model.records())
         )
 
@@ -1411,6 +1414,10 @@ class MainWindow(QMainWindow):
                 else:
                     if updated:
                         self._append_log(self.translator.t("gui.log.batch_output_dir_applied", count=updated, dir=path))
+        elif action == follow_options_action and can_edit:
+            self.queue_model.restore_global_options(rows)
+        elif action == follow_output_action and can_edit:
+            self.queue_model.restore_global_output(rows)
         elif action == retry_action:
             retried = self.queue_manager.retry_rows(rows)
             if retried:
@@ -1494,7 +1501,7 @@ class MainWindow(QMainWindow):
         QMessageBox.warning(self, self.translator.t("gui.message.warning"), detail)
 
     def _on_queue_row_activated(self, _view: ResponsiveQueueTableView, index: QModelIndex) -> None:
-        if self.queue_busy:
+        if self.active_worker is not None or self.queue_manager.is_busy():
             return
         row = index.row()
         record = self.queue_model.record_for_row(row)

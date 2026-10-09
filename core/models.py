@@ -189,6 +189,18 @@ class EncodeOptions:
 
 
 @dataclass(slots=True)
+class EncodeRequest:
+    """A source and selected settings awaiting a concrete execution binding.
+
+    input_root identifies a folder import; None identifies explicit files.
+    """
+    file_item: VideoFileItem
+    options: EncodeOptions
+    output_dir: Optional[Path] = None
+    input_root: Optional[Path] = None
+
+
+@dataclass(slots=True)
 class EncoderInfo:
     codec: CodecChoice
     backend: BackendChoice

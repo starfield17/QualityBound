@@ -348,5 +348,15 @@
   "gui.decision.size_conflict_title": "画质与体积冲突",
   "gui.decision.size_conflict_intro": "{file} 已测试的候选达到画质目标，但超过体积上限，或其媒体预算不足。",
   "gui.decision.quality_miss_title": "未达到画质目标",
-  "gui.decision.quality_miss_intro": "{file} 已测试的候选未达到 VMAF 目标。"
+  "gui.decision.quality_miss_intro": "{file} 已测试的候选未达到 VMAF 目标。",
+  "gui.status.awaiting_start": "待启动",
+  "gui.status.preparing_queue": "准备队列",
+  "gui.table.at_start": "启动时确定",
+  "gui.tag.custom_options": "自定义参数",
+  "gui.tag.custom_output": "自定义目录",
+  "gui.tooltip.start_binding": "点击 Start Queue 时确定编码参数和输出路径；保留单项自定义设置。",
+  "gui.menu.follow_global_options": "参数跟随全局设置",
+  "gui.menu.follow_global_output": "输出目录跟随全局设置",
+  "gui.log.sources_added": "已添加 {count} 个源文件；启动队列时确定执行参数。",
+  "gui.log.preparing_queue": "使用当前设置准备队列。"
 }

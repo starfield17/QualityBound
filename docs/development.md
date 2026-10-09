@@ -59,6 +59,31 @@ python -m unittest discover -s test -p "test_architecture.py" -v
 
 ## Smart analysis and queue completion
 
+GUI intake discovers and probes sources into `AWAITING_START` records containing
+source drafts, with no execution plan or tool snapshot. Directory recursion is
+resolved during intake; Start does not rescan the folder. `QueuePrepareWorker`
+freezes current options, output directory, tools and workdir at Start, preferring
+each source's independent parameter and directory overrides. Metadata is probed
+again using the start-time tools to account for source changes. Parameter edits
+and output naming/validation do not run during intake or right-click override
+selection.
+
+Preparation locks edits, reordering and decision activation. The model commits
+the complete prepared batch after validating identities and output collisions;
+Stop or close before handoff leaves drafts unbound and starts no encodes. Global
+tool/encoder or queue collision errors leave the batch awaiting correction;
+per-file probe/output validation errors become Failed records, while valid items
+run. A pause or Smart decision resumes the bound plan. Manual retry returns to
+the draft and preserves its overrides, selecting current global settings at the
+next Start. The obsolete GUI `PlanWorker` and eager planning callback are removed.
+
+When resumed and new items carry different tool snapshots, contiguous groups use
+their own FFmpeg/FFprobe/workdir. All groups finish analysis before encoding;
+groups encode in queue order with at most the configured concurrency. The core
+executors accept matching analysis terminal results and do not measure a group
+again during the encode phase. Ready Smart items still require successful
+analysis and the usual final validation/publication gates.
+
 Both Smart algorithms use the same analysis-policy resolver. A size conflict
 first applies the selected size or quality relaxation to measured candidates.
 If it remains size-blocked with a required output ratio greater than 1.0, it

@@ -19,7 +19,7 @@ from PySide6.QtWidgets import QApplication, QStyle
 
 from core.i18n import Translator
 from core.media import human_kbps, validate_unique_output_paths
-from core.models import DecisionOption, EncodeOptions, EncodeResult
+from core.models import DecisionOption, EncodeOptions, EncodeResult, EncodePlan
 from core.progress_events import ProgressEvent
 from gui.queue_actions import (
     accept_size_miss as accept_size_miss_action,
@@ -50,6 +50,8 @@ from gui.queue_state import (
     output_will_be_written,
     prepare_record_for_execution,
     reset_for_retry,
+    unbind_for_retry,
+    build_queue_job_snapshot,
     status_key,
 )
 from gui.qt_optionals import maybe_none
@@ -137,6 +139,10 @@ class QueueTableModel(QAbstractTableModel):
         self.translator = tr
         self._records: list[QueueItemRecord] = []
         self._metrics = QueueMetrics()
+        self._preparing = False
+
+    def set_preparing(self, preparing: bool) -> None:
+        self._preparing = preparing
 
     def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:
         parent = _transient_index(parent)
@@ -184,6 +190,10 @@ class QueueTableModel(QAbstractTableModel):
         media = record.media_info
 
         if role == Qt.ItemDataRole.DisplayRole:
+            if record.plan_item is None and column in {QueueColumn.TARGET_BITRATE, QueueColumn.ENCODER, QueueColumn.OUTPUT}:
+                return self.translator.t("gui.table.at_start")
+            if record.plan_item is None and column == QueueColumn.QUALITY:
+                return "-"
             if column == QueueColumn.NAME:
                 return record.source_path.name
             if column == QueueColumn.FOLDER:
@@ -197,13 +207,13 @@ class QueueTableModel(QAbstractTableModel):
             if column == QueueColumn.SOURCE_BITRATE:
                 return human_kbps(media.video_bitrate_bps) if media else "n/a"
             if column == QueueColumn.TARGET_BITRATE:
-                return human_kbps(record.plan_item.target_video_bitrate_bps) if record.plan_item.target_video_bitrate_bps else "n/a"
+                return human_kbps(record.bound_plan_item.target_video_bitrate_bps) if record.bound_plan_item.target_video_bitrate_bps else "n/a"
             if column == QueueColumn.QUALITY:
-                segmented = record.plan_item.segmented_analysis_result
+                segmented = record.bound_plan_item.segmented_analysis_result
                 if segmented is not None:
                     mean = segmented.final_mean_vmaf if segmented.final_mean_vmaf is not None else segmented.predicted_mean_vmaf
                     return f"{mean:.1f}" if mean is not None else "-"
-                quality = record.plan_item.quality_search_result
+                quality = record.bound_plan_item.quality_search_result
                 if quality is None or quality.min_vmaf is None:
                     return "-"
                 ratio = quality.predicted_output_ratio or quality.required_output_ratio
@@ -215,7 +225,7 @@ class QueueTableModel(QAbstractTableModel):
             if column == QueueColumn.ENCODER:
                 if record.assigned_encoder and record.assigned_backend:
                     return f"{record.assigned_encoder} ({record.assigned_backend})"
-                encoder = record.plan_item.encoder_info
+                encoder = record.bound_plan_item.encoder_info
                 return f"{encoder.encoder_name} ({encoder.backend.value})" if encoder else "n/a"
             if column == QueueColumn.OUTPUT:
                 return record.output_path.name
@@ -230,6 +240,7 @@ class QueueTableModel(QAbstractTableModel):
                 return self.translator.t(status_key(record.status))
             if column == QueueColumn.PROGRESS:
                 if record.status in {
+                    QueueItemStatus.AWAITING_START,
                     QueueItemStatus.QUEUED,
                     QueueItemStatus.WAITING_ANALYSIS,
                 }:
@@ -239,6 +250,8 @@ class QueueTableModel(QAbstractTableModel):
             if column == QueueColumn.FOLDER:
                 return str(record.source_path.parent)
             if column == QueueColumn.OUTPUT:
+                if record.plan_item is None:
+                    return self.translator.t("gui.tooltip.start_binding")
                 return str(record.output_path)
             return build_tooltip(record, self.translator)
         elif role == Qt.ItemDataRole.TextAlignmentRole:
@@ -306,6 +319,8 @@ class QueueTableModel(QAbstractTableModel):
         destination_parent: QModelIndex | QPersistentModelIndex,
         destination_child: int,
     ) -> bool:
+        if self._preparing:
+            return False
         source_parent = _transient_index(source_parent)
         destination_parent = _transient_index(destination_parent)
         if count <= 0:
@@ -381,7 +396,7 @@ class QueueTableModel(QAbstractTableModel):
         is active.
         """
 
-        return not any(record.status in ACTIVE_ITEM_STATUSES for record in self._records)
+        return not self._preparing and not any(record.status in ACTIVE_ITEM_STATUSES for record in self._records)
 
     def sort(self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder) -> None:
         if not self._records or not self.can_sort():
@@ -415,10 +430,12 @@ class QueueTableModel(QAbstractTableModel):
                 record.media_info.format_bitrate_bps if record.media_info is not None else 0,
             )
         if column == QueueColumn.TARGET_BITRATE:
-            return lambda record: (record.plan_item.target_video_bitrate_bps,)
+            return lambda record: (record.plan_item.target_video_bitrate_bps if record.plan_item is not None else 0,)
         if column == QueueColumn.QUALITY:
             def quality_key(record: QueueItemRecord) -> tuple[object, ...]:
-                segmented = record.plan_item.segmented_analysis_result
+                if record.plan_item is None:
+                    return (-1.0,)
+                segmented = record.bound_plan_item.segmented_analysis_result
                 if segmented is not None:
                     mean = (
                         segmented.final_mean_vmaf
@@ -427,7 +444,7 @@ class QueueTableModel(QAbstractTableModel):
                     )
                     if mean is not None:
                         return (float(mean),)
-                quality = record.plan_item.quality_search_result
+                quality = record.bound_plan_item.quality_search_result
                 if quality is not None and quality.min_vmaf is not None:
                     return (float(quality.min_vmaf),)
                 return (-1.0,)
@@ -436,11 +453,11 @@ class QueueTableModel(QAbstractTableModel):
         if column == QueueColumn.ENCODER:
             return lambda record: (
                 record.plan_item.encoder_info.encoder_name.casefold()
-                if record.plan_item.encoder_info is not None
+                if record.plan_item is not None and record.plan_item.encoder_info is not None
                 else "",
             )
         if column == QueueColumn.OUTPUT:
-            return lambda record: (record.output_path.name.casefold(),)
+            return lambda record: (record.output_path.name.casefold() if record.plan_item is not None else "",)
         if column == QueueColumn.TAGS:
             return lambda record: (
                 " ".join(build_tags(record, self.translator)).casefold(),
@@ -452,6 +469,8 @@ class QueueTableModel(QAbstractTableModel):
         return lambda record: (0,)
 
     def remove_rows_by_index(self, rows: list[int]) -> int:
+        if self._preparing:
+            return 0
         targets = sorted({row for row in rows if 0 <= row < len(self._records)}, reverse=True)
         removed = 0
         for row in targets:
@@ -482,6 +501,8 @@ class QueueTableModel(QAbstractTableModel):
         return self.remove_rows_by_index(targets)
 
     def retry_rows(self, rows: list[int]) -> int:
+        if self._preparing:
+            return 0
         retried = 0
         changed_rows: list[int] = []
         for row in sorted(set(rows)):
@@ -490,7 +511,7 @@ class QueueTableModel(QAbstractTableModel):
                 continue
             if record.status not in {QueueItemStatus.FAILED, QueueItemStatus.CANCELLED}:
                 continue
-            reset_for_retry(record)
+            unbind_for_retry(record)
             retried += 1
             changed_rows.append(row)
         self._emit_rows_changed(changed_rows)
@@ -566,6 +587,53 @@ class QueueTableModel(QAbstractTableModel):
             if record.status in RUNNABLE_ITEM_STATUSES
         ]
 
+    def draft_records(self) -> list[QueueItemRecord]:
+        return [record for record in self._records if record.status == QueueItemStatus.AWAITING_START]
+
+    def apply_prepared_plan(self, item_ids: list[str], plan: EncodePlan, workdir: Path) -> None:
+        """Atomically replace only the drafts included in this preparation."""
+        if len(item_ids) != len(plan.items) or len(set(item_ids)) != len(item_ids):
+            raise RuntimeError("Prepared queue item identity mismatch.")
+        replacements: dict[int, QueueItemRecord] = {}
+        for item_id, item in zip(item_ids, plan.items, strict=True):
+            row, original = self.record_for_id(item_id)
+            if row is None or original is None or original.status != QueueItemStatus.AWAITING_START or original.source_path != item.source_path:
+                raise RuntimeError("Queue changed during preparation.")
+            candidate = copy.deepcopy(original)
+            candidate.plan_item = copy.deepcopy(item)
+            candidate.job_snapshot = build_queue_job_snapshot(plan, workdir)
+            candidate.job_snapshot.output_root = item.output_path.parent
+            if candidate.draft is not None:
+                candidate.draft.media_info = copy.deepcopy(item.media_info)
+            encoder = item.encoder_info
+            candidate.total_passes = 2 if item.options.two_pass and encoder and encoder.supports_two_pass else 1
+            reset_for_retry(candidate)
+            if item.skip_reason:
+                candidate.status = QueueItemStatus.FAILED
+                candidate.error_summary = item.skip_reason
+            replacements[row] = candidate
+        combined = [replacements.get(row, record) for row, record in enumerate(self._records)]
+        validate_unique_output_paths((record.source_path, record.output_path) for record in combined if output_will_be_written(record))
+        for row, record in replacements.items():
+            self._records[row] = record
+        self._emit_rows_changed(list(replacements))
+
+    def restore_global_options(self, rows: list[int]) -> int:
+        def restore(record: QueueItemRecord) -> bool:
+            unbind_for_retry(record)
+            assert record.draft is not None
+            record.draft.options_override = None
+            return True
+        return self._atomic_edit_rows(rows, restore)
+
+    def restore_global_output(self, rows: list[int]) -> int:
+        def restore(record: QueueItemRecord) -> bool:
+            unbind_for_retry(record)
+            assert record.draft is not None
+            record.draft.output_dir_override = None
+            return True
+        return self._atomic_edit_rows(rows, restore)
+
     def mark_running(self, item_id: str) -> None:
         row, record = self.record_for_id(item_id)
         if row is None or record is None:
@@ -639,6 +707,8 @@ class QueueTableModel(QAbstractTableModel):
         rows: list[int],
         edit: Callable[[QueueItemRecord], bool],
     ) -> int:
+        if self._preparing:
+            raise RuntimeError("Queue preparation owns these settings until it finishes.")
         targets = sorted(set(rows))
         if not targets or not self.can_edit_rows(targets):
             raise RuntimeError("Every selected queue item must be editable.")

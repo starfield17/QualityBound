@@ -348,5 +348,15 @@
   "gui.decision.size_conflict_title": "Quality and size conflict",
   "gui.decision.size_conflict_intro": "Tested candidates meet the quality target but exceed the size limit for {file}, or its media budget is too small.",
   "gui.decision.quality_miss_title": "Quality target not reached",
-  "gui.decision.quality_miss_intro": "Tested candidates did not meet the VMAF target for {file}."
+  "gui.decision.quality_miss_intro": "Tested candidates did not meet the VMAF target for {file}.",
+  "gui.status.awaiting_start": "Awaiting Start",
+  "gui.status.preparing_queue": "Preparing queue",
+  "gui.table.at_start": "Set at Start",
+  "gui.tag.custom_options": "Custom options",
+  "gui.tag.custom_output": "Custom output",
+  "gui.tooltip.start_binding": "Encoding settings and output are selected when Start Queue is clicked. Per-item overrides are preserved.",
+  "gui.menu.follow_global_options": "Follow global encoding settings",
+  "gui.menu.follow_global_output": "Follow global output directory",
+  "gui.log.sources_added": "Added {count} source(s); execution settings will be selected at Start Queue.",
+  "gui.log.preparing_queue": "Preparing queue with the current settings."
 }

@@ -35,7 +35,7 @@ def choose_quality_decision(
     record: QueueItemRecord,
     options: list[DecisionOption],
 ) -> DecisionOption | None:
-    quality = record.plan_item.quality_search_result or record.plan_item.segmented_analysis_result
+    quality = record.bound_plan_item.quality_search_result or record.bound_plan_item.segmented_analysis_result
     box = QMessageBox(parent)
     box.setIcon(QMessageBox.Icon.Warning)
     quality_miss = quality is not None and quality.failure_kind == ConstraintFailureKind.QUALITY_UNREACHABLE

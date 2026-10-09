@@ -47,7 +47,14 @@ and Smart/Fixed control syncing.
   `create_queue_view()` factory. May use `gui.queue_model`'s column definitions.
 - `gui.queue_manager` — Qt worker/thread orchestration over the model.
 - `gui.gui_workers` — the one-shot threads `MainWindow` starts directly:
-  `PlanWorker` and `EncoderCapabilityDetectWorker`.
+  `QueueIntakeWorker` discovers/probes sources without encoding parameters;
+  `QueuePrepareWorker` binds a batch at Start Queue; and
+  `EncoderCapabilityDetectWorker` probes available encoders.
+- New source records are `AWAITING_START`, with a source draft and no execution
+  plan or tool snapshot. Start freezes current options and output directory,
+  independently preferring per-item overrides. The model commits prepared plans
+  atomically; preparation locks queue edits, reordering and decision activation.
+  Resume retains its bound snapshot. Manual retry returns to source-draft state.
 - `gui.queue_completion` — skipped-source publishing, reports, notifications and
   confirmed post-run actions. `process_stopped` handles skipped-source policy
   independently of unresolved decisions and copies snapshots on a background

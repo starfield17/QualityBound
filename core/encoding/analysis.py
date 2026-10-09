@@ -36,8 +36,21 @@ from .process import _emit, _emit_progress
 from .segmented import analyze_segmented_plan_item
 
 
+__all__ = ["analyze_plan_item", "item_needs_smart_analysis", "run_analysis_phase", "_validate_prepared_analysis_results"]
+
+
 def item_needs_smart_analysis(item: EncodePlanItem) -> bool:
     return item.skip_reason is None and item.options.compression_mode == CompressionMode.SMART
+
+
+def _validate_prepared_analysis_results(items: list[EncodePlanItem], results: list[EncodeResult | None]) -> list[EncodeResult | None]:
+    """Accept the terminal results produced for this exact, analyzed plan."""
+    if len(results) != len(items):
+        raise ValueError("Prepared analysis results do not match the plan.")
+    for item, result in zip(items, results, strict=True):
+        if result is not None and (result.source_path != item.source_path or result.output_path != item.output_path or result.success):
+            raise ValueError("Prepared analysis result identity does not match its item.")
+    return list(results)
 
 
 def _record_effective_smart_options(result: EncodeResult, item: EncodePlanItem) -> None:

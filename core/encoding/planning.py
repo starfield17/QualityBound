@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Iterable, cast
@@ -20,6 +21,7 @@ from core.models import (
     EncodeOptions,
     EncodePlan,
     EncodePlanItem,
+    EncodeRequest,
     EncoderInfo,
     OperationCancelledError,
     VideoFileItem,
@@ -529,3 +531,70 @@ def build_encode_plan(
         input_root=input_root,
         output_root=output_root,
     )
+
+
+def prepare_encode_requests(
+    requests: Iterable[EncodeRequest], *, workdir: Path,
+    ffmpeg_path: str | None = None, ffprobe_path: str | None = None,
+    progress_callback: Callable[[str], None] | None = None,
+    cancel_check: Callable[[], bool] | None = None,
+) -> EncodePlan:
+    """Bind a GUI batch at start, preserving per-source settings and layout.
+
+    Tool/encoder and batch path errors abort preparation. Individual source or
+    output validation errors remain visible plan failures, without encoding.
+    Source metadata is refreshed with the selected probe at this boundary.
+    """
+    selected = copy.deepcopy(list(requests))
+    if not selected:
+        raise ValueError("No sources to prepare.")
+    for request in selected:
+        request.file_item = VideoFileItem(request.file_item.path.expanduser().resolve(), request.file_item.relative_path)
+
+    def check_cancel() -> None:
+        if cancel_check is not None and cancel_check():
+            raise OperationCancelledError("Queue preparation cancelled.")
+
+    check_cancel()
+    ffmpeg, ffprobe = discover_ffmpeg_tools(ffmpeg_path, ffprobe_path)
+    capabilities = ensure_encoder_capabilities(ffmpeg, progress_callback=progress_callback)
+    bindings: list[tuple[EncoderInfo, EncodeOptions]] = []
+    for request in selected:
+        check_cancel()
+        bindings.append(_resolve_plan_encoder(request.options, ffmpeg, progress_callback, capabilities))
+    validate_workdir(workdir)
+    outputs: list[Path] = []
+    roots: list[Path] = []
+    for request, (_encoder, options) in zip(selected, bindings, strict=True):
+        check_cancel()
+        if request.input_root is not None:
+            root = choose_output_root(request.input_root, request.output_dir, options.codec)
+            output = build_output_path(request.file_item.path, request.input_root, root, options.codec,
+                                       options.container, create_directories=False)
+        else:
+            root = request.output_dir or request.file_item.path.parent
+            output = build_explicit_file_output_path(request.file_item.path, request.file_item.relative_path,
+                                                     request.output_dir, options.codec, options.container, create_directories=False)
+        roots.append(root)
+        outputs.append(output)
+    groups: dict[str, list[int]] = {}
+    for index, output in enumerate(outputs):
+        groups.setdefault(normalized_output_path(output), []).append(index)
+    for indexes in groups.values():
+        if len(indexes) > 1:
+            for index in indexes:
+                outputs[index] = disambiguate_output_path(outputs[index], selected[index].file_item.path)
+    validate_unique_output_paths((request.file_item.path, output) for request, output in zip(selected, outputs, strict=True))
+    items: list[EncodePlanItem] = []
+    for request, output, (encoder, options) in zip(selected, outputs, bindings, strict=True):
+        check_cancel()
+        ratio = choose_ratio(options.codec, options.ratio) if options.compression_mode == CompressionMode.FIXED_BITRATE else None
+        try:
+            item = _successful_plan_item(request.file_item, output, ffprobe, ratio, options, encoder, workdir, cancel_check)
+        except OperationCancelledError:
+            raise
+        except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as exc:
+            item = _skipped_plan_item(request.file_item, output, options, encoder, exc)
+        items.append(item)
+    check_cancel()
+    return EncodePlan(items, ffmpeg, ffprobe, selected[0].input_root or selected[0].file_item.path.parent, roots[0])

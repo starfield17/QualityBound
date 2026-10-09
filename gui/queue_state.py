@@ -10,12 +10,13 @@ from pathlib import Path
 from typing import Mapping
 
 from core.i18n import Translator
-from core.models import CompressionMode, EncodePlan, EncodePlanItem, EncodeResult, MediaInfo, QualitySearchResult, SegmentedAnalysisResult
+from core.models import CompressionMode, EncodeOptions, EncodePlan, EncodePlanItem, EncodeResult, MediaInfo, QualitySearchResult, SegmentedAnalysisResult, VideoFileItem
 from core.progress_events import ProgressEvent
 from core.smart import resolve_max_output_ratio
 
 
 class QueueItemStatus(str, Enum):
+    AWAITING_START = "awaiting_start"
     QUEUED = "queued"
     WAITING_ANALYSIS = "waiting_analysis"
     ANALYZING = "analyzing"
@@ -29,6 +30,7 @@ class QueueItemStatus(str, Enum):
 
 
 STATUS_KEY_BY_VALUE = {
+    QueueItemStatus.AWAITING_START: "gui.status.awaiting_start",
     QueueItemStatus.QUEUED: "gui.status.ready",
     QueueItemStatus.WAITING_ANALYSIS: "gui.status.waiting_analysis",
     QueueItemStatus.ANALYZING: "gui.status.analyzing",
@@ -71,10 +73,19 @@ class QueueJobSnapshot:
 
 
 @dataclass(slots=True)
+class QueueSourceDraft:
+    file_item: VideoFileItem
+    input_root: Path | None
+    media_info: MediaInfo | None = None
+    options_override: EncodeOptions | None = None
+    output_dir_override: Path | None = None
+
+
+@dataclass(slots=True)
 class QueueItemRecord:
     item_id: str
-    plan_item: EncodePlanItem
-    job_snapshot: QueueJobSnapshot
+    plan_item: EncodePlanItem | None
+    job_snapshot: QueueJobSnapshot | None
     status: QueueItemStatus
     total_passes: int
     current_pass_index: int = 0
@@ -92,24 +103,52 @@ class QueueItemRecord:
     analysis_candidate_index: int = 0
     analysis_candidate_limit: int = 0
     analysis_measurement_budget: int = 0
+    draft: QueueSourceDraft | None = None
+
+    def __post_init__(self) -> None:
+        if (self.plan_item is None) != (self.job_snapshot is None):
+            raise ValueError("A queue binding requires both a plan and a tool snapshot.")
+        if self.plan_item is None:
+            if self.draft is None or self.status in RUNNABLE_ITEM_STATUSES | ACTIVE_ITEM_STATUSES | {QueueItemStatus.NEEDS_DECISION}:
+                raise ValueError("An unbound queue item requires a source draft and a non-executing status.")
+        elif self.status == QueueItemStatus.AWAITING_START:
+            raise ValueError("An awaiting-start source must not have an execution binding.")
+        if self.plan_item is not None and self.draft is not None and self.plan_item.source_path != self.draft.file_item.path:
+            raise ValueError("Queue source and execution binding identities differ.")
+
+    @property
+    def bound_plan_item(self) -> EncodePlanItem:
+        if self.plan_item is None:
+            raise RuntimeError("Queue source is not bound to an execution plan.")
+        return self.plan_item
+
+    @property
+    def bound_job_snapshot(self) -> QueueJobSnapshot:
+        if self.job_snapshot is None:
+            raise RuntimeError("Queue source has no execution tool snapshot.")
+        return self.job_snapshot
 
     @property
     def source_path(self) -> Path:
-        return self.plan_item.source_path
+        if self.draft is not None:
+            return self.draft.file_item.path
+        return self.bound_plan_item.source_path
 
     @property
     def output_path(self) -> Path:
-        return self.plan_item.output_path
+        return self.bound_plan_item.output_path
 
     @property
     def media_info(self) -> MediaInfo | None:
-        return self.plan_item.media_info
+        if self.plan_item is not None:
+            return self.plan_item.media_info
+        return self.draft.media_info if self.draft is not None else None
 
     @property
     def duration_sec(self) -> float:
-        if self.plan_item.media_info is None:
+        if self.media_info is None:
             return 0.0
-        return float(self.plan_item.media_info.duration or 0.0)
+        return float(self.media_info.duration or 0.0)
 
     @property
     def effective_weight(self) -> float:
@@ -152,6 +191,23 @@ def build_queue_job_snapshot(plan: EncodePlan, workdir: Path) -> QueueJobSnapsho
 
 def clone_plan_item(plan_item: EncodePlanItem) -> EncodePlanItem:
     return copy.deepcopy(plan_item)
+
+
+def create_draft_record(draft: QueueSourceDraft, error: str | None = None) -> QueueItemRecord:
+    return QueueItemRecord(uuid.uuid4().hex, None, None,
+                           QueueItemStatus.FAILED if error else QueueItemStatus.AWAITING_START,
+                           1, error_summary=error, draft=copy.deepcopy(draft))
+
+
+def unbind_for_retry(record: QueueItemRecord) -> None:
+    """A manual retry returns a source to start-time selection, not a resume."""
+    if record.draft is None:
+        record.draft = QueueSourceDraft(VideoFileItem(record.source_path, Path(record.source_path.name)),
+                                        None, record.media_info)
+    record.plan_item = None
+    record.job_snapshot = None
+    reset_for_retry(record)
+    record.total_passes = 1
 
 
 def create_queue_records(plan: EncodePlan, workdir: Path) -> list[QueueItemRecord]:
@@ -197,13 +253,19 @@ def short_error(message: str | None, limit: int = 120) -> str:
 
 def build_tags(record: QueueItemRecord, translator: Translator) -> list[str]:
     tags: list[str] = []
+    if record.plan_item is None:
+        if record.draft is not None and record.draft.options_override is not None:
+            tags.append(translator.t("gui.tag.custom_options"))
+        if record.draft is not None and record.draft.output_dir_override is not None:
+            tags.append(translator.t("gui.tag.custom_output"))
+        return tags
     if record.total_passes > 1:
         tags.append(translator.t("gui.tag.two_pass"))
-    if record.plan_item.options.overwrite:
+    if record.bound_plan_item.options.overwrite:
         tags.append(translator.t("gui.tag.overwrite"))
-    if record.plan_item.options.copy_external_subtitles:
+    if record.bound_plan_item.options.copy_external_subtitles:
         tags.append(translator.t("gui.tag.external_subtitles"))
-    if record.plan_item.warnings:
+    if record.bound_plan_item.warnings:
         tags.append(translator.t("gui.tag.warning"))
     if record.status == QueueItemStatus.SKIPPED:
         tags.append(translator.t("gui.tag.skipped"))
@@ -221,18 +283,20 @@ def build_tags(record: QueueItemRecord, translator: Translator) -> list[str]:
 
 
 def build_tooltip(record: QueueItemRecord, translator: Translator) -> str:
+    if record.plan_item is None:
+        return "\n".join([str(record.source_path), translator.t("gui.tooltip.start_binding"), record.error_summary or ""])
     lines = [
         translator.t("gui.tooltip.source", path=record.source_path),
         translator.t("gui.tooltip.output", path=record.output_path),
     ]
-    if record.plan_item.warnings:
+    if record.bound_plan_item.warnings:
         lines.append(
-            translator.t("gui.tooltip.warnings", warnings="; ".join(record.plan_item.warnings))
+            translator.t("gui.tooltip.warnings", warnings="; ".join(record.bound_plan_item.warnings))
         )
     if record.error_summary:
         lines.append(translator.t("gui.tooltip.detail", detail=record.error_summary))
-    quality = record.plan_item.quality_search_result
-    segmented = record.plan_item.segmented_analysis_result
+    quality = record.bound_plan_item.quality_search_result
+    segmented = record.bound_plan_item.segmented_analysis_result
     if segmented is not None:
         mean = segmented.final_mean_vmaf if segmented.final_mean_vmaf is not None else segmented.predicted_mean_vmaf
         lines.append(translator.t("gui.tooltip.smart_v2_shots", count=len(segmented.shots)))
@@ -316,8 +380,10 @@ def estimate_saved_bytes(records: list[QueueItemRecord]) -> tuple[int | None, bo
     has_estimate = False
     is_floor = False
     for record in records:
+        if record.plan_item is None:
+            continue
         media = record.media_info
-        if media is None or media.duration <= 0 or record.plan_item.skip_reason:
+        if media is None or media.duration <= 0 or record.bound_plan_item.skip_reason:
             continue
 
         try:
@@ -327,24 +393,24 @@ def estimate_saved_bytes(records: list[QueueItemRecord]) -> tuple[int | None, bo
         if source_bytes <= 0:
             continue
 
-        target_video_bitrate_bps = record.plan_item.target_video_bitrate_bps
+        target_video_bitrate_bps = record.bound_plan_item.target_video_bitrate_bps
         if target_video_bitrate_bps > 0:
-            if record.plan_item.options.audio_mode.value == "copy":
+            if record.bound_plan_item.options.audio_mode.value == "copy":
                 audio_bitrate_bps = max(int(media.audio_bitrate_bps or 0), 0)
             else:
-                parsed_audio = parse_bitrate_to_bps(record.plan_item.options.audio_bitrate)
+                parsed_audio = parse_bitrate_to_bps(record.bound_plan_item.options.audio_bitrate)
                 audio_bitrate_bps = max(parsed_audio or 0, 0)
             estimated_output_bytes = int(
                 media.duration * (target_video_bitrate_bps + audio_bitrate_bps) / 8.0
             )
         elif (
-            record.plan_item.options.compression_mode == CompressionMode.SMART
+            record.bound_plan_item.options.compression_mode == CompressionMode.SMART
             and record.status not in no_output_statuses
         ):
             try:
                 ceiling_ratio = resolve_max_output_ratio(
-                    record.plan_item.options.codec,
-                    record.plan_item.options.max_output_ratio,
+                    record.bound_plan_item.options.codec,
+                    record.bound_plan_item.options.max_output_ratio,
                 )
             except ValueError:
                 continue
@@ -368,7 +434,7 @@ def output_will_be_written(record: QueueItemRecord) -> bool:
     must not participate in queue-wide collision checks.
     """
 
-    return record.plan_item.skip_reason is None
+    return record.plan_item is not None and record.plan_item.skip_reason is None
 
 
 def processed_weight(record: QueueItemRecord) -> float:
@@ -395,7 +461,7 @@ def compute_metrics(records: list[QueueItemRecord]) -> QueueMetrics:
         weight = record.effective_weight
         total_weight += weight
         completed_weight += processed_weight(record)
-        if record.status in {QueueItemStatus.QUEUED, QueueItemStatus.WAITING_ANALYSIS}:
+        if record.status in {QueueItemStatus.AWAITING_START, QueueItemStatus.QUEUED, QueueItemStatus.WAITING_ANALYSIS}:
             metrics.queued_items += 1
         elif record.status in ACTIVE_ITEM_STATUSES:
             metrics.running_items += 1
@@ -434,7 +500,7 @@ def compute_metrics(records: list[QueueItemRecord]) -> QueueMetrics:
 def mark_started(record: QueueItemRecord) -> None:
     record.status = (
         QueueItemStatus.WAITING_ANALYSIS
-        if record.plan_item.options.compression_mode == CompressionMode.SMART
+        if record.bound_plan_item.options.compression_mode == CompressionMode.SMART
         else QueueItemStatus.ENCODING
     )
     record.started_at = time.time()
@@ -451,9 +517,9 @@ def mark_started(record: QueueItemRecord) -> None:
 
 
 def reset_for_retry(record: QueueItemRecord) -> None:
-    record.status = (
+    record.status = QueueItemStatus.AWAITING_START if record.plan_item is None else (
         QueueItemStatus.WAITING_ANALYSIS
-        if record.plan_item.options.compression_mode == CompressionMode.SMART
+        if record.bound_plan_item.options.compression_mode == CompressionMode.SMART
         else QueueItemStatus.QUEUED
     )
     record.current_pass_index = 0
@@ -534,12 +600,12 @@ def apply_progress_event(record: QueueItemRecord, event: Mapping[str, object] | 
     if isinstance(budget, int):
         record.analysis_measurement_budget = budget
     if isinstance(segmented_result, SegmentedAnalysisResult):
-        record.plan_item.segmented_analysis_result = segmented_result
+        record.bound_plan_item.segmented_analysis_result = segmented_result
     if isinstance(quality_result, QualitySearchResult):
-        record.plan_item.quality_search_result = quality_result
+        record.bound_plan_item.quality_search_result = quality_result
     target_bitrate = event.get("target_video_bitrate_bps")
     if isinstance(target_bitrate, int) and target_bitrate > 0:
-        record.plan_item.target_video_bitrate_bps = target_bitrate
+        record.bound_plan_item.target_video_bitrate_bps = target_bitrate
     current_pass_index = event.get("current_pass_index")
     if isinstance(current_pass_index, int):
         record.current_pass_index = current_pass_index
@@ -568,18 +634,18 @@ def apply_progress_event(record: QueueItemRecord, event: Mapping[str, object] | 
 
 def mark_finished(record: QueueItemRecord, result: EncodeResult) -> None:
     if result.segmented_analysis_result is not None:
-        record.plan_item.segmented_analysis_result = result.segmented_analysis_result
+        record.bound_plan_item.segmented_analysis_result = result.segmented_analysis_result
     record.result = result
     record.log_path = result.log_path
     record.finished_at = time.time()
     if result.quality_search_result is not None:
-        record.plan_item.quality_search_result = result.quality_search_result
+        record.bound_plan_item.quality_search_result = result.quality_search_result
         if result.quality_search_result.selected_video_bitrate_bps > 0:
-            record.plan_item.target_video_bitrate_bps = result.quality_search_result.selected_video_bitrate_bps
+            record.bound_plan_item.target_video_bitrate_bps = result.quality_search_result.selected_video_bitrate_bps
     if result.effective_min_vmaf is not None:
-        record.plan_item.options.min_vmaf = result.effective_min_vmaf
+        record.bound_plan_item.options.min_vmaf = result.effective_min_vmaf
     if result.effective_max_output_ratio is not None:
-        record.plan_item.options.max_output_ratio = result.effective_max_output_ratio
+        record.bound_plan_item.options.max_output_ratio = result.effective_max_output_ratio
     if result.needs_decision:
         record.status = QueueItemStatus.NEEDS_DECISION
         record.file_progress = 100.0

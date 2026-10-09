@@ -7,7 +7,9 @@ modules import concrete owners in `config`, `media`, `ffmpeg`, and `smart`.
 ## Internal boundaries
 
 - `planning` discovers inputs, resolves one encoder, probes media, and builds
-  validated plan items.
+  validated plan items. `prepare_encode_requests` binds a GUI batch at start
+  with independent per-source options and folder layout; encoder and media
+  validation use the selected tools. CLI planning retains its existing contract.
 - `analysis` runs Smart analysis and converts policy outcomes into terminal
   item results or encode-ready items.
 - `process` owns FFmpeg process lifecycle, cancellation, logging, and progress
@@ -22,6 +24,12 @@ modules import concrete owners in `config`, `media`, `ffmpeg`, and `smart`.
   `core.ffmpeg.segmented`; shot search stays in `core.smart.v2`.
 - `parallel` deep-copies already-bound plan items, runs Smart analysis for the
   whole queue first, then dynamically schedules full-file encode workers.
+
+GUI execution may contain frozen tool contexts from different starts. It groups
+contiguous items by FFmpeg, FFprobe and workdir, completes all groups' analysis
+before any encoding, then executes groups in queue order. Executors can accept
+the matching terminal analysis results through `analysis_results`; each ready
+Smart item must carry its successful analysis and still pass execution gates.
 
 Never share a mutable `EncodePlanItem` between workers and never rebind or
 round-robin its encoder in the executor. A Smart output is

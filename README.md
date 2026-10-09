@@ -86,6 +86,12 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
+In the GUI, add or drop files first, adjust encoding settings and the output
+directory, then click **Start Queue**. Settings are bound at Start. Right-click
+overrides apply only to the selected sources; parameter and output-directory
+overrides are independent and can each be reset to follow the global settings.
+Resume keeps the current run's settings; a manual retry selects settings again.
+
 Plan or encode from the CLI:
 
 ```bash

@@ -132,7 +132,7 @@ class QueueCompletionHandler(QObject):
         if self._apply_copy_result is not None:
             self._apply_copy_result(item_id, result)
         if self._copy_translator is not None:
-            self._log_publication(record.plan_item, result, self._copy_translator)
+            self._log_publication(record.bound_plan_item, result, self._copy_translator)
 
     @Slot()
     def _on_copy_finished(self) -> None:
@@ -174,8 +174,8 @@ class QueueCompletionHandler(QObject):
         for record in records:
             if record.result is None:
                 continue
-            if is_eligible_skipped_item(record.plan_item, record.result):
-                eligible.append((record.plan_item, record.result))
+            if is_eligible_skipped_item(record.bound_plan_item, record.result):
+                eligible.append((record.bound_plan_item, record.result))
         return eligible
 
     def _publish_skipped_pairs(self, pairs: list[tuple[EncodePlanItem, EncodeResult]], tr: Translator) -> None:

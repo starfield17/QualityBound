@@ -9,7 +9,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QThread, Signal
 
-from core.encoding import execute_plan, execute_plan_concurrent
+from core.encoding import execute_plan, execute_plan_concurrent, run_analysis_phase
 from core.models import EncodePlan, EncodeResult, OperationCancelledError
 from core.progress_events import ProgressEvent
 from gui.queue_state import ACTIVE_ITEM_STATUSES, RUNNABLE_ITEM_STATUSES, QueueItemRecord, QueueItemStatus, create_queue_records
@@ -78,69 +78,79 @@ class QueueExecuteWorker(QThread):
     def pause_after_current(self) -> None:
         self._pause_after_current_event.set()
 
-    def _build_plan(self) -> EncodePlan:
-        first_record = self.items[0].record
+    def _build_plan(self, items: list[QueueExecutionItem] | None = None) -> EncodePlan:
+        selected = self.items if items is None else items
+        first_record = selected[0].record
         return EncodePlan(
-            items=[copy.deepcopy(item.record.plan_item) for item in self.items],
-            ffmpeg_path=first_record.job_snapshot.ffmpeg_path,
-            ffprobe_path=first_record.job_snapshot.ffprobe_path,
+            items=[copy.deepcopy(item.record.bound_plan_item) for item in selected],
+            ffmpeg_path=first_record.bound_job_snapshot.ffmpeg_path,
+            ffprobe_path=first_record.bound_job_snapshot.ffprobe_path,
             input_root=first_record.source_path.parent,
-            output_root=first_record.job_snapshot.output_root,
+            output_root=first_record.bound_job_snapshot.output_root,
+        )
+
+    def _started(self, items: list[QueueExecutionItem], plan: EncodePlan, index: int) -> None:
+        encoder = plan.items[index].encoder_info
+        self.item_started.emit(items[index].item_id,
+                               encoder.backend.value if encoder else plan.items[index].options.backend.value,
+                               encoder.encoder_name if encoder else "")
+
+    def _execute_group(self, items: list[QueueExecutionItem], plan: EncodePlan,
+                       analysis: list[EncodeResult | None] | None = None) -> list[EncodeResult]:
+        contexts: list[dict[str, object]] = [{"queue_item_id": item.item_id} for item in items]
+        workdir = items[0].record.bound_job_snapshot.workdir
+        if self.max_workers > 1:
+            return execute_plan_concurrent(
+                plan, workdir, max_workers=self.max_workers,
+                log_callback=self._emit_log, progress_callback=self._emit_progress,
+                cancel_check=self._cancel_event.is_set, pause_check=self._pause_after_current_event.is_set,
+                process_callback=self._set_current_process, item_contexts=contexts,
+                item_started_callback=lambda index, backend, encoder: self.item_started.emit(items[index].item_id, backend, encoder),
+                item_result_callback=lambda index, result: self.item_finished.emit(items[index].item_id, result),
+                analysis_results=analysis,
+            )
+        return execute_plan(
+            plan, workdir, log_callback=self._emit_log, progress_callback=self._emit_progress,
+            cancel_check=self._cancel_event.is_set, pause_check=self._pause_after_current_event.is_set,
+            process_callback=lambda proc: self._set_current_process("serial", proc),
+            item_started_callback=lambda index: self._started(items, plan, index),
+            item_result_callback=lambda index, result: self.item_finished.emit(items[index].item_id, result),
+            extra_progress_contexts=contexts, analysis_results=analysis,
+        )
+
+    def _analyze_group(self, items: list[QueueExecutionItem], plan: EncodePlan) -> list[EncodeResult | None]:
+        return run_analysis_phase(
+            plan.ffmpeg_path, plan.items, items[0].record.bound_job_snapshot.workdir,
+            log_callback=self._emit_log, progress_callback=self._emit_progress,
+            cancel_check=self._cancel_event.is_set, pause_check=self._pause_after_current_event.is_set,
+            process_callback=self._set_current_process,
+            item_contexts=[{"queue_item_id": item.item_id} for item in items],
+            item_started_callback=lambda index: self._started(items, plan, index),
+            item_result_callback=lambda index, result: self.item_finished.emit(items[index].item_id, result),
         )
 
     def run(self) -> None:
         try:
-            if self.max_workers > 1:
-                plan = self._build_plan()
-                index_to_item_id = [item.item_id for item in self.items]
-                results = execute_plan_concurrent(
-                    plan,
-                    self.items[0].record.job_snapshot.workdir,
-                    max_workers=self.max_workers,
-                    log_callback=self._emit_log,
-                    progress_callback=self._emit_progress,
-                    cancel_check=self._cancel_event.is_set,
-                    pause_check=self._pause_after_current_event.is_set,
-                    process_callback=self._set_current_process,
-                    item_contexts=[{"queue_item_id": item.item_id} for item in self.items],
-                    item_started_callback=lambda index, backend, encoder: self.item_started.emit(
-                        index_to_item_id[index], backend, encoder
-                    ),
-                    item_result_callback=lambda index, result: self.item_finished.emit(index_to_item_id[index], result),
-                )
-                if self._pause_after_current_event.is_set() and len(results) < len(self.items):
-                    self.paused.emit()
-                    return
-                self.queue_finished.emit()
-                return
-            plan = self._build_plan()
-            index_to_item_id = [item.item_id for item in self.items]
-
-            def started(index: int) -> None:
-                item = self.items[index]
-                encoder = plan.items[index].encoder_info or item.record.plan_item.encoder_info
-                backend_name = encoder.backend.value if encoder else item.record.plan_item.options.backend.value
-                encoder_name = encoder.encoder_name if encoder else "n/a"
-                self.item_started.emit(item.item_id, backend_name, encoder_name)
-
-            def finished(index: int, result: EncodeResult) -> None:
-                self.item_finished.emit(index_to_item_id[index], result)
-
-            results = execute_plan(
-                plan,
-                self.items[0].record.job_snapshot.workdir,
-                log_callback=self._emit_log,
-                progress_callback=self._emit_progress,
-                cancel_check=self._cancel_event.is_set,
-                process_callback=lambda proc: self._set_current_process("serial", proc),
-                pause_check=self._pause_after_current_event.is_set,
-                item_started_callback=started,
-                item_result_callback=finished,
-                extra_progress_contexts=[{"queue_item_id": item.item_id} for item in self.items],
-            )
-            if self._pause_after_current_event.is_set() and len(results) < len(self.items):
-                self.paused.emit()
-                return
+            # Contiguous groups preserve queue order and each item's tool snapshot.
+            groups: list[list[QueueExecutionItem]] = []
+            previous: tuple[Path, Path, Path] | None = None
+            for item in self.items:
+                snapshot = item.record.bound_job_snapshot
+                key = (snapshot.ffmpeg_path, snapshot.ffprobe_path, snapshot.workdir)
+                if key != previous:
+                    groups.append([])
+                    previous = key
+                groups[-1].append(item)
+            plans = [self._build_plan(group) for group in groups]
+            analyses = [self._analyze_group(group, plan) for group, plan in zip(groups, plans, strict=True)] if len(groups) > 1 else [None]
+            for group, plan, analysis in zip(groups, plans, analyses, strict=True):
+                if self._cancel_event.is_set():
+                    raise OperationCancelledError("Encoding cancelled.")
+                results = self._execute_group(group, plan, analysis)
+                if self._pause_after_current_event.is_set():
+                    if len(results) < len(group) or group is not groups[-1]:
+                        self.paused.emit()
+                        return
             self.queue_finished.emit()
         except OperationCancelledError as exc:
             self.cancelled.emit(str(exc))
@@ -168,14 +178,33 @@ class QueueManager(QObject):
         self._last_completed_run_id: str | None = None
         self._worker_outcome: str | None = None
         self._postprocessing_pending = False
+        self._preparation_pending = False
 
     def is_busy(self) -> bool:
-        return self._worker is not None or self._postprocessing_pending
+        return self._worker is not None or self._postprocessing_pending or self._preparation_pending
+
+    def begin_preparation(self) -> None:
+        self._preparation_pending = True
+        self.model.set_preparing(True)
+        self.busyChanged.emit(True)
+
+    def finish_preparation(self) -> None:
+        self._preparation_pending = False
+        self.model.set_preparing(False)
+        self.busyChanged.emit(self.is_busy())
 
     def add_plan(self, plan: EncodePlan, workdir: Path) -> int:
         records = create_queue_records(plan, workdir)
         self.model.add_records(records)
         return len(records)
+
+    def include_prepared_items(self, item_ids: list[str]) -> None:
+        if self._pending_run is None:
+            self._pending_run = QueueRunCompletion(uuid.uuid4().hex, tuple(item_ids))
+        else:
+            known = set(self._pending_run.item_ids)
+            self._pending_run = QueueRunCompletion(self._pending_run.run_id,
+                self._pending_run.item_ids + tuple(item_id for item_id in item_ids if item_id not in known))
 
     def start(self, max_workers: int = 1) -> bool:
         if self.is_busy():
@@ -378,7 +407,7 @@ class QueueManager(QObject):
         self._reconcile_pending_run()
 
     def _reconcile_pending_run(self) -> None:
-        if self._postprocessing_pending:
+        if self._postprocessing_pending or self._preparation_pending:
             return
         completion = self._pending_run
         if completion is None:
@@ -388,7 +417,7 @@ class QueueManager(QObject):
         if any(record.status == QueueItemStatus.NEEDS_DECISION for record in records):
             self.stateChanged.emit("awaiting_decision")
             return
-        if any(record.status in RUNNABLE_ITEM_STATUSES for record in records):
+        if any(record.status in RUNNABLE_ITEM_STATUSES or record.status == QueueItemStatus.AWAITING_START for record in records):
             self.stateChanged.emit("idle")
             return
         self._pending_run = None

@@ -7,10 +7,9 @@ testable without constructing a Qt model or view.
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 
-from core.encoding import reconfigure_plan_item
-from core.media import validate_plan_item
 from core.models import (
     DecisionActionCode,
     DecisionOption,
@@ -32,12 +31,16 @@ from core.smart import (
 from gui.queue_state import (
     QueueItemRecord,
     QueueItemStatus,
+    QueueSourceDraft,
     reset_for_retry,
+    unbind_for_retry,
     short_error,
 )
+from core.models import VideoFileItem
 
 
 EDITABLE_ITEM_STATUSES = {
+    QueueItemStatus.AWAITING_START,
     QueueItemStatus.QUEUED,
     QueueItemStatus.WAITING_ANALYSIS,
 }
@@ -55,7 +58,15 @@ def record_quality_result(record: QueueItemRecord) -> QualitySearchResult | Segm
     lookup lives here instead of being re-derived from one field.
     """
 
+    if record.plan_item is None:
+        return None
     return record.plan_item.quality_search_result or record.plan_item.segmented_analysis_result
+
+
+def _ensure_draft(record: QueueItemRecord) -> QueueSourceDraft:
+    if record.draft is None:
+        record.draft = QueueSourceDraft(VideoFileItem(record.source_path, Path(record.source_path.name)), None, record.media_info)
+    return record.draft
 
 
 def apply_options_to_record(
@@ -64,52 +75,22 @@ def apply_options_to_record(
     *,
     runtime_capabilities: dict | None = None,
 ) -> bool:
-    """Re-plan one editable queue record with a newly bound encoder."""
+    """Save a per-source override; binding and validation happen at Start."""
+    del runtime_capabilities  # Capabilities are selected with the start-time tools.
     if not can_edit_record(record):
         return False
-    if not isinstance(runtime_capabilities, dict):
-        raise RuntimeError("Encoder capabilities are not ready for queue reconfiguration.")
-    record.plan_item = reconfigure_plan_item(
-        record.plan_item,
-        options,
-        ffmpeg_path=record.job_snapshot.ffmpeg_path,
-        workdir=record.job_snapshot.workdir,
-        runtime_capabilities=runtime_capabilities,
-        create_directories=False,
-    )
-    encoder = record.plan_item.encoder_info
-    record.total_passes = (
-        2
-        if record.plan_item.options.two_pass
-        and encoder is not None
-        and encoder.supports_two_pass
-        else 1
-    )
-    reset_for_retry(record)
-
+    _ensure_draft(record).options_override = copy.deepcopy(options)
+    unbind_for_retry(record)
     return True
 
 
 def apply_output_dir_to_record(record: QueueItemRecord, output_dir: Path) -> bool:
-    """Change an editable record's output directory after full validation."""
+    """Save an independent directory override without creating outputs."""
     if not can_edit_record(record):
         return False
-    encoder = record.plan_item.encoder_info
-    if encoder is None:
-        raise RuntimeError("Queue item does not have a bound encoder.")
-    output_path = output_dir.expanduser().resolve() / record.output_path.name
-    validate_plan_item(
-        record.source_path,
-        output_path,
-        record.plan_item.options,
-        encoder,
-        record.job_snapshot.workdir,
-        create_directories=False,
-    )
-    record.plan_item.output_path = output_path
-    reset_for_retry(record)
+    _ensure_draft(record).output_dir_override = output_dir.expanduser().resolve()
+    unbind_for_retry(record)
     return True
-
 
 
 def decision_options_for_record(record: QueueItemRecord) -> list[DecisionOption]:
@@ -146,25 +127,25 @@ def apply_quality_decision(record: QueueItemRecord, decision: DecisionOption) ->
         try:
             if quality.measurement_fingerprint:
                 if isinstance(quality, SegmentedAnalysisResult):
-                    delete_segmented_analysis_receipt(record.job_snapshot.workdir, quality.measurement_fingerprint)
+                    delete_segmented_analysis_receipt(record.bound_job_snapshot.workdir, quality.measurement_fingerprint)
                 else:
-                    delete_analysis_receipt(record.job_snapshot.workdir, quality.measurement_fingerprint)
+                    delete_analysis_receipt(record.bound_job_snapshot.workdir, quality.measurement_fingerprint)
         except (OSError, ValueError) as exc:
             record.error_summary = short_error(str(exc))
             return False
-        record.plan_item.quality_search_result = None
-        record.plan_item.segmented_analysis_result = None
+        record.bound_plan_item.quality_search_result = None
+        record.bound_plan_item.segmented_analysis_result = None
         reset_for_retry(record)
         return True
 
     reselected = reselect_after_quality_decision(
-        record.job_snapshot.ffmpeg_path,
-        record.plan_item,
+        record.bound_job_snapshot.ffmpeg_path,
+        record.bound_plan_item,
         quality,
         decision,
     )
     if isinstance(reselected, SegmentedAnalysisResult):
-        record.plan_item.segmented_analysis_result = reselected
+        record.bound_plan_item.segmented_analysis_result = reselected
         if reselected.success or decision.requires_analysis:
             reset_for_retry(record)
         else:
@@ -173,9 +154,9 @@ def apply_quality_decision(record: QueueItemRecord, decision: DecisionOption) ->
                 record.result.error_message = reselected.reason
             record.error_summary = reselected.reason
         return True
-    record.plan_item.quality_search_result = reselected
+    record.bound_plan_item.quality_search_result = reselected
     if reselected.status == QualitySearchStatus.FOUND:
-        record.plan_item.target_video_bitrate_bps = reselected.selected_video_bitrate_bps
+        record.bound_plan_item.target_video_bitrate_bps = reselected.selected_video_bitrate_bps
         reset_for_retry(record)
     elif decision.requires_analysis:
         reselected.fingerprint = ""
@@ -205,7 +186,7 @@ def accept_size_miss(record: QueueItemRecord) -> bool:
     result = record.result
     assert result is not None
     try:
-        accept_rejected_output(record.plan_item, result)
+        accept_rejected_output(record.bound_plan_item, result)
     except (OSError, ValueError) as exc:
         record.error_summary = short_error(str(exc))
         return False
@@ -223,7 +204,7 @@ def discard_size_miss(record: QueueItemRecord) -> bool:
     result = record.result
     assert result is not None
     try:
-        discard_rejected_output(record.plan_item, result)
+        discard_rejected_output(record.bound_plan_item, result)
     except (OSError, ValueError) as exc:
         record.error_summary = short_error(str(exc))
         return False
@@ -240,7 +221,7 @@ def retry_size_miss(record: QueueItemRecord) -> bool:
     result = record.result
     assert result is not None
     try:
-        prepare_size_miss_retry(record.plan_item, result)
+        prepare_size_miss_retry(record.bound_plan_item, result)
     except ValueError as exc:
         record.error_summary = short_error(str(exc))
         return False
