@@ -947,6 +947,7 @@ def run_smart_case(argv: Sequence[str] | None = None) -> int:
         }
 
         # Cache this point for oracle sweep if needed
+        assert ground_truth_passed is not None and full_encode_output_bytes is not None
         evaluated_oracle_cache[bitrate_to_encode] = OraclePoint(
             bitrate_bps=bitrate_to_encode,
             mean_vmaf=mean_v,

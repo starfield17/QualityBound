@@ -1,0 +1,6 @@
+{
+  "extends": "./pyproject.toml",
+  "include": ["scripts"],
+  "typeCheckingMode": "basic",
+  "reportUnnecessaryTypeIgnoreComment": "error"
+}

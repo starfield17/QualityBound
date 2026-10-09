@@ -117,9 +117,10 @@ not real-world VMAF accuracy.
 
 ## Deferred check work
 
-Three known gaps are left open on purpose. None of them blocks a release. Each is
+Two known gaps are left open on purpose. Neither of them blocks a release. Each is
 recorded with the measurement that produced it, so it can be picked up without
-re-running the audit.
+re-running the audit. The scope of each check — strict for the application, basic
+for `test/` and `scripts/` — is recorded with its reason in the same section.
 
 ### Strict-mode inference debt at the dict and JSON boundaries
 
@@ -179,24 +180,31 @@ per-directory rule policy (not supported today) or splitting the test tree acros
 two configuration files, so the decision is recorded here rather than taken
 silently.
 
-### `scripts/` is outside the type-check scope
+### `scripts/` is type-checked in `basic` mode
 
-`pyproject.toml` includes `core`, `cli`, `gui` and `main.py`. Adding `scripts`
-analyses 8 files and reports 9 findings in basic mode over 3 of them:
+`pyright.scripts.json` includes `scripts/` and runs the project settings in basic
+mode. It reports nothing now; the nine findings it started with were three real
+typing mistakes rather than style:
 
-- `scripts/build_icons.py` — the Pillow `save(format=...)` overload rejects
-  `Literal["PNG"]`, and a `QByteArray` is passed where `Iterable[SupportsRead]`
-  is expected (the Qt form is `bytes(state.toBase64().data())`);
-- `scripts/prepare_ffmpeg.py` — two `IO[bytes]` arguments against `BinaryIO`
-  parameters, and one iteration over a value typed `object`;
-- `scripts/run_smart_case.py` — two optional values (`bool | None`, `int | None`)
-  passed to non-optional parameters.
+- `scripts/build_icons.py` passed a `str` to `QImage.save(device, format)`, which
+takes `bytes`, and returned `QByteArray` where `bytes` was declared — now
+  `b"PNG"` and `bytes(encoded.data())`;
+- `scripts/prepare_ffmpeg.py` typed `_copy_stream` as `BinaryIO` while `zipfile`
+  and `tarfile` hand it `IO[bytes]`, and iterated `data["licenses"]` without
+  narrowing it out of `object`;
+- `scripts/run_smart_case.py` passed the possibly-unset `ground_truth_passed` and
+  `full_encode_output_bytes` into `OraclePoint`, which declares them non-optional.
 
-These are development and packaging tools, not application payload, so the scope
-choice is a cost decision rather than a safety one. They are not unchecked, only
-untyped: `build_icons.py` runs in the quality gate, `prepare_ffmpeg.py` runs in the
-packaging workflow, and `run_smart_case.py` is exercised by `test/test_smart_case.py`
-and `test/test_smart_corpus.py`.
+Strict mode is not available for this scope: a strict pass over `scripts/` reports
+147 findings, 139 of them the same six disabled inference rules the application
+scope leaves open (capability snapshots, preset documents and JSON-decoded
+manifests travelling as `object`). The remaining eight are one missing stub for
+`nuitka`, two unannotated parameters, one argument-type mismatch over a JSON union,
+and dead `is not None` guards. These are development and packaging tools, not
+application payload, so the scope choice is a cost decision rather than a safety
+one; the executables still run in the quality gate (`build_icons.py --check`), the
+packaging workflow (`prepare_ffmpeg.py`, `build_nuitka.py`), and
+`test/test_smart_case.py` / `test/test_smart_corpus.py`.
 
 ## Known limitations
 

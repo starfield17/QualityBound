@@ -254,6 +254,7 @@ class QualityWorkflowTestCase(unittest.TestCase):
         self.assertIn("python scripts/build_icons.py --check", self.workflow)
         self.assertIn("python scripts/check_strict_debt.py", self.workflow)
         self.assertIn("pyright -p pyright.tests.json", self.workflow)
+        self.assertIn("pyright -p pyright.scripts.json", self.workflow)
 
     def test_quality_provisions_linux_qt_runtime_before_icon_check(self) -> None:
         self.assertIn("Install Linux Qt runtime dependencies", self.workflow)

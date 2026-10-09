@@ -72,5 +72,8 @@ jobs:
       - name: Type-check the test suite
         run: pyright -p pyright.tests.json
 
+      - name: Type-check the development scripts
+        run: pyright -p pyright.scripts.json
+
       - name: Ratchet strict-mode inference debt
         run: python scripts/check_strict_debt.py

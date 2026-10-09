@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 import zipfile
 from pathlib import Path
-from typing import BinaryIO
+from typing import IO
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 if str(REPOSITORY_ROOT) not in sys.path:
@@ -170,7 +170,7 @@ def _archive_filename(url: str, digest: str) -> str:
     return f"{digest[:16]}-{name}"
 
 
-def _copy_stream(source: BinaryIO, destination: Path) -> None:
+def _copy_stream(source: IO[bytes], destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     with destination.open("wb") as output:
         shutil.copyfileobj(source, output)
@@ -472,7 +472,9 @@ def prepare_target(
     verify_binary_architecture(ffprobe_path, str(target["architecture"]))
 
     licenses_dir = output_dir / "LICENSES"
-    for license_entry in data["licenses"]:
+    license_entries = data["licenses"]
+    assert isinstance(license_entries, list)
+    for license_entry in license_entries:
         url = str(license_entry["url"])
         digest = str(license_entry["sha256"])
         cached = _download(url, cache_dir / _archive_filename(url, digest), digest)

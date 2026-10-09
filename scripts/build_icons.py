@@ -42,9 +42,9 @@ def render_png(svg_path: Path, size: int) -> bytes:
 
     encoded = QByteArray()
     buffer = QBuffer(encoded)
-    if not buffer.open(QIODevice.OpenModeFlag.WriteOnly) or not image.save(buffer, "PNG"):
+    if not buffer.open(QIODevice.OpenModeFlag.WriteOnly) or not image.save(buffer, b"PNG"):
         raise RuntimeError(f"Could not encode {size}px PNG icon.")
-    return bytes(encoded)
+    return bytes(encoded.data())
 
 
 def build_ico(svg_path: Path) -> bytes:
