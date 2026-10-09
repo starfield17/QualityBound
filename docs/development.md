@@ -152,7 +152,7 @@ Install build requirements and create a native package on the current platform:
 
 ```bash
 python -m pip install -r requirements-build.txt
-python scripts/build_nuitka.py --clean --version 3.3.0
+python scripts/build_nuitka.py --clean --version 3.3.1
 ```
 
 The normalized standalone directory is `dist/qualitybound/`. A native macOS app
