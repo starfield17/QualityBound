@@ -194,15 +194,13 @@ one-display-set PGS stream, and the text path (`.srt` to MP4 `mov_text`) encodes
 successfully.
 
 Nothing in planning probes the subtitle codecs, so the failure is only surfaced
-after the full video encode has run. Deciding what to do needs a product choice,
-because the three candidate behaviours are not equivalent:
+after the full video encode has run. The chosen behaviour is to fail early during
+planning when a bitmap subtitle would target MP4 (`SPEC.md` N9 ← S3): dropping the
+stream would publish a file that lost part of the input, and switching the
+container would change the requested output.
 
-- drop the bitmap subtitle stream for MP4 (encode succeeds, subtitles are lost);
-- fail early during planning when a bitmap subtitle would target MP4; or
-- convert MP4 bitmap-subtitle output to MKV, which changes the requested
-  container.
-
-Until one is chosen, users who need bitmap subtitles should select MKV.
+That check is not implemented yet, so the failure still surfaces after the encode.
+Until it is, users who need bitmap subtitles should select MKV.
 
 ## Packaging
 
