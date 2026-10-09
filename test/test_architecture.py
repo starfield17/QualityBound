@@ -347,6 +347,26 @@ class ArchitectureTestCase(unittest.TestCase):
             + ", ".join(violations),
         )
 
+    def test_smart_v1_reaches_into_v2_only_for_reselect(self) -> None:
+        # D2 ← S1
+        graph = _dependency_graph()
+        v1_modules = {source for source in graph if source.startswith("core.smart.v1")}
+        allowed_v2_dependencies = {("core.smart.v1.decisions", "core.smart.v2.workflow")}
+        observed = {
+            (source, dependency)
+            for source in sorted(v1_modules)
+            for dependency in sorted(graph[source])
+            if dependency.startswith("core.smart.v2")
+        }
+        self.assertEqual(
+            observed,
+            allowed_v2_dependencies,
+            "v1 is the default algorithm and must not depend on experimental v2. "
+            "core.smart.v1.decisions may reuse v2's reselect for a segmented result; "
+            "any other edge makes the default path depend on v2, and a removed edge "
+            "makes this allow-list stale:",
+        )
+
     def test_smart_public_surface_matches_adapter_operations(self) -> None:
         tree = ast.parse((ROOT / "core/smart/__init__.py").read_text(encoding="utf-8"))
         exports = next(
