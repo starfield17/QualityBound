@@ -256,6 +256,13 @@ class QualityWorkflowTestCase(unittest.TestCase):
         self.assertIn("pyright -p pyright.tests.json", self.workflow)
         self.assertIn("pyright -p pyright.scripts.json", self.workflow)
 
+    def test_quality_installs_build_requirements_before_the_scripts_type_check(self) -> None:
+        # scripts/build_nuitka.py imports Nuitka, so the packaging-script scope
+        # would report an unresolved import without the build requirement.
+        install = self.workflow.index("python -m pip install -r requirements-build.txt")
+        scripts_check = self.workflow.index("pyright -p pyright.scripts.json")
+        self.assertLess(install, scripts_check)
+
     def test_quality_provisions_linux_qt_runtime_before_icon_check(self) -> None:
         self.assertIn("Install Linux Qt runtime dependencies", self.workflow)
         icon_check = self.workflow.index("python scripts/build_icons.py --check")

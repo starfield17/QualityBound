@@ -209,8 +209,8 @@ silently.
 ### `scripts/` is type-checked in `basic` mode
 
 `pyright.scripts.json` includes `scripts/` and runs the project settings in basic
-mode. It reports nothing now; the nine findings it started with were three real
-typing mistakes rather than style:
+mode. It reports nothing now; the findings it started with were real typing
+mistakes rather than style:
 
 - `scripts/build_icons.py` passed a `str` to `QImage.save(device, format)`, which
 takes `bytes`, and returned `QByteArray` where `bytes` was declared — now
@@ -219,14 +219,20 @@ takes `bytes`, and returned `QByteArray` where `bytes` was declared — now
   and `tarfile` hand it `IO[bytes]`, and iterated `data["licenses"]` without
   narrowing it out of `object`;
 - `scripts/run_smart_case.py` passed the possibly-unset `ground_truth_passed` and
-  `full_encode_output_bytes` into `OraclePoint`, which declares them non-optional.
+  `full_encode_output_bytes` into `OraclePoint`, which declares them non-optional;
+- `scripts/build_nuitka.py` built `Path(nuitka.__file__)` without allowing for
+  `None`. The narrowed form matters because the check's result depended on whether
+  Nuitka happened to be installed: an unresolved import falls back to
+  `types.ModuleType`, whose `__file__` is `str | None`, so a machine with Nuitka
+  present passed and one without it reported a `StrPath` argument error.
 
-Strict mode is not available for this scope: a strict pass over `scripts/` reports
-147 findings, 139 of them the same six disabled inference rules the application
-scope leaves open (capability snapshots, preset documents and JSON-decoded
-manifests travelling as `object`). The remaining eight are one missing stub for
-`nuitka`, two unannotated parameters, one argument-type mismatch over a JSON union,
-and dead `is not None` guards. These are development and packaging tools, not
+The Quality job installs `requirements-build.txt` before this step, so the
+`nuitka` import resolves instead of reporting an unresolved import, and the same
+step keeps working for a contributor who has not installed the build
+requirements. Strict mode is not available for this scope: a strict pass over
+`scripts/` reports the same six disabled inference rules the application scope
+leaves open (capability snapshots, preset documents and JSON-decoded manifests
+travelling as `object`). These are development and packaging tools, not
 application payload, so the scope choice is a cost decision rather than a safety
 one; the executables still run in the quality gate (`build_icons.py --check`), the
 packaging workflow (`prepare_ffmpeg.py`, `build_nuitka.py`), and

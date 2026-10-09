@@ -41,7 +41,10 @@ exists only because of a spec entry.
 
 ## Canonical commands
 
-Install development checks with `python -m pip install -r requirements-dev.txt`.
+Install development checks with `python -m pip install -r requirements-dev.txt`. The
+`scripts/` type check also needs the build requirements, because
+`scripts/build_nuitka.py` imports Nuitka: `python -m pip install -r
+requirements-build.txt`.
 Run the full validation set with:
 
 ```text

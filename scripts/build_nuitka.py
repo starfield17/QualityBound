@@ -687,7 +687,12 @@ def patch_nuitka_windows_arm64_clang_probe(
     if nuitka_root is None:
         import nuitka
 
-        nuitka_root = Path(nuitka.__file__).resolve().parent
+        module_file = getattr(nuitka, "__file__", None)
+        if module_file is None:
+            raise RuntimeError(
+                "Cannot locate the installed Nuitka package to patch its ARM64 probe."
+            )
+        nuitka_root = Path(module_file).resolve().parent
 
     probe_path = nuitka_root / "build" / "SconsUtils.py"
     source = probe_path.read_text(encoding="utf-8")

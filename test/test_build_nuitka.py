@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import ModuleType
 from unittest.mock import patch
 
 from scripts.build_nuitka import (
@@ -178,6 +180,36 @@ class NuitkaBuildCommandTestCase(unittest.TestCase):
                 )
             )
             self.assertEqual(probe_path.read_text(encoding="utf-8"), original)
+
+    def test_locates_the_installed_package_from_its_module_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            nuitka_root = Path(temp_dir)
+            probe_path = nuitka_root / "build" / "SconsUtils.py"
+            probe_path.parent.mkdir()
+            probe_path.write_text('elif b"ARM64" in process_result.stderr:\n', encoding="utf-8")
+            installed = ModuleType("nuitka")
+            installed.__file__ = str(nuitka_root / "__init__.py")
+
+            with patch.dict(sys.modules, {"nuitka": installed}):
+                self.assertTrue(
+                    patch_nuitka_windows_arm64_clang_probe(
+                        platform_name="win32",
+                        machine="arm64",
+                    )
+                )
+            self.assertIn(
+                'b"aarch64" in process_result.stdout',
+                probe_path.read_text(encoding="utf-8"),
+            )
+
+    def test_an_installed_package_without_a_module_file_is_refused(self) -> None:
+        installed = ModuleType("nuitka")
+        installed.__file__ = None
+
+        with patch.dict(sys.modules, {"nuitka": installed}), self.assertRaisesRegex(
+            RuntimeError, "locate the installed Nuitka package"
+        ):
+            patch_nuitka_windows_arm64_clang_probe(platform_name="win32", machine="arm64")
 
     def test_macos_app_command_and_paths_are_native(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
