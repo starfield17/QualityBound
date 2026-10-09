@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-SUPPORTED_LANGUAGES = {"en", "zh_cn"}
 LANGUAGE_NAME_KEY = "language.name"
 # Locale filenames accept lowercase letters, digits, underscores and hyphens only.
 LOCALE_FILENAME_RE = re.compile(r"^[a-z0-9_-]+\.json$")

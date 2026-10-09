@@ -11,8 +11,6 @@ DEFAULT_RATIO = {
     CodecChoice.AV1: 0.64,
 }
 
-DEFAULT_MIN_VIDEO_KBPS = 250
-
 
 def choose_ratio(codec: CodecChoice, ratio: float | None) -> float:
     if ratio is not None:
