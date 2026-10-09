@@ -115,6 +115,32 @@ algorithms, holdout policy routing, repeated completion, cancellation and output
 publication races. These synthetic tests verify control flow and file side effects,
 not real-world VMAF accuracy.
 
+## Checks deliberately not adopted
+
+### `reportImplicitStringConcatenation`
+
+Measured as a warning over the application scope (`core`, `cli`, `gui`, `main.py`)
+the rule reports 19 findings across 14 files, and every one is an intentional
+multi-line string, not an omitted comma:
+
+- a sentence split to stay readable, such as `cli/cli_entry.py:145`
+  (`"...--backend auto. " "Choose a concrete backend..."`);
+- an f-string continued on the next line inside a call, such as
+  `core/encoding/analysis.py:149`;
+- the two halves of a filtergraph, such as `core/smart/v1/vmaf.py:301`;
+- `_write_analysis_header` (`core/smart/v1/workflow.py:128`), a 15-literal block
+  of `key=value\n` lines, plus the two smaller log blocks it resembles.
+
+Adopting the rule means rewriting each site with `+` or replacing the log blocks
+with `str.join`, so a readable message or log header would be made less readable
+to guard against a defect class the audit found zero instances of. `ruff` already
+declines the style families for the same reason, and this repository wants the
+bug-finding subset instead (`pyproject.toml`).
+
+Re-measure by temporarily adding `"reportImplicitStringConcatenation": "warning"`
+to the project `include` scope. If a future finding is a genuine concatenation
+defect, that site is worth fixing whether or not the rule is adopted.
+
 ## Deferred check work
 
 Two known gaps are left open on purpose. Neither of them blocks a release. Each is
