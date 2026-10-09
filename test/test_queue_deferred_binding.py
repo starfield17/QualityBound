@@ -39,7 +39,7 @@ class DeferredQueueTestCase(unittest.TestCase):
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        self.root = Path(temporary.name).resolve()
         self.source = self.root / "source.mov"
         self.source.write_bytes(b"video")
         self.record = create_draft_record(QueueSourceDraft(VideoFileItem(self.source, Path("source.mov")), None, media(self.source)))
