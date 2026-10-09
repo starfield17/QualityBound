@@ -147,14 +147,14 @@ sample-scheme changes produce a different receipt identity.
 
 ## Known limitations
 
-- **MP4 output cannot carry bitmap subtitles.** Converting a PGS, VobSub or DVB
-  subtitle stream to MP4's `mov_text` is not possible, so an encode whose source
-  has one fails with FFmpeg's
-  `Subtitle encoding currently only possible from text to text or bitmap to bitmap`
-  and publishes nothing. Choose MKV to keep such subtitles; text subtitles and
-  MKV sources are unaffected. See
+- **MP4 output cannot carry bitmap subtitles.** MP4 subtitles are encoded as
+  `mov_text`, which only accepts text sources, so a PGS, VobSub or DVB subtitle
+  stream cannot be carried into an MP4 output. Planning refuses such a source
+  with the offending codec and publishes nothing, instead of failing after the
+  full video encode. Choose MKV to keep such subtitles; text subtitles and MKV
+  sources are unaffected. See
   [Development, translations, and packaging](docs/development.md) (Known limitations)
-  for the reproduced commands.
+  for the codec list and the reproduced commands.
 
 ## Documentation
 

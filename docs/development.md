@@ -178,8 +178,8 @@ and `test/test_smart_corpus.py`.
 streams into MP4 with `-map 0:s? -c:s mov_text`. `mov_text` is a text codec, so
 it only accepts text subtitle sources (SubRip, ASS, WebVTT, ...). A source whose
 subtitle stream is a bitmap format — PGS (`hdmv_pgs_subtitle`), DVD/VobSub
-(`dvd_subtitle`) or DVB (`dvbsub`) — is rejected by FFmpeg before the output
-file is opened:
+(`dvd_subtitle`), DVB (`dvbsub`), DVB teletext or XSUB — is rejected by FFmpeg
+before the output file is opened:
 
 ```text
 [sost#0:1/mov_text @ ...] Subtitle encoding currently only possible from text to text or bitmap to bitmap
@@ -187,20 +187,22 @@ Error opening output file out.mp4.
 Error opening output files: Invalid argument
 ```
 
-The item then fails with that FFmpeg message in `error_message` and no output is
-published. MKV output is unaffected: it copies the stream with `-c:s copy`, so
-bitmap subtitles survive as they are. The behaviour was reproduced with a
-one-display-set PGS stream, and the text path (`.srt` to MP4 `mov_text`) encodes
-successfully.
+The behaviour was reproduced with a one-display-set PGS stream, and the text
+path (`.srt` to MP4 `mov_text`) encodes successfully.
 
-Nothing in planning probes the subtitle codecs, so the failure is only surfaced
-after the full video encode has run. The chosen behaviour is to fail early during
-planning when a bitmap subtitle would target MP4 (`SPEC.md` N9 ← S3): dropping the
-stream would publish a file that lost part of the input, and switching the
-container would change the requested output.
+Planning now refuses such a source before any encode runs, so the failure is not
+left to the end of the video encode (`SPEC.md` N9 ← S3: dropping the stream would
+publish a file that lost part of the input, and switching the container would
+change the requested output). `core/media/subtitles.py` names the bitmap codecs
+in `MP4_INCAPABLE_SUBTITLE_CODECS`; `core/media/validation.py:
+validate_subtitle_carrier` applies them to `MediaInfo.subtitle_codecs`, which
+`core/ffmpeg/probe.py` fills from the ffprobe stream list. The item becomes a
+skipped plan item whose reason names the codec, with the source unchanged.
 
-That check is not implemented yet, so the failure still surfaces after the encode.
-Until it is, users who need bitmap subtitles should select MKV.
+MKV output is unaffected: it copies the stream with `-c:s copy`, so bitmap
+subtitles survive as they are. Users who need bitmap subtitles select MKV;
+disabling subtitle copying also plans for MP4, and that choice is the
+operator's, not a silent drop.
 
 ## Packaging
 

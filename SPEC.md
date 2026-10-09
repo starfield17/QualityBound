@@ -56,13 +56,6 @@ D3 Smart measurements are cached as receipts keyed by source, FFmpeg, bound
 D4 Capability and receipt caches are local files under the app data directory ←
    Is not (network service), T4.
 
-Open:
-
-- N9 is decided but not implemented, so its `review:` has no failing test behind
-  it yet: planning still does not probe subtitle codecs, and the failure surfaces
-  after the full video encode. `docs/development.md` (Known limitations) carries
-  the reproduction and tells users to select MKV until it lands.
-
 ## Do not build
 
 - N1 No account, telemetry, update check or call to an endpoint this project
@@ -89,8 +82,8 @@ Open:
   review: a new widget or CLI flag that no preset and no constraint decision
   consumes.
 - N9 A source whose subtitle codec the target container cannot carry is refused in
-  planning, with the reason, before any encode runs. ← S3 — review: the planning
-  path refuses instead of mapping the stream (check not yet written, see Open).
+  planning, with the reason, before any encode runs. ← S3 — check:
+  `python -m unittest discover -s test -p "test_subtitle_carrier.py"`.
 - N10 When something missing or broken turns up outside this spec, append it to
   "Found · Not doing" and keep going. Do not implement it.
 

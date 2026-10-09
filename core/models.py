@@ -147,6 +147,8 @@ class MediaInfo:
     pix_fmt: Optional[str] = None
     bit_depth: Optional[int] = None
     color_transfer: Optional[str] = None
+    # Subtitle stream codec names in stream order; empty when the source carries none.
+    subtitle_codecs: tuple[str, ...] = ()
 
 
 @dataclass(slots=True)

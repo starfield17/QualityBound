@@ -4,8 +4,9 @@ import os
 from collections.abc import Iterable
 from pathlib import Path
 
-from core.models import EncodeOptions, EncoderInfo
+from core.models import ContainerChoice, EncodeOptions, EncoderInfo, MediaInfo
 from core.media.paths import ensure_dir
+from core.media.subtitles import mp4_incapable_subtitle_codecs
 
 
 def validate_workdir(workdir: Path, *, create_directories: bool = True) -> Path:
@@ -60,12 +61,35 @@ def validate_two_pass(options: EncodeOptions, encoder_info: EncoderInfo) -> None
         raise RuntimeError(f"Encoder {encoder_info.encoder_name} does not support two-pass in this implementation.")
 
 
+def validate_subtitle_carrier(media_info: MediaInfo, options: EncodeOptions) -> None:
+    """Refuse a source whose bitmap subtitles the target container cannot carry.
+
+    FFmpeg maps MP4 subtitles with the text codec ``mov_text``, so the failure
+    otherwise surfaces only after the full video encode has run. Refusing here
+    keeps the reason attached to the item instead of losing it to a finished
+    encode (SPEC.md N9).
+    """
+
+    if not options.copy_subtitles or options.container != ContainerChoice.MP4:
+        return
+    offending = mp4_incapable_subtitle_codecs(media_info.subtitle_codecs)
+    if not offending:
+        return
+    codecs = ", ".join(offending)
+    raise RuntimeError(
+        f"MP4 output cannot carry bitmap subtitle codec(s): {codecs}. "
+        "MP4 subtitles are encoded as mov_text, which only accepts text sources. "
+        "Select MKV to keep these subtitles, or disable subtitle copying."
+    )
+
+
 def validate_plan_item(
     source_path: Path,
     output_path: Path,
     options: EncodeOptions,
     encoder_info: EncoderInfo,
     workdir: Path,
+    media_info: MediaInfo | None,
     *,
     create_directories: bool = True,
 ) -> None:
@@ -78,3 +102,5 @@ def validate_plan_item(
         create_directories=create_directories,
     )
     validate_two_pass(options, encoder_info)
+    if media_info is not None:
+        validate_subtitle_carrier(media_info, options)

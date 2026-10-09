@@ -1,9 +1,34 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Iterable
 from pathlib import Path
 
 from core.media.paths import ensure_dir
+
+
+# Bitmap subtitle codecs, which FFmpeg marks with AV_CODEC_PROP_BITMAP_SUB. MP4
+# has no bitmap subtitle codec: its only subtitle encoder is the text codec
+# mov_text, so a bitmap stream cannot be carried into an MP4 output at all.
+MP4_INCAPABLE_SUBTITLE_CODECS = frozenset(
+    {
+        "dvd_subtitle",
+        "dvbsub",
+        "dvb_teletext",
+        "hdmv_pgs_subtitle",
+        "xsub",
+    }
+)
+
+
+def mp4_incapable_subtitle_codecs(codecs: Iterable[str]) -> tuple[str, ...]:
+    """Return the distinct bitmap subtitle codecs an MP4 output cannot carry."""
+
+    offending: list[str] = []
+    for codec in codecs:
+        if codec in MP4_INCAPABLE_SUBTITLE_CODECS and codec not in offending:
+            offending.append(codec)
+    return tuple(offending)
 
 
 SIDECAR_SUBTITLE_EXTENSIONS = {

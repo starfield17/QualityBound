@@ -148,6 +148,11 @@ def probe_media_info(
 
     audio_streams = [item for item in streams if item.get("codec_type") == "audio"]
     first_audio = audio_streams[0] if audio_streams else None
+    subtitle_codecs = tuple(
+        str(item.get("codec_name"))
+        for item in streams
+        if item.get("codec_type") == "subtitle" and item.get("codec_name")
+    )
 
     duration = _parse_float(fmt.get("duration")) or _parse_float(video_stream.get("duration")) or 0.0
     if duration <= 0:
@@ -196,4 +201,5 @@ def probe_media_info(
         pix_fmt=pix_fmt,
         bit_depth=bit_depth,
         color_transfer=str(video_stream.get("color_transfer")) if video_stream.get("color_transfer") else None,
+        subtitle_codecs=subtitle_codecs,
     )

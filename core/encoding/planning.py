@@ -282,6 +282,7 @@ def reconfigure_plan_item(
         candidate.options,
         resolved_encoder,
         workdir,
+        candidate.media_info,
         create_directories=create_directories,
     )
     return candidate
@@ -329,6 +330,7 @@ def _successful_plan_item(
         options=options,
         encoder_info=encoder_info,
         workdir=workdir,
+        media_info=media_info,
     )
     return item
 
