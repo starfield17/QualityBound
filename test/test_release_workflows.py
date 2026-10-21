@@ -269,6 +269,8 @@ class QualityWorkflowTestCase(unittest.TestCase):
         for package in (
             "libegl1",
             "libgl1",
+            "libpulse0",
+            "libpulse-mainloop-glib0",
             "libxkbcommon-x11-0",
             "libxcb-cursor0",
         ):
@@ -279,6 +281,14 @@ class QualityWorkflowTestCase(unittest.TestCase):
 class TestWorkflowTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.workflow = _workflow("_test.yml")
+
+    def test_linux_test_and_package_jobs_provision_native_pcm_audio_libraries(self) -> None:
+        for name in ("_test.yml", "_package.yml"):
+            workflow = _workflow(name)
+            for package in ("libpulse0", "libpulse-mainloop-glib0"):
+                with self.subTest(workflow=name, package=package):
+                    self.assertIn(package, workflow)
+                    self.assertLess(workflow.index(package), workflow.index("python -m pip install"))
 
     def test_test_workflow_has_required_inputs(self) -> None:
         for name in ("runner", "platform", "architecture"):

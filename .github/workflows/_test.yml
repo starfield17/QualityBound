@@ -61,6 +61,8 @@ jobs:
           sudo apt-get install -y \
             libegl1 \
             libgl1 \
+            libpulse0 \
+            libpulse-mainloop-glib0 \
             libxkbcommon-x11-0 \
             libxcb-cursor0
 

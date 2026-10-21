@@ -51,6 +51,11 @@ FFmpeg libraries outside the external `FFmpeg/` bundle. This avoids bundling a
 second decoder version. The renderer displays 8-bit RGB previews; it is not an
 HDR mastering or numerical quality-measurement surface.
 
+Linux source/test/build environments also need Qt's native PulseAudio runtime
+libraries (`libpulse0` and `libpulse-mainloop-glib0` on Ubuntu). These provide
+PCM device output, not media codecs. The reusable workflows install them before
+importing the GUI or collecting its standalone dependencies.
+
 The focused regression suite is `test/test_video_comparison.py`. On 2026-10-21,
 macOS arm64 source-runtime checks used the release FFmpeg 9.0.2 with dav1d,
 FFmpeg binary SHA-256
