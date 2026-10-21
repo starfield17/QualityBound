@@ -67,6 +67,7 @@ from core.media import (
     post_encode_action_key,
 )
 from gui.activity_log_window import ActivityLogWindow
+from gui.comparison_window import ComparisonWindow
 from gui.constraint_decision_dialog import (
     SizeMissDecision,
     choose_quality_decision,
@@ -160,6 +161,7 @@ class MainWindow(QMainWindow):
         self._status_percent: float | None = None
         self._close_after_running_task_stops = False
         self._loading_initial_state = True
+        self.comparison_windows: list[ComparisonWindow] = []
 
         self.queue_model = QueueTableModel(self.translator, self)
         self.queue_manager = QueueManager(self.queue_model, self)
@@ -196,6 +198,8 @@ class MainWindow(QMainWindow):
                     event.ignore()
                     return
             self._persist_runtime_state()
+            for comparison in list(self.comparison_windows):
+                comparison.close()
             event.accept()
             return
         if self._close_after_running_task_stops:
@@ -237,6 +241,7 @@ class MainWindow(QMainWindow):
             self.stop_action: QStyle.StandardPixmap.SP_MediaStop,
             self.queue_action: QStyle.StandardPixmap.SP_FileDialogListView,
             self.activity_log_action: QStyle.StandardPixmap.SP_FileDialogInfoView,
+            self.compare_action: QStyle.StandardPixmap.SP_MediaPlay,
             self.presets_action: QStyle.StandardPixmap.SP_DialogSaveButton,
             self.settings_action: QStyle.StandardPixmap.SP_FileDialogDetailedView,
         }
@@ -298,6 +303,7 @@ class MainWindow(QMainWindow):
         self.stop_action = QAction(self)
         self.queue_action = QAction(self)
         self.activity_log_action = QAction(self)
+        self.compare_action = QAction(self)
         self.presets_action = QAction(self)
         self.settings_action = QAction(self)
         self._apply_action_icons()
@@ -315,6 +321,7 @@ class MainWindow(QMainWindow):
         for action in [
             self.queue_action,
             self.activity_log_action,
+            self.compare_action,
             self.presets_action,
             self.settings_action,
         ]:
@@ -508,6 +515,7 @@ class MainWindow(QMainWindow):
         self.stop_action.triggered.connect(self._stop_active_task)
         self.queue_action.triggered.connect(self._show_queue_window)
         self.activity_log_action.triggered.connect(self._show_activity_log)
+        self.compare_action.triggered.connect(lambda: self._show_comparison())
         self.presets_action.triggered.connect(self._open_preset_manager)
         self.settings_action.triggered.connect(self._open_settings_dialog)
 
@@ -598,6 +606,7 @@ class MainWindow(QMainWindow):
         self.stop_action.setText(self.translator.t("gui.button.stop"))
         self.queue_action.setText(self.translator.t("gui.button.queue"))
         self.activity_log_action.setText(self.translator.t("gui.button.activity_log"))
+        self.compare_action.setText(self.translator.t("gui.compare.title"))
         self.presets_action.setText(self.translator.t("gui.button.presets"))
         self.settings_action.setText(self.translator.t("gui.button.settings"))
         self._sync_action_tips()
@@ -630,6 +639,8 @@ class MainWindow(QMainWindow):
         self.queue_model.set_translator(self.translator)
         self.activity_log_window.apply_translations(self.translator)
         self.queue_window.apply_translations(self.translator)
+        for comparison in self.comparison_windows:
+            comparison.apply_translations(self.translator)
         self._render_queue_state()
         self._set_status_snapshot(
             self._status_stage,
@@ -1305,6 +1316,21 @@ class MainWindow(QMainWindow):
         self.activity_log_window.raise_()
         self.activity_log_window.activateWindow()
 
+    def _show_comparison(self, record: QueueItemRecord | None = None) -> None:
+        ffmpeg, ffprobe = self._selected_ffmpeg(), self._selected_ffprobe()
+        if record is not None and record.job_snapshot is not None:
+            ffmpeg = str(record.job_snapshot.ffmpeg_path)
+            ffprobe = str(record.job_snapshot.ffprobe_path)
+        window = ComparisonWindow(self.translator, self, ffmpeg=ffmpeg, ffprobe=ffprobe)
+        window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.comparison_windows.append(window)
+        window.destroyed.connect(lambda: self.comparison_windows.remove(window))
+        if record is not None:
+            window.load_paths(record.source_path, record.output_path)
+        window.show()
+        window.raise_()
+        window.activateWindow()
+
     def _selected_rows_from_view(self, view: ResponsiveQueueTableView) -> list[int]:
         return sorted(index.row() for index in view.selectionModel().selectedRows())
 
@@ -1322,6 +1348,11 @@ class MainWindow(QMainWindow):
         open_output_action = menu.addAction(self.translator.t("gui.menu.open_output_folder"))
         copy_source_action = menu.addAction(self.translator.t("gui.menu.copy_source_path"))
         copy_output_action = menu.addAction(self.translator.t("gui.menu.copy_output_path"))
+        compare_action = menu.addAction(self.translator.t("gui.compare.queue_action"))
+        compare_action.setEnabled(
+            len(rows) == 1 and selected_record is not None
+            and selected_record.status == QueueItemStatus.DONE
+        )
         menu.addSeparator()
 
         apply_options_action = menu.addAction(self.translator.t("gui.menu.apply_current_options"))
@@ -1378,6 +1409,8 @@ class MainWindow(QMainWindow):
             self._copy_to_clipboard(str(selected_record.source_path))
         elif action == copy_output_action and selected_record is not None:
             self._copy_to_clipboard(str(selected_record.output_path))
+        elif action == compare_action and selected_record is not None:
+            self._show_comparison(selected_record)
         elif action == apply_options_action and can_reconfigure:
             opts = self.options_panel.read_options()
             try:

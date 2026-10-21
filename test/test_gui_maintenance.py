@@ -5,8 +5,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
-from PySide6.QtCore import QEventLoop, QTimer
+from PySide6.QtWidgets import QApplication, QDialog, QMenu, QMessageBox
+from PySide6.QtCore import QEventLoop, QPoint, QTimer
 
 from core.media import PostEncodeAction, SystemPowerResult
 from core.models import (
@@ -193,6 +193,61 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
             self.assertIsNotNone(window.statusBar())
         finally:
             window.close()
+
+    def test_comparison_toolbar_opens_independent_manual_window(self) -> None:
+        window = MainWindow(self.repo_root, language="en")
+        try:
+            with patch("gui.gui_mainwindow.ComparisonWindow") as comparison:
+                window.compare_action.trigger()
+                comparison.assert_called_once_with(
+                    window.translator, window,
+                    ffmpeg=window._selected_ffmpeg(), ffprobe=window._selected_ffprobe(),
+                )
+                comparison.return_value.load_paths.assert_not_called()
+                comparison.return_value.show.assert_called_once()
+        finally:
+            window.close()
+
+    def test_queue_comparison_passes_source_output_and_bound_tools(self) -> None:
+        window = MainWindow(self.repo_root, language="en")
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                record = self._record(Path(directory), "comparison", QueueItemStatus.DONE)
+                with patch("gui.gui_mainwindow.ComparisonWindow") as comparison:
+                    window._show_comparison(record)
+                    comparison.assert_called_once_with(
+                        window.translator, window,
+                        ffmpeg=str(record.job_snapshot.ffmpeg_path) if record.job_snapshot else None,
+                        ffprobe=str(record.job_snapshot.ffprobe_path) if record.job_snapshot else None,
+                    )
+                    comparison.return_value.load_paths.assert_called_once_with(
+                        record.source_path, record.output_path,
+                    )
+        finally:
+            window.close()
+
+    def test_comparison_queue_action_is_only_enabled_for_done_item(self) -> None:
+        window = MainWindow(self.repo_root, language="en")
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                statuses = [QueueItemStatus.DONE, QueueItemStatus.FAILED, QueueItemStatus.SKIPPED,
+                            QueueItemStatus.NEEDS_DECISION]
+                window.queue_model.add_records([
+                    self._record(Path(directory), f"compare-{index}", status)
+                    for index, status in enumerate(statuses)
+                ])
+                for row, status in enumerate(statuses):
+                    window.table_view.selectRow(row)
+                    menu = QMenu(window)
+                    with (patch("gui.gui_mainwindow.QMenu", return_value=menu),
+                          patch.object(menu, "exec", return_value=None)):
+                        window._show_queue_context_menu(window.table_view, QPoint())
+                    action = next(action for action in menu.actions()
+                                  if action.text() == window.translator.t("gui.compare.queue_action"))
+                    self.assertEqual(action.isEnabled(), status == QueueItemStatus.DONE)
+        finally:
+            with patch("gui.gui_mainwindow.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
+                window.close()
 
     def test_queue_progress_transition_is_qt_free(self) -> None:
         item = EncodePlanItem(

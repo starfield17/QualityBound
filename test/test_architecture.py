@@ -82,6 +82,27 @@ def _is_qt_import(name: str) -> bool:
     return top in QT_ROOTS or lower.startswith(("pyside", "pyqt")) or lower == "qt"
 
 
+def _codec_import_violations(code: str) -> list[str]:
+    """N11 ← S3: allow native PCM APIs, never an in-process media decoder."""
+    allowed_audio = {"QAudioDevice", "QAudioFormat", "QAudioSink", "QMediaDevices"}
+    bindings = {"av", "ffmpeg", "ffmpegio", "imageio_ffmpeg", "cv2", "decord", "moviepy"}
+    violations: list[str] = []
+    for node in ast.walk(ast.parse(code)):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if _top_level(alias.name) in bindings or alias.name.startswith("PySide6.QtMultimedia"):
+                    violations.append(alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if _top_level(module) in bindings or module.startswith("PySide6.QtMultimediaWidgets"):
+                violations.append(module)
+            elif module == "PySide6.QtMultimedia":
+                violations.extend(alias.name for alias in node.names if alias.name not in allowed_audio)
+            elif module == "PySide6":
+                violations.extend(alias.name for alias in node.names if alias.name.startswith("QtMultimedia"))
+    return violations
+
+
 def _layer_violations(source: str, path: Path) -> list[str]:
     layer = _top_level(source)
     allowed = set(sys.stdlib_module_names) | {layer, "core"}
@@ -135,6 +156,28 @@ def _cycles(graph: dict[str, set[str]]) -> list[list[str]]:
 
 
 class ArchitectureTestCase(unittest.TestCase):
+    def test_application_codec_imports_use_only_native_pcm_apis(self) -> None:
+        violations = {
+            source: found for source, path in _app_modules().items()
+            if (found := _codec_import_violations(path.read_text(encoding="utf-8")))
+        }
+        self.assertFalse(violations, f"N11 requires external FFmpeg codecs: {violations}")
+
+    def test_codec_guard_rejects_embedded_backends_and_bindings(self) -> None:
+        forbidden = [
+            "import av", "from av import VideoFrame", "import imageio_ffmpeg",
+            "import PySide6.QtMultimedia as media", "from PySide6 import QtMultimedia",
+            "from PySide6.QtMultimedia import QMediaPlayer as Player",
+            "from PySide6.QtMultimedia import QAudioDecoder",
+            "from PySide6.QtMultimediaWidgets import QVideoWidget",
+        ]
+        for code in forbidden:
+            with self.subTest(code=code):
+                self.assertTrue(_codec_import_violations(code))
+        self.assertEqual(_codec_import_violations(
+            "from PySide6.QtMultimedia import QAudioDevice, QAudioFormat, QAudioSink, QMediaDevices"
+        ), [])
+
     def test_core_root_contains_only_public_contracts_and_capability_packages(self) -> None:
         root_entries = {
             path.name

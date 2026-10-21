@@ -69,6 +69,19 @@ and Smart/Fixed control syncing.
   is not a preset option and does not select or rotate backends.
 - View may depend on the model; model and state must not depend on the view.
 
+## Video comparison
+
+- `gui.comparison_window` owns independent A/B playback windows,
+  scrubbing, audio selection, and cancellable background inspection workers.
+- `gui.comparison_state` owns Qt-free timeline/offset and frame-selection rules;
+  `gui.comparison_decode` owns read-only FFmpeg/FFprobe inspection and static-frame
+  decoding. `gui.comparison_playback` owns the shared clock, external FFmpeg
+  video/PCM audio pipes, and native Qt PCM output. Workers never mutate queue
+  records or publish media. The codec ownership boundary is `SPEC.md` N11.
+- MainWindow supplies paths, bound tools and translations. Comparison modules
+  never import MainWindow or the queue. A generation token rejects stale decode
+  results after seeks, file replacement, playback or closing.
+
 ## MainWindow scope
 
 `MainWindow` remains the GUI composition root and owns source selection, queue

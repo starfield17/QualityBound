@@ -41,6 +41,8 @@ scripts.
 - `scripts/build_nuitka.py` is the source of truth for accepted numeric versions
   and generated package layout. Release tags use `vMAJOR.MINOR.PATCH` or the
   supported four-part numeric form.
+- `verify_external_decoder_payload` in the builder enforces `SPEC.md` N11 on
+  staged packages; native PCM output requires no multimedia codec plugin.
 - `packaging/windows/installer.iss` is the single source of truth for the new
   QualityBound Inno `AppId`. A literal GUID begins with `{{` because Inno
   escapes a literal left brace by doubling it. Do not inject the AppId with an

@@ -113,6 +113,25 @@ python main.py --cli encode input.mp4 \
 Supported encoding backends are CPU, NVIDIA NVENC, Intel QSV, AMD AMF, and
 Apple VideoToolbox where the selected FFmpeg build and hardware expose them.
 
+Use **Video comparison** in the toolbar to open two local videos, or right-click
+one successfully encoded queue item and select **Compare source and output**.
+The comparison window offers side-by-side playback and a single view switched
+with **Tab**. **Space** plays or pauses both videos; click or drag the shared
+timeline to seek. Releasing a drag restores the previous playback state.
+Select audio from A or B, or mute both. Adjust **B offset** to align different
+introductions: positive values skip the beginning of B. Frame buttons provide
+timestamp-based fine adjustment. Playback stops at the common interval's end.
+
+**Precise inspection** decodes paused frames at the corresponding timestamps,
+including after seeking, and supports previous/next-frame inspection. Different
+frame rates can produce different displayed frame timestamps. **Normal
+synchronization** decodes the first available frame at or after the requested
+time, without the additional frame-timestamp probe. Playback uses one shared
+presentation clock; different frame rates need not display identical timestamps.
+All video and audio decoding uses the selected external FFmpeg, and frame
+inspection uses its FFprobe companion. Qt displays decoded images and sends PCM
+samples to the audio device; it does not supply an additional FFmpeg decoder.
+
 Smart v1 remains the default. To try per-shot allocation, select **Smart v2
 (experimental)** in the GUI Smart options, or pass `--smart-algorithm
 v2_experimental` in the CLI. V2 interprets `--min-vmaf` as a whole-video mean

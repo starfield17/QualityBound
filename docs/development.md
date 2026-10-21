@@ -28,6 +28,43 @@ checks the repository `FFmpeg/` directory before the system path.
 Supported bundled layouts are `FFmpeg/ffmpeg` plus `FFmpeg/ffprobe`, or the same
 pair under `FFmpeg/bin/`, with `.exe` suffixes on Windows.
 
+## Video comparison playback
+
+Comparison is a GUI-owned, read-only operation. MainWindow passes a pair of
+paths and the selected tool paths; completed queue items supply their bound
+FFmpeg/FFprobe snapshot. No encoder selection or queue state changes occur.
+
+Every video and audio decode invokes that external FFmpeg. Two video pipes
+produce RGB frames with presentation timestamps and share one clock. Workers
+wait for GUI acknowledgement before queuing another frame, discard frames more
+than 80 ms late, and report sustained decoder lag rather than accumulating it.
+The selected audio pipe produces PCM in the output device's format. With audio,
+processed PCM time drives the clock so an underrun cannot leave buffered audio
+permanently behind video; muted sessions use monotonic time. Audio timestamp
+gaps and short tails are filled with silence through the common video interval.
+
+Qt only paints images and outputs native PCM through `QAudioSink`. Audio device
+initialization temporarily removes Qt plugin search paths, then restores them,
+selecting Qt's audio-only fallback without loading its FFmpeg codec backend.
+Nuitka excludes multimedia codec plugins, and the build rejects secondary
+FFmpeg libraries outside the external `FFmpeg/` bundle. This avoids bundling a
+second decoder version. The renderer displays 8-bit RGB previews; it is not an
+HDR mastering or numerical quality-measurement surface.
+
+The focused regression suite is `test/test_video_comparison.py`. On 2026-10-21,
+macOS arm64 source-runtime checks used the release FFmpeg 9.0.2 with dav1d,
+FFmpeg binary SHA-256
+`02843e946b9905c6ff1fe77d284f86916b15e32161b7f250516c70228b78696e`,
+and PySide6 6.11.2. Deterministic `testsrc2` fixtures covered CFR 25/30/24 fps,
+a ten-second VFR timestamp gap, a two-second start timestamp, and non-square
+pixels. Static frame images were checked against independent full-decode frame
+selection. A four-second Apollo-footage AV1 clip exercised playback, AAC PCM
+output, seeking, offsets and A/B switching. The combined source-runtime check
+took approximately 10 seconds and confirmed zero secondary FFmpeg libraries in
+the process. These are playback-correctness checks, not Smart quality evidence.
+Cross-platform packaging/runtime checks remain owned by the existing CI and
+Verify profiles.
+
 ## Translations
 
 Built-in language packs live in `config/i18n/`. English is the complete
@@ -331,7 +368,7 @@ Install build requirements and create a native package on the current platform:
 
 ```bash
 python -m pip install -r requirements-build.txt
-python scripts/build_nuitka.py --clean --version 3.4.0
+python scripts/build_nuitka.py --clean --version 3.5.0
 ```
 
 The normalized standalone directory is `dist/qualitybound/`. A native macOS app

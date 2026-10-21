@@ -36,6 +36,9 @@ exists only because of a spec entry.
 - Keep committed code and documentation portable: no personal environment,
   executable bundle or font paths. Evaluation tools accept explicit paths;
   honor a user-specified FFmpeg without falling back to a system installation.
+- Use the resolved external FFmpeg/FFprobe pair for every media codec operation,
+  including comparison playback. Keep Python codec bindings and Qt codec
+  backends out; Qt is limited to image display and PCM output. (`# N11 ← S3`)
 - Smart reference and measurement reuse must identify actual window coordinates
   and measurement settings, never a window's position in a list. (`# F3 ← S1`)
 

@@ -31,6 +31,7 @@ from core.ffmpeg.subprocess import (
     hidden_popen_kwargs,
     hidden_process_creationflags,
     noninteractive_run_kwargs,
+    terminate_process,
 )
 
 __all__ = [
@@ -59,4 +60,5 @@ __all__ = [
     "probe_media_info",
     "resolve_encoder",
     "smoke_test_encoder",
+    "terminate_process",
 ]

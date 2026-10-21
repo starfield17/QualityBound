@@ -23,10 +23,22 @@ from scripts.build_nuitka import (
     resolve_macos_target_arch,
     resolve_windows_compiler,
     stage_release_resources,
+    verify_external_decoder_payload,
 )
 
 
 class NuitkaBuildCommandTestCase(unittest.TestCase):
+    def test_playback_payload_refuses_secondary_ffmpeg_libraries(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tools = root / "FFmpeg"
+            tools.mkdir()
+            (tools / "avcodec-61.dll").touch()
+            verify_external_decoder_payload(root)
+            (root / "avcodec-61.dll").touch()
+            with self.assertRaisesRegex(RuntimeError, "avcodec"):
+                verify_external_decoder_payload(root)
+
     def test_common_command_contains_required_options(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir).resolve()
@@ -38,6 +50,7 @@ class NuitkaBuildCommandTestCase(unittest.TestCase):
 
             self.assertIn("--mode=standalone", command)
             self.assertIn("--enable-plugin=pyside6", command)
+            self.assertIn("--noinclude-qt-plugins=multimedia", command)
             self.assertIn("--include-package=cli", command)
             self.assertIn("--include-package=core", command)
             self.assertIn("--include-package=gui", command)

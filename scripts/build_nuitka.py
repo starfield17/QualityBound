@@ -25,6 +25,18 @@ def project_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def verify_external_decoder_payload(package_dir: Path) -> None:
+    """Comparison uses bundled external tools, never Qt's FFmpeg backend."""
+    names = {
+        path.name.lower() for path in package_dir.rglob("*")
+        if path.is_file() and "FFmpeg" not in path.relative_to(package_dir).parts
+    }
+    forbidden = ("ffmpegmedia", "avcodec", "avformat", "avutil", "swresample", "swscale")
+    extra = [name for name in names if any(part in name for part in forbidden)]
+    if extra:
+        raise RuntimeError("Unexpected secondary FFmpeg playback libraries: " + ", ".join(sorted(extra)))
+
+
 def normalize_version(version: str) -> str:
     """Validate a numeric release version and normalize it for Windows metadata."""
     value = version.strip()
@@ -271,6 +283,7 @@ def build_nuitka_command(
         f"--mode={mode}",
         "--assume-yes-for-downloads",
         "--enable-plugin=pyside6",
+        "--noinclude-qt-plugins=multimedia",
         "--include-package=cli",
         "--include-package=core",
         "--include-package=gui",
@@ -830,6 +843,7 @@ def main(argv: list[str] | None = None) -> int:
             ffmpeg_dir=ffmpeg_dir,
             require_ffmpeg=args.require_ffmpeg,
         )
+        verify_external_decoder_payload(paths.package_dir)
         sign_macos_app(paths.package_dir)
         if paths.dmg_path is None:
             raise RuntimeError("macOS app build did not define a deterministic DMG path.")
@@ -851,6 +865,7 @@ def main(argv: list[str] | None = None) -> int:
             ffmpeg_dir=ffmpeg_dir,
             require_ffmpeg=args.require_ffmpeg,
         )
+        verify_external_decoder_payload(paths.package_dir)
 
     if not paths.executable_path.is_file():
         raise RuntimeError(f"Nuitka build completed but executable was not found: {paths.executable_path}")

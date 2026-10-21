@@ -86,6 +86,14 @@ D4 Capability and receipt caches are local files under the app data directory �
   `python -m unittest discover -s test -p "test_subtitle_carrier.py"`.
 - N10 When something missing or broken turns up outside this spec, append it to
   "Found · Not doing" and keep going. Do not implement it.
+- N11 One external FFmpeg/FFprobe toolchain owns media probing, encoding,
+  decoding and comparison playback. Explicit tool paths are authoritative;
+  releases use the pair pinned by `packaging/ffmpeg/manifest.json`. No Python
+  codec binding, Qt media codec backend, or secondary bundled FFmpeg library
+  may introduce another decoder version. Qt may display decoded images and
+  output PCM audio. ← S3 — checks:
+  `python -m unittest discover -s test -p "test_architecture.py" -k codec`
+  and `python -m unittest discover -s test -p "test_build_nuitka.py" -k playback_payload`.
 
 ## Frame
 
