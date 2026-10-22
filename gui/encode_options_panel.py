@@ -72,6 +72,7 @@ class EncodeOptionsPanel(QWidget):
     compression_mode_changed = Signal(object)
     analysis_profile_changed = Signal(object)
     options_changed = Signal()
+    smart_unavailable = Signal(str)
 
     def __init__(
         self,
@@ -283,9 +284,18 @@ class EncodeOptionsPanel(QWidget):
             self.viewing_context_combo.addItem("", context.value)
         layout.addWidget(self.viewing_context_label, 3, 2)
         layout.addWidget(self.viewing_context_combo, 3, 3)
-        layout.setColumnStretch(1, 1)
-        layout.setColumnStretch(3, 1)
-        layout.setColumnStretch(5, 1)
+        layout.setColumnStretch(6, 1)
+
+        self.codec_combo.setMaximumWidth(140)
+        self.compression_mode_combo.setMaximumWidth(200)
+        self.backend_combo.setMaximumWidth(170)
+        self.container_combo.setMaximumWidth(120)
+        self.ratio_edit.setMaximumWidth(160)
+        self.min_vmaf_spin.setMaximumWidth(120)
+        self.max_output_ratio_spin.setMaximumWidth(120)
+        self.analysis_profile_combo.setMaximumWidth(180)
+        self.viewing_context_combo.setMaximumWidth(250)
+        self.smart_algorithm_combo.setMaximumWidth(260)
 
         self.options_tabs.addTab(page, "")
         self.basic_tab = page
@@ -349,8 +359,14 @@ class EncodeOptionsPanel(QWidget):
         layout.addWidget(self.bufsize_factor_label, 3, 0)
         layout.addWidget(self.bufsize_factor_spin, 3, 1)
         layout.addWidget(self.two_pass_check, 3, 2, 1, 2)
-        layout.setColumnStretch(1, 1)
-        layout.setColumnStretch(3, 1)
+        layout.setColumnStretch(4, 1)
+        self.encoder_preset_combo.setMaximumWidth(220)
+        self.decode_acceleration_combo.setMaximumWidth(180)
+        self.pix_fmt_edit.setMaximumWidth(160)
+        self.min_bitrate_spin.setMaximumWidth(140)
+        self.max_bitrate_spin.setMaximumWidth(140)
+        self.maxrate_factor_spin.setMaximumWidth(120)
+        self.bufsize_factor_spin.setMaximumWidth(120)
 
         self.options_tabs.addTab(page, "")
         self.video_tab = page
@@ -379,8 +395,9 @@ class EncodeOptionsPanel(QWidget):
         layout.addWidget(self.audio_bitrate_edit, 0, 3)
         layout.addWidget(self.copy_subtitles_check, 1, 0, 1, 2)
         layout.addWidget(self.copy_external_subtitles_check, 1, 2, 1, 2)
-        layout.setColumnStretch(1, 1)
-        layout.setColumnStretch(3, 1)
+        layout.setColumnStretch(4, 1)
+        self.audio_mode_combo.setMaximumWidth(220)
+        self.audio_bitrate_edit.setMaximumWidth(140)
 
         self.options_tabs.addTab(page, "")
         self.audio_tab = page
@@ -533,6 +550,53 @@ class EncodeOptionsPanel(QWidget):
     def set_busy(self, busy: bool) -> None:
         self.options_tabs.setEnabled(not busy)
 
+    def set_visible(self, visible: bool) -> None:
+        self.setVisible(visible)
+
+    def _bind_labels(self) -> None:
+        pairs = (
+            (self.codec_label, self.codec_combo),
+            (self.compression_mode_label, self.compression_mode_combo),
+            (self.backend_label, self.backend_combo),
+            (self.container_label, self.container_combo),
+            (self.ratio_label, self.ratio_edit),
+            (self.min_vmaf_label, self.min_vmaf_spin),
+            (self.max_output_ratio_label, self.max_output_ratio_spin),
+            (self.analysis_profile_label, self.analysis_profile_combo),
+            (self.viewing_context_label, self.viewing_context_combo),
+            (self.smart_algorithm_label, self.smart_algorithm_combo),
+            (self.encoder_preset_label, self.encoder_preset_combo),
+            (self.decode_acceleration_label, self.decode_acceleration_combo),
+            (self.pix_fmt_label, self.pix_fmt_edit),
+            (self.min_bitrate_label, self.min_bitrate_spin),
+            (self.max_bitrate_label, self.max_bitrate_spin),
+            (self.maxrate_factor_label, self.maxrate_factor_spin),
+            (self.bufsize_factor_label, self.bufsize_factor_spin),
+            (self.audio_mode_label, self.audio_mode_combo),
+            (self.audio_bitrate_label, self.audio_bitrate_edit),
+        )
+        for label, widget in pairs:
+            label.setBuddy(widget)
+            widget.setAccessibleName(label.text())
+
+    def apply_tab_order(self) -> None:
+        chain = (
+            self.codec_combo,
+            self.compression_mode_combo,
+            self.backend_combo,
+            self.container_combo,
+            self.ratio_edit,
+            self.min_vmaf_spin,
+            self.max_output_ratio_spin,
+            self.analysis_profile_combo,
+            self.viewing_context_combo,
+            self.smart_algorithm_combo,
+            self.overwrite_check,
+            self.recursive_check,
+        )
+        for first, second in zip(chain, chain[1:]):
+            self.setTabOrder(first, second)
+
     def set_translator(self, translator: Translator) -> None:
         self.translator = translator
         self.codec_label.setText(self.translator.t("gui.label.codec"))
@@ -568,10 +632,16 @@ class EncodeOptionsPanel(QWidget):
         self.backend_label.setText(self.translator.t("gui.label.backend"))
         self.container_label.setText(self.translator.t("gui.label.container"))
         self.ratio_label.setText(self.translator.t("gui.label.ratio"))
+        ratio_tooltip = self.translator.t("gui.tooltip.ratio")
+        self.ratio_label.setToolTip(ratio_tooltip)
+        self.ratio_edit.setToolTip(ratio_tooltip)
         self.min_vmaf_label.setText(self.translator.t("gui.label.min_vmaf"))
         self.min_vmaf_label.setToolTip(self.translator.t("gui.tooltip.min_vmaf"))
         self.min_vmaf_spin.setToolTip(self.translator.t("gui.tooltip.min_vmaf"))
         self.max_output_ratio_label.setText(self.translator.t("gui.label.max_output_ratio"))
+        max_ratio_tooltip = self.translator.t("gui.tooltip.max_output_ratio")
+        self.max_output_ratio_label.setToolTip(max_ratio_tooltip)
+        self.max_output_ratio_spin.setToolTip(max_ratio_tooltip)
         self.analysis_profile_label.setText(self.translator.t("gui.label.analysis_profile"))
         self.analysis_profile_combo.setItemText(
             self.analysis_profile_combo.findData(AnalysisProfileName.FAST.value),
@@ -628,6 +698,8 @@ class EncodeOptionsPanel(QWidget):
         self.options_tabs.setTabText(self.options_tabs.indexOf(self.video_tab), self.translator.t("gui.tab.video"))
         self.options_tabs.setTabText(self.options_tabs.indexOf(self.audio_tab), self.translator.t("gui.tab.audio_subtitles"))
 
+        self._bind_labels()
+        self.apply_tab_order()
         self._rebuild_backend_controls()
         self.refresh_encoder_preset_choices()
 
@@ -805,9 +877,9 @@ class EncodeOptionsPanel(QWidget):
             message = ""
             if isinstance(vmaf, dict):
                 message = str(vmaf.get("error_message") or "")
-            self.compression_mode_combo.setToolTip(
-                message or self.translator.t("gui.tooltip.smart_unavailable")
-            )
+            reason = message or self.translator.t("gui.tooltip.smart_unavailable")
+            self.compression_mode_combo.setToolTip(reason)
+            self.smart_unavailable.emit(reason)
         else:
             self.compression_mode_combo.setToolTip("")
         self.sync_dependent_controls()

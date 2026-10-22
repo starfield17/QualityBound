@@ -86,6 +86,7 @@ from gui.queue_manager import QueueManager, QueueRunCompletion
 from gui.queue_state import (
     TERMINAL_ITEM_STATUSES,
     QueueItemRecord,
+    compute_metrics,
     QueueItemStatus,
     QueueMetrics,
     progress_stage_key,
@@ -183,6 +184,7 @@ class MainWindow(QMainWindow):
         self._preset_dirty = False
         self._applying_preset = False
         self._completion_banner: tuple[str, list[tuple[str, Callable[[], None]]]] | None = None
+        self._runtime_banner: tuple[str, str, list[tuple[str, Callable[[], None]]]] | None = None
         self._banner_key: tuple[object, ...] | None = None
         self._dismissed_banner_key: tuple[object, ...] | None = None
 
@@ -239,6 +241,7 @@ class MainWindow(QMainWindow):
                     event.ignore()
                     return
             self._persist_runtime_state()
+            self._save_window_geometry()
             for comparison in list(self.comparison_windows):
                 comparison.close()
             event.accept()
@@ -333,11 +336,29 @@ class MainWindow(QMainWindow):
         root_layout.addWidget(self.jobs_box, 1)
         self._build_status_bar()
         self._apply_initial_window_geometry()
+        self._restore_window_geometry()
 
         self.tray_icon = QSystemTrayIcon(self)
         if self.tray_icon.isSystemTrayAvailable() and not self.windowIcon().isNull():
             self.tray_icon.setIcon(self.windowIcon())
+            self.tray_icon.setToolTip(self.translator.t("app.title"))
+            self.tray_show_action = QAction(self)
+            self.tray_quit_action = QAction(self)
+            self.tray_show_action.triggered.connect(self._show_main_window)
+            self.tray_quit_action.triggered.connect(self.close)
+            self.tray_menu = QMenu(self)
+            self.tray_menu.addAction(self.tray_show_action)
+            self.tray_menu.addSeparator()
+            self.tray_menu.addAction(self.pause_after_current_action)
+            self.tray_menu.addAction(self.stop_action)
+            self.tray_menu.addSeparator()
+            self.tray_menu.addAction(self.tray_quit_action)
+            self.tray_icon.setContextMenu(self.tray_menu)
+            self.tray_icon.activated.connect(self._on_tray_activated)
             self.tray_icon.show()
+        self.queue_window.attach_actions(
+            [self.start_queue_action, self.pause_after_current_action, self.stop_action]
+        )
 
     def _build_toolbar(self) -> None:
         toolbar = QToolBar(self)
@@ -439,6 +460,11 @@ class MainWindow(QMainWindow):
         self._apply_action_icons()
         self.queue_model.refresh_theme()
         self._render_queue_state()
+        tokens = current_tokens()
+        self.empty_icon_label.setPixmap(
+            action_icon("queue", tokens.accent, tokens.icon_disabled).pixmap(44, 44)
+        )
+        self.activity_log_window.highlighter.rehighlight()
 
     def _show_about(self) -> None:
         QMessageBox.about(
@@ -505,19 +531,24 @@ class MainWindow(QMainWindow):
         self.source_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.source_file_button = QPushButton()
         self.source_dir_button = QPushButton()
+        self.source_file_button.setMaximumWidth(110)
+        self.source_dir_button.setMaximumWidth(110)
 
         self.preset_label = QLabel()
         self.preset_combo = QComboBox()
         self.manage_presets_button = QPushButton()
+        self.manage_presets_button.setMaximumWidth(160)
 
         self.post_encode_label = QLabel()
         self.post_encode_combo = QComboBox()
+        self.post_encode_combo.setMaximumWidth(300)
         for action in PostEncodeAction:
             self.post_encode_combo.addItem("", action.value)
 
         self.output_label = QLabel()
         self.output_edit = QLineEdit()
         self.output_button = QPushButton()
+        self.output_button.setMaximumWidth(110)
 
         source_layout.addWidget(self.source_label, 0, 0)
         source_layout.addWidget(self.source_combo, 0, 1, 1, 3)
@@ -533,8 +564,7 @@ class MainWindow(QMainWindow):
         source_layout.addWidget(self.post_encode_combo, 2, 4, 1, 2)
         source_layout.setColumnStretch(1, 1)
         source_layout.setColumnStretch(2, 1)
-        source_layout.setColumnStretch(4, 1)
-        source_layout.setColumnStretch(5, 1)
+        source_layout.setColumnStretch(3, 1)
         return source_box
 
     def _build_setup_bar(self) -> QWidget:
@@ -567,7 +597,7 @@ class MainWindow(QMainWindow):
             Qt.ArrowType.RightArrow if collapsed else Qt.ArrowType.DownArrow
         )
         self.source_box.setVisible(not collapsed)
-        self.options_panel.setVisible(not collapsed)
+        self.options_panel.set_visible(not collapsed)
         self.setup_summary_label.setVisible(collapsed)
         self._update_setup_summary()
         self.app_config["setup_collapsed"] = collapsed
@@ -588,11 +618,13 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(8)
         layout.addStretch(1)
-        icon = QLabel()
+        self.empty_icon_label = QLabel()
         tokens = current_tokens()
-        icon.setPixmap(action_icon("queue", tokens.accent, tokens.icon_disabled).pixmap(44, 44))
-        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(icon)
+        self.empty_icon_label.setPixmap(
+            action_icon("queue", tokens.accent, tokens.icon_disabled).pixmap(44, 44)
+        )
+        self.empty_icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.empty_icon_label)
         self.empty_title_label = QLabel()
         self.empty_title_label.setObjectName("emptyTitle")
         self.empty_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -730,6 +762,30 @@ class MainWindow(QMainWindow):
         status_bar.addPermanentWidget(self.status_current_progress_label)
         status_bar.addPermanentWidget(self.current_progress_bar)
 
+    def _restore_window_geometry(self) -> None:
+        for widget, key in (
+            (self, "main_window_geometry"),
+            (self.queue_window, "queue_window_geometry"),
+            (self.activity_log_window, "activity_log_geometry"),
+        ):
+            encoded = str(self.app_config.get(key, "")).strip()
+            if not encoded:
+                continue
+            try:
+                raw = QByteArray.fromBase64(encoded.encode("ascii"))
+            except Exception:
+                continue
+            widget.restoreGeometry(raw)
+
+    def _save_window_geometry(self) -> None:
+        for widget, key in (
+            (self, "main_window_geometry"),
+            (self.queue_window, "queue_window_geometry"),
+            (self.activity_log_window, "activity_log_geometry"),
+        ):
+            state = widget.saveGeometry()
+            self.app_config[key] = bytes(state.toBase64().data()).decode("ascii")
+
     def _apply_initial_window_geometry(self) -> None:
         minimum = clamped_window_size(760, 520)
         self.setMinimumSize(minimum)
@@ -766,6 +822,7 @@ class MainWindow(QMainWindow):
         self.output_edit.textChanged.connect(self._refresh_path_validation)
         self.preset_combo.currentIndexChanged.connect(self._preset_combo_changed)
         self.options_panel.options_changed.connect(self._on_options_changed)
+        self.options_panel.smart_unavailable.connect(self._on_smart_unavailable)
         self.notification_banner.dismissed.connect(self._on_banner_dismissed)
 
         self.table_view.filesDropped.connect(self._handle_dropped_paths)
@@ -882,6 +939,10 @@ class MainWindow(QMainWindow):
         self.empty_drop_label.setText(self.translator.t("gui.empty.drop"))
         self.notification_banner.apply_translations(self.translator)
         self.details_panel.apply_translations(self.translator)
+        if hasattr(self, "tray_show_action"):
+            self.tray_show_action.setText(self.translator.t("gui.tray.show"))
+            self.tray_quit_action.setText(self.translator.t("gui.tray.quit"))
+            self.tray_icon.setToolTip(self.translator.t("app.title"))
         self._sync_action_tips()
 
         self.source_label.setText(self.translator.t("gui.label.source"))
@@ -909,6 +970,7 @@ class MainWindow(QMainWindow):
         if editable is not None:
             editable.setPlaceholderText(self.translator.t("gui.placeholder.source"))
         self.output_edit.setPlaceholderText(self.translator.t("gui.placeholder.default_output"))
+        self._bind_accessibility()
 
         self.queue_model.set_translator(self.translator)
         for view in (self.table_view, self.queue_window.table_view):
@@ -929,6 +991,25 @@ class MainWindow(QMainWindow):
             self._status_percent,
         )
         self._update_queue_metrics(self.queue_model.metrics())
+
+    def _bind_accessibility(self) -> None:
+        pairs = (
+            (self.source_label, self.source_combo),
+            (self.output_label, self.output_edit),
+            (self.preset_label, self.preset_combo),
+            (self.post_encode_label, self.post_encode_combo),
+        )
+        for label, widget in pairs:
+            label.setBuddy(widget)
+            widget.setAccessibleName(label.text())
+        self.setup_toggle.setAccessibleName(self.translator.t("gui.button.setup"))
+        self.queue_state_label.setAccessibleName(self.translator.t("gui.summary.states"))
+        self.table_view.setAccessibleName(self.translator.t("gui.group.jobs"))
+        self.queue_window.table_view.setAccessibleName(self.translator.t("gui.group.jobs"))
+        self.setTabOrder(self.source_combo, self.output_edit)
+        self.setTabOrder(self.output_edit, self.preset_combo)
+        self.setTabOrder(self.preset_combo, self.post_encode_combo)
+        self.setTabOrder(self.post_encode_combo, self.table_view)
 
     def _set_source_history(self, items: list[str]) -> None:
         current = self.source_combo.currentText().strip()
@@ -1001,6 +1082,7 @@ class MainWindow(QMainWindow):
             return
 
         self._encoder_capabilities_ready = False
+        self._runtime_banner = None
         self.options_panel.begin_capability_detection()
         worker = EncoderCapabilityDetectWorker(
             self._selected_ffmpeg(),
@@ -1021,6 +1103,7 @@ class MainWindow(QMainWindow):
     def _on_encoder_capability_detection_completed(self, capabilities: dict) -> None:
         self.app_config["encoder_capabilities"] = capabilities
         self._encoder_capabilities_ready = True
+        self._runtime_banner = None
         self.options_panel.set_runtime_capabilities(capabilities)
         self._set_encoder_status("", "", visible=False)
         self._append_log(
@@ -1039,6 +1122,11 @@ class MainWindow(QMainWindow):
             visible=True,
         )
         self._append_log(self.translator.t("gui.log.encoder_detection_failed", error=message))
+        self._set_runtime_banner(
+            self.translator.t("gui.banner.detection_failed"),
+            "error",
+            [(self.translator.t("gui.completion.view_log"), self._show_activity_log)],
+        )
 
     def _set_encoder_status(self, text: str, tooltip: str, *, visible: bool) -> None:
         self.encoder_status_label.setText(text)
@@ -1160,6 +1248,23 @@ class MainWindow(QMainWindow):
         self._set_drop_overlay_visible(False)
         super().dragLeaveEvent(event)
 
+    def _on_smart_unavailable(self, reason: str) -> None:
+        self._set_runtime_banner(
+            self.translator.t("gui.banner.smart_unavailable", reason=reason),
+            "warning",
+            [(self.translator.t("gui.button.settings"), self._open_settings_dialog)],
+        )
+
+    def _set_runtime_banner(
+        self,
+        text: str,
+        severity: str,
+        actions: list[tuple[str, Callable[[], None]]] | None = None,
+    ) -> None:
+        self._runtime_banner = (text, severity, actions or [])
+        self._dismissed_banner_key = None
+        self._update_decision_banner(self.queue_model.metrics())
+
     def _refresh_path_validation(self) -> None:
         text = self.source_combo.currentText().strip()
         invalid_source = bool(text) and not Path(text).expanduser().exists()
@@ -1259,6 +1364,15 @@ class MainWindow(QMainWindow):
                 self.notification_banner.hide_message()
                 return
             self.notification_banner.show_message(text, severity="success", actions=actions)
+            return
+        if self._runtime_banner is not None:
+            text, severity, actions = self._runtime_banner
+            key = ("runtime", text)
+            self._banner_key = key
+            if key == self._dismissed_banner_key:
+                self.notification_banner.hide_message()
+                return
+            self.notification_banner.show_message(text, severity=severity, actions=actions)
             return
         self._banner_key = None
         self.notification_banner.hide_message()
@@ -1721,7 +1835,17 @@ class MainWindow(QMainWindow):
     def _plan_current_source(self) -> None:
         input_path = self._selected_input()
         if input_path is None:
-            QMessageBox.warning(self, self.translator.t("gui.message.warning"), self.translator.t("gui.message.select_source"))
+            self.notification_banner.show_message(
+                self.translator.t("gui.message.select_source"),
+                severity="warning",
+            )
+            return
+        if not input_path.exists():
+            self._refresh_path_validation()
+            self.notification_banner.show_message(
+                self.translator.t("gui.banner.path_invalid"),
+                severity="error",
+            )
             return
         self._persist_runtime_state()
         worker = QueueIntakeWorker(input_path, self.options_panel.read_options().recursive, self._selected_ffprobe(), ffmpeg_path=self._selected_ffmpeg())
@@ -1813,13 +1937,27 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(self, self.translator.t("gui.message.info"), self.translator.t("gui.message.no_queued_items"))
             return
         self._append_log(self.translator.t("gui.log.encoding"))
-        self._set_status_snapshot("queue / starting", "-", "-", "-", 0.0)
+        self._set_status_snapshot(
+            self.translator.t("gui.status.starting_queue"), "-", "-", "-", 0.0
+        )
 
     def _pause_after_current(self) -> None:
         if not self.queue_busy:
             QMessageBox.information(self, self.translator.t("gui.message.info"), self.translator.t("gui.message.no_running_queue"))
             return
         self.queue_manager.pause_after_current()
+
+    def _show_main_window(self) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
+        if reason in {
+            QSystemTrayIcon.ActivationReason.Trigger,
+            QSystemTrayIcon.ActivationReason.DoubleClick,
+        }:
+            self._show_main_window()
 
     def _show_queue_window(self) -> None:
         self.queue_window.show()
@@ -1841,7 +1979,28 @@ class MainWindow(QMainWindow):
         self.comparison_windows.append(window)
         window.destroyed.connect(lambda: self.comparison_windows.remove(window))
         if record is not None:
-            window.load_paths(record.source_path, record.output_path)
+            comparison_output = record.output_path
+            if (
+                record.result is not None
+                and record.result.rejected_output_path is not None
+                and not comparison_output.exists()
+            ):
+                comparison_output = record.result.rejected_output_path
+            window.load_paths(record.source_path, comparison_output)
+        window.show()
+        window.raise_()
+        window.activateWindow()
+
+    def _compare_preserved(self, record: QueueItemRecord, preserved_path: Path) -> None:
+        ffmpeg, ffprobe = self._selected_ffmpeg(), self._selected_ffprobe()
+        if record.job_snapshot is not None:
+            ffmpeg = str(record.job_snapshot.ffmpeg_path)
+            ffprobe = str(record.job_snapshot.ffprobe_path)
+        window = ComparisonWindow(self.translator, self, ffmpeg=ffmpeg, ffprobe=ffprobe)
+        window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.comparison_windows.append(window)
+        window.destroyed.connect(lambda: self.comparison_windows.remove(window))
+        window.load_paths(record.source_path, preserved_path)
         window.show()
         window.raise_()
         window.activateWindow()
@@ -1865,8 +2024,15 @@ class MainWindow(QMainWindow):
         copy_output_action = menu.addAction(self.translator.t("gui.menu.copy_output_path"))
         compare_action = menu.addAction(self.translator.t("gui.compare.queue_action"))
         compare_action.setEnabled(
-            len(rows) == 1 and selected_record is not None
-            and selected_record.status == QueueItemStatus.DONE
+            len(rows) == 1
+            and selected_record is not None
+            and (
+                selected_record.status == QueueItemStatus.DONE
+                or (
+                    selected_record.result is not None
+                    and selected_record.result.rejected_output_path is not None
+                )
+            )
         )
         menu.addSeparator()
 
@@ -1984,7 +2150,12 @@ class MainWindow(QMainWindow):
     def _resolve_queue_decision(self, row: int, record: QueueItemRecord) -> None:
         result = record.result
         if result is not None and result.rejected_output_path is not None:
-            choice = choose_size_miss_decision(self, self.translator, record)
+            choice = choose_size_miss_decision(
+                self,
+                self.translator,
+                record,
+                compare=lambda path: self._compare_preserved(record, path),
+            )
             if choice is None:
                 return
             resolved = False
@@ -2203,6 +2374,10 @@ class MainWindow(QMainWindow):
             self._persist_runtime_state()
         self._start_plan_for_files(all_video_files)
 
+    @staticmethod
+    def _escape_applescript(text: str) -> str:
+        return text.replace("\\", "\\\\").replace('"', '\\"')
+
     def _send_desktop_notification(self, title: str, message: str) -> None:
         if self.tray_icon.isSystemTrayAvailable() and not self.tray_icon.icon().isNull():
             if not self.tray_icon.isVisible():
@@ -2211,11 +2386,13 @@ class MainWindow(QMainWindow):
         elif sys.platform == "darwin":
             try:
                 import subprocess
+                escaped_message = self._escape_applescript(message)
+                escaped_title = self._escape_applescript(title)
                 subprocess.run(
                     [
                         "osascript",
                         "-e",
-                        f'display notification "{message}" with title "{title}"',
+                        f'display notification "{escaped_message}" with title "{escaped_title}"',
                     ],
                     check=False,
                     capture_output=True,
@@ -2309,7 +2486,7 @@ class MainWindow(QMainWindow):
             )
         )
         if done:
-            measured = self.queue_model.metrics()
+            measured = compute_metrics(records)
             saved = measured.actual_saved_bytes or 0
             source_bytes = measured.actual_source_bytes or 0
             ratio = (saved / source_bytes * 100.0) if source_bytes > 0 else 0.0

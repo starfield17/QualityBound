@@ -147,6 +147,13 @@ _STYLESHEET = Template(
     QWidget#centralContent {
         background: $window;
     }
+    QWidget#comparisonWindow {
+        background: $window;
+    }
+    QLabel#comparePlaceholder {
+        color: $muted;
+        font-size: 14px;
+    }
     QScrollArea {
         background: $window;
         border: none;
@@ -202,6 +209,9 @@ _STYLESHEET = Template(
     }
     QLabel#setupSummary {
         color: $muted;
+    }
+    QLabel[invalid="true"], QLabel#setupSummary[invalid="true"] {
+        color: $danger;
     }
     QLabel#emptyTitle {
         color: $text;
@@ -420,6 +430,9 @@ _STYLESHEET = Template(
     QCheckBox:disabled, QRadioButton:disabled {
         color: $disabled_text;
     }
+    QCheckBox:focus, QRadioButton:focus {
+        color: $accent;
+    }
     QTabWidget::pane {
         border: 1px solid $border;
         border-radius: 8px;
@@ -456,6 +469,9 @@ _STYLESHEET = Template(
         background: $accent;
         border-radius: 4px;
     }
+    QProgressBar[over="true"]::chunk {
+        background: $danger;
+    }
     QTableView {
         background: $surface;
         alternate-background-color: $surface_alt;
@@ -467,6 +483,9 @@ _STYLESHEET = Template(
     }
     QTableView::item {
         padding: 2px 4px;
+    }
+    QTableView:focus {
+        border: 1px solid $accent;
     }
     QHeaderView::section {
         background: $header;

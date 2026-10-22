@@ -5,17 +5,39 @@ from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
-from PySide6.QtGui import (QCloseEvent, QImage, QKeySequence, QMouseEvent,
-                          QPainter, QPaintEvent, QShortcut)
-from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFileDialog, QHBoxLayout,
-                              QLabel, QPushButton, QSlider, QStackedLayout,
-                              QStyle, QVBoxLayout, QWidget)
+from PySide6.QtGui import (
+    QCloseEvent,
+    QDragEnterEvent,
+    QDropEvent,
+    QImage,
+    QKeySequence,
+    QMouseEvent,
+    QPainter,
+    QPaintEvent,
+    QShortcut,
+)
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDoubleSpinBox,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSlider,
+    QStackedLayout,
+    QStyle,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from core.i18n import Translator
+from core.media import VIDEO_EXTENSIONS
 from gui.comparison_decode import (ComparisonMedia, DecodeCancelled, FramePair,
                                    ToolRunner, decode_pair, inspect_pair, preview_pair)
 from gui.comparison_state import ComparisonPhase, ComparisonTimeline
 from gui.comparison_playback import PlaybackSession
+from gui.window_geometry import clamped_window_size
 
 
 class ComparisonWorker(QThread):
@@ -104,14 +126,20 @@ class VideoPane(QWidget):
         host = QWidget(self)
         self.stack = QStackedLayout(host)
         self.canvas = FrameCanvas(host)
+        self.placeholder = QLabel(host)
+        self.placeholder.setObjectName("comparePlaceholder")
+        self.placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.placeholder.setWordWrap(True)
         self.stack.addWidget(self.canvas)
+        self.stack.addWidget(self.placeholder)
+        self.stack.setCurrentWidget(self.placeholder)
         layout.addWidget(host, 1)
         self.setMinimumSize(160, 150)
 
     def show_frame(self, image: QImage) -> None:
         self.canvas.image = image
         self.canvas.update()
-        self.stack.setCurrentWidget(self.canvas)
+        self.stack.setCurrentWidget(self.canvas if not image.isNull() else self.placeholder)
 
 def display_time(seconds: float) -> str:
     milliseconds = max(0, round(seconds * 1000))
@@ -138,7 +166,9 @@ class ComparisonWindow(QWidget):
         self._resume_after_scrub = False
         self._resume_after_seek = False
         self._selected_side = 0
-        self.resize(1120, 700)
+        self.setObjectName("comparisonWindow")
+        self.setAcceptDrops(True)
+        self.resize(clamped_window_size(1120, 700, minimum_width=720, minimum_height=480))
         self._build_ui()
         self.playback = PlaybackSession(self)
         self.playback.frame_ready.connect(self._playback_frame)
@@ -169,6 +199,7 @@ class ComparisonWindow(QWidget):
         for side, button in enumerate(self.open_buttons):
             button.clicked.connect(lambda _checked=False, side=side: self._choose_file(side))
             files.addWidget(button)
+        files.addStretch(1)
         root.addLayout(files)
         options = QHBoxLayout()
         self.mode = QComboBox(self)
@@ -179,8 +210,14 @@ class ComparisonWindow(QWidget):
         self.audio.currentIndexChanged.connect(self._set_audio)
         self.switch_button = QPushButton(self)
         self.switch_button.clicked.connect(self.toggle_side)
+        self.help_button = QToolButton(self)
+        self.help_button.setText("?")
+        self.help_button.setCheckable(True)
+        self.help_button.toggled.connect(self._toggle_help)
         for widget in (self.mode, self.precision, self.audio, self.switch_button):
             options.addWidget(widget)
+        options.addWidget(self.help_button)
+        options.addStretch(1)
         root.addLayout(options)
         self.panes = [VideoPane(self), VideoPane(self)]
         self.picture_layout = QHBoxLayout()
@@ -191,9 +228,11 @@ class ComparisonWindow(QWidget):
         self.slider.sliderPressed.connect(self._scrub_started)
         self.slider.valueChanged.connect(self._scrub_moved)
         self.slider.sliderReleased.connect(self._scrub_finished)
-        root.addWidget(self.slider)
+        timeline_row = QHBoxLayout()
+        timeline_row.addWidget(self.slider, 1)
         self.time_label = QLabel(self)
-        root.addWidget(self.time_label)
+        timeline_row.addWidget(self.time_label)
+        root.addLayout(timeline_row)
         controls = QHBoxLayout()
         self.play_button = QPushButton(self)
         self.play_button.clicked.connect(self.toggle_play)
@@ -225,6 +264,7 @@ class ComparisonWindow(QWidget):
         root.addWidget(self.status)
         self.help_label = QLabel(self)
         self.help_label.setWordWrap(True)
+        self.help_label.setVisible(False)
         root.addWidget(self.help_label)
 
     def apply_translations(self, translator: Translator) -> None:
@@ -232,7 +272,7 @@ class ComparisonWindow(QWidget):
         t = translator.t
         self.setWindowTitle(t("gui.compare.title"))
         for side, button in enumerate(self.open_buttons):
-            button.setText(t("gui.compare.open", side="AB"[side]))
+            button.setText(t("gui.compare.open_short", side="AB"[side]))
         for combo, labels in [
             (self.mode, (t("gui.compare.side_by_side"), t("gui.compare.single"))),
             (self.precision, (t("gui.compare.precise"), t("gui.compare.normal"))),
@@ -252,8 +292,44 @@ class ComparisonWindow(QWidget):
         self.offset_label.setText(t("gui.compare.offset"))
         self.offset.setToolTip(t("gui.compare.offset_hint"))
         self.help_label.setText(t("gui.compare.help"))
+        self.help_button.setToolTip(t("gui.compare.help_toggle"))
+        self.mode.setToolTip(t("gui.compare.mode_hint"))
+        self.precision.setToolTip(t("gui.compare.precision_hint"))
+        self.audio.setToolTip(t("gui.compare.audio_hint"))
+        for pane in self.panes:
+            pane.placeholder.setText(t("gui.compare.placeholder"))
         self._update_labels()
         self._update_controls()
+
+    def _toggle_help(self, visible: bool) -> None:
+        self.help_label.setVisible(visible)
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        if event.mimeData().hasUrls():
+            paths = [Path(url.toLocalFile()) for url in event.mimeData().urls() if url.isLocalFile()]
+            if paths:
+                event.acceptProposedAction()
+                return
+        super().dragEnterEvent(event)
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        paths = [
+            Path(url.toLocalFile())
+            for url in event.mimeData().urls()
+            if url.isLocalFile() and Path(url.toLocalFile()).is_file()
+        ]
+        if not paths:
+            super().dropEvent(event)
+            return
+        event.acceptProposedAction()
+        if len(paths) >= 2:
+            self.paths = [paths[0], paths[1]]
+        else:
+            side = 1 if self.panes[1].geometry().contains(event.position().toPoint()) else 0
+            self.paths[side] = paths[0]
+        self._update_labels()
+        if self.paths[0] is not None and self.paths[1] is not None:
+            self.load_paths(self.paths[0], self.paths[1])
 
     @property
     def timeline(self) -> ComparisonTimeline | None:
@@ -291,8 +367,17 @@ class ComparisonWindow(QWidget):
         self._jobs.remove(job)
         job.deleteLater()
 
+    def _video_filter(self) -> str:
+        extensions = " ".join(f"*{suffix}" for suffix in sorted(VIDEO_EXTENSIONS))
+        return f"{self.translator.t('gui.compare.video_files')} ({extensions});;{self.translator.t('gui.compare.all_files')} (*)"
+
     def _choose_file(self, side: int) -> None:
-        path, _filter = QFileDialog.getOpenFileName(self, self.translator.t("gui.compare.open", side="AB"[side]))
+        path, _filter = QFileDialog.getOpenFileName(
+            self,
+            self.translator.t("gui.compare.open", side="AB"[side]),
+            "",
+            self._video_filter(),
+        )
         if path:
             self.paths[side] = Path(path)
             self._update_labels()
@@ -377,12 +462,25 @@ class ComparisonWindow(QWidget):
         for side, pane in enumerate(self.panes):
             path = self.paths[side]
             stamp = self.timestamps[side]
-            pane.label.setText(f"{'AB'[side]} · {path.name if path else '—'} · "
-                               f"{display_time(stamp) if stamp is not None else '—'}")
+            parts = ["AB"[side], path.name if path else "—"]
+            if self.media is not None:
+                details = self.media.details[side]
+                if details.width and details.height:
+                    parts.append(f"{details.width}×{details.height}")
+                parts.append(f"{details.fps:.2f} fps")
+            parts.append(display_time(stamp) if stamp is not None else "—")
+            pane.label.setText(" · ".join(parts))
             pane.label.setToolTip(str(path) if path else "")
         timeline = self.timeline
         end = display_time(timeline.end) if timeline else "—"
         self.time_label.setText(f"{display_time(self.position)} / {end}")
+        if self.paths[0] is not None and self.paths[1] is not None:
+            self.setWindowTitle(
+                f"{self.translator.t('gui.compare.title')} · "
+                f"{self.paths[0].name} ↔ {self.paths[1].name}"
+            )
+        else:
+            self.setWindowTitle(self.translator.t("gui.compare.title"))
 
     def _playback_frame(self, side: int, image: object, timestamp: float) -> None:
         if self.phase == ComparisonPhase.PLAYING and isinstance(image, QImage):

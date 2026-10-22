@@ -26,6 +26,8 @@ class VideoDetails:
     fps: float
     start: float = 0.0
     has_audio: bool = False
+    width: int = 0
+    height: int = 0
 
     def __post_init__(self) -> None:
         if not all(math.isfinite(value) for value in (self.duration, self.origin, self.fps, self.start)):

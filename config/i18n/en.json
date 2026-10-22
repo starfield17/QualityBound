@@ -170,8 +170,8 @@
   "gui.table.source": "Source",
   "gui.table.resolution": "Resolution",
   "gui.table.duration": "Duration",
-  "gui.table.source_bitrate": "Source bitrate (kbps)",
-  "gui.table.target_bitrate": "Target bitrate (kbps)",
+  "gui.table.source_bitrate": "Source kbps",
+  "gui.table.target_bitrate": "Target kbps",
   "gui.table.quality": "VMAF / size (est.)",
   "gui.table.encoder": "Encoder",
   "gui.table.output": "Output file",
@@ -525,5 +525,15 @@
   "gui.status.starting_queue": "Starting queue",
   "gui.menu.reset_queue_order": "Reset Queue Order",
   "gui.tooltip.table_header": "Click a header to sort the view. Sorting changes the queue's execution order; right-click the header to reset it.",
-  "gui.summary.measured_saved_tooltip": "Measured on {count} completed file(s)."
+  "gui.summary.measured_saved_tooltip": "Measured on {count} completed file(s).",
+  "gui.compare.open_short": "Open {side}…",
+  "gui.compare.video_files": "Video files",
+  "gui.compare.all_files": "All files",
+  "gui.compare.mode_hint": "Choose side-by-side or a single A/B view.",
+  "gui.compare.precision_hint": "Precise inspection aligns paused frames by timestamp; normal mode uses the shared playback clock.",
+  "gui.compare.audio_hint": "Choose which file's audio track to hear.",
+  "gui.window.queue_hint": "Right-click a row for actions; drag rows to reorder. Header sorting changes the execution order.",
+  "gui.tray.show": "Show QualityBound",
+  "gui.tray.quit": "Quit QualityBound",
+  "gui.button.ok": "OK"
 }

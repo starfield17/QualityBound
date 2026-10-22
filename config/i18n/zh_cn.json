@@ -170,8 +170,8 @@
   "gui.table.source": "源文件",
   "gui.table.resolution": "分辨率",
   "gui.table.duration": "时长",
-  "gui.table.source_bitrate": "源码率（kbps）",
-  "gui.table.target_bitrate": "目标码率（kbps）",
+  "gui.table.source_bitrate": "源码率 (kbps)",
+  "gui.table.target_bitrate": "目标码率 (kbps)",
   "gui.table.quality": "VMAF / 体积（预估）",
   "gui.table.encoder": "编码器",
   "gui.table.output": "输出文件",
@@ -525,5 +525,15 @@
   "gui.status.starting_queue": "正在启动队列",
   "gui.menu.reset_queue_order": "恢复队列顺序",
   "gui.tooltip.table_header": "点击表头可排序；排序会改变队列的执行顺序，右键表头可恢复原顺序。",
-  "gui.summary.measured_saved_tooltip": "基于 {count} 个已完成文件的实测值。"
+  "gui.summary.measured_saved_tooltip": "基于 {count} 个已完成文件的实测值。",
+  "gui.compare.open_short": "打开 {side}…",
+  "gui.compare.video_files": "视频文件",
+  "gui.compare.all_files": "所有文件",
+  "gui.compare.mode_hint": "选择并排显示或单个 A/B 视图。",
+  "gui.compare.precision_hint": "精确检查按时间戳对齐暂停帧；普通模式使用共享播放时钟。",
+  "gui.compare.audio_hint": "选择要播放哪个文件的音轨。",
+  "gui.window.queue_hint": "右键行可执行操作；拖动行可调整顺序。表头排序会改变执行顺序。",
+  "gui.tray.show": "显示 QualityBound",
+  "gui.tray.quit": "退出 QualityBound",
+  "gui.button.ok": "确定"
 }

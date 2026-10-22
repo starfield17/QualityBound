@@ -360,7 +360,7 @@ class VideoToolboxCliAndGuiTestCase(unittest.TestCase):
             )
             window._on_encoder_capability_detection_completed(capabilities)
             panel = window.options_panel
-            self.assertIn("videotoolbox", [panel.backend_combo.itemText(i) for i in range(panel.backend_combo.count())])
+            self.assertIn("videotoolbox", [panel.backend_combo.itemData(i) for i in range(panel.backend_combo.count())])
             self.assertEqual(
                 [panel.decode_acceleration_combo.itemData(i) for i in range(panel.decode_acceleration_combo.count())],
                 ["software", "videotoolbox"],
@@ -375,9 +375,11 @@ class VideoToolboxCliAndGuiTestCase(unittest.TestCase):
             )
             self.assertEqual(panel.read_options().decode_acceleration, DecodeAcceleration.VIDEOTOOLBOX)
 
-            panel.codec_combo.setCurrentText("av1")
-            self.assertNotIn("videotoolbox", [panel.backend_combo.itemText(i) for i in range(panel.backend_combo.count())])
-            self.assertEqual(panel.backend_combo.currentText(), "auto")
+            av1_index = panel.codec_combo.findData("av1")
+            assert av1_index >= 0
+            panel.codec_combo.setCurrentIndex(av1_index)
+            self.assertNotIn("videotoolbox", [panel.backend_combo.itemData(i) for i in range(panel.backend_combo.count())])
+            self.assertEqual(panel.backend_combo.currentData(), "auto")
         finally:
             window.close()
 

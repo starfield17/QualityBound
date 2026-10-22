@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QInputDialog,
     QLabel,
     QListWidget,
+    QListWidgetItem,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -27,18 +30,21 @@ class PresetManagerDialog(QDialog):
         self.translator = tr
         self.default_preset_name = default_preset_name
         self.selected_action: dict[str, str] | None = None
+        self._preset_names: list[str] = []
 
         self._build_ui()
         self.set_preset_names(preset_names, default_preset_name)
         self.apply_translations(tr)
 
     def _build_ui(self) -> None:
-        self.resize(480, 420)
+        self.resize(520, 440)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
 
         self.info_label = QLabel()
+        self.status_label = QLabel()
+        self.status_label.setObjectName("setupSummary")
         self.list_widget = QListWidget()
 
         buttons = QHBoxLayout()
@@ -56,6 +62,7 @@ class PresetManagerDialog(QDialog):
 
         layout.addWidget(self.info_label)
         layout.addWidget(self.list_widget, 1)
+        layout.addWidget(self.status_label)
         layout.addLayout(buttons)
 
         self.load_button.clicked.connect(self._request_load)
@@ -63,6 +70,8 @@ class PresetManagerDialog(QDialog):
         self.delete_button.clicked.connect(self._request_delete)
         self.default_button.clicked.connect(self._request_set_default)
         self.close_button.clicked.connect(self.reject)
+        self.list_widget.currentItemChanged.connect(lambda *_args: self._update_button_state())
+        self.list_widget.itemDoubleClicked.connect(lambda _item: self._request_load())
 
     def apply_translations(self, tr: Translator) -> None:
         self.translator = tr
@@ -73,34 +82,52 @@ class PresetManagerDialog(QDialog):
         self.default_button.setText(self.translator.t("gui.button.set_default_preset"))
         self.close_button.setText(self.translator.t("gui.button.close"))
         self._update_info_label()
+        self._update_button_state()
 
     def set_preset_names(self, preset_names: list[str], default_preset_name: str) -> None:
+        previous = self._selected_preset_name()
+        self._preset_names = list(preset_names)
         self.default_preset_name = default_preset_name
+        self.list_widget.blockSignals(True)
         self.list_widget.clear()
+        marker = self.translator.t("gui.label.default_preset_marker")
         for name in preset_names:
-            label = name
-            if name == default_preset_name:
-                label = f"{name} ({self.translator.t('gui.label.default_preset_marker')})"
-            self.list_widget.addItem(label)
-        if preset_names:
-            self.list_widget.setCurrentRow(0)
+            label = f"{name} ({marker})" if name == default_preset_name else name
+            item = QListWidgetItem(label)
+            item.setData(Qt.ItemDataRole.UserRole, name)
+            self.list_widget.addItem(item)
+        self.list_widget.blockSignals(False)
+        row = self._row_for_name(previous)
+        if row < 0 and preset_names:
+            row = 0
+        if row >= 0:
+            self.list_widget.setCurrentRow(row)
         self._update_info_label()
+        self._update_button_state()
+
+    def _row_for_name(self, name: str) -> int:
+        for row in range(self.list_widget.count()):
+            item = maybe_none(self.list_widget.item(row))
+            if item is not None and item.data(Qt.ItemDataRole.UserRole) == name:
+                return row
+        return -1
 
     def _selected_preset_name(self) -> str:
-        # QListWidget.currentItem() is declared as non-null but returns None while the
-        # list is empty, which is the state this guard protects.
         item = maybe_none(self.list_widget.currentItem())
         if item is None:
             return ""
-        text = item.text()
-        suffix = f" ({self.translator.t('gui.label.default_preset_marker')})"
-        if text.endswith(suffix):
-            return text[: -len(suffix)]
-        return text
+        name = item.data(Qt.ItemDataRole.UserRole)
+        return name if isinstance(name, str) else ""
 
     def _update_info_label(self) -> None:
         default_text = self.default_preset_name or self.translator.t("gui.label.none")
         self.info_label.setText(self.translator.t("gui.label.default_preset", name=default_text))
+
+    def _update_button_state(self) -> None:
+        has_selection = bool(self._selected_preset_name())
+        for button in (self.load_button, self.delete_button, self.default_button):
+            button.setEnabled(has_selection)
+        self.save_current_button.setEnabled(True)
 
     def _request_load(self) -> None:
         name = self._selected_preset_name()
@@ -117,12 +144,32 @@ class PresetManagerDialog(QDialog):
         )
         if not ok or not name.strip():
             return
-        self.selected_action = {"action": "save", "name": name.strip()}
+        name = name.strip()
+        if name in self._preset_names:
+            answer = QMessageBox.question(
+                self,
+                self.translator.t("gui.message.warning"),
+                self.translator.t("gui.message.overwrite_preset_confirm", name=name),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+        self.selected_action = {"action": "save", "name": name}
         self.accept()
 
     def _request_delete(self) -> None:
         name = self._selected_preset_name()
         if not name:
+            return
+        answer = QMessageBox.question(
+            self,
+            self.translator.t("gui.message.warning"),
+            self.translator.t("gui.message.delete_preset_confirm", name=name),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
             return
         self.selected_action = {"action": "delete", "name": name}
         self.accept()

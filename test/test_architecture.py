@@ -523,10 +523,14 @@ class ArchitectureTestCase(unittest.TestCase):
             "begin_capability_detection",
             "current_analysis_profile_name",
             "notify_capability_detection_failed",
+            "options_changed",
             "read_options",
+            "smart_unavailable",
+            "summary_text",
             "set_busy",
             "set_runtime_capabilities",
             "set_translator",
+            "set_visible",
             "sync_dependent_controls",
         }
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))

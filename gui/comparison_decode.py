@@ -89,7 +89,7 @@ def inspect_pair(paths: tuple[Path, Path], ffmpeg: str | None,
 def inspect_video(path: Path, probe: Path, runner: ToolRunner) -> VideoDetails:
     payload = json.loads(runner.run([
         str(probe), "-v", "error", "-show_entries",
-        "stream=codec_type,duration,start_time,avg_frame_rate,r_frame_rate:format=duration,start_time",
+        "stream=codec_type,duration,start_time,avg_frame_rate,r_frame_rate,width,height:format=duration,start_time",
         "-of", "json", str(path),
     ]))
     streams = [stream for stream in payload.get("streams", []) if stream.get("codec_type", "video") == "video"]
@@ -108,7 +108,9 @@ def inspect_video(path: Path, probe: Path, runner: ToolRunner) -> VideoDetails:
     if fps <= 0:
         numerator, denominator = str(stream.get("r_frame_rate", "0/1")).split("/")
         fps = float(numerator) / float(denominator) if float(denominator) else 0.0
-    details = VideoDetails(duration, origin, fps, start, has_audio)
+    width = int(stream.get("width", 0) or 0)
+    height = int(stream.get("height", 0) or 0)
+    details = VideoDetails(duration, origin, fps, start, has_audio, width, height)
     if "duration" not in stream:
         # Matroska and similar containers may report the last timestamp as their
         # duration, including a start offset or a longer audio tail. Measure the
@@ -129,7 +131,15 @@ def inspect_video(path: Path, probe: Path, runner: ToolRunner) -> VideoDetails:
         last = max(frames, key=lambda frame: float(frame["best_effort_timestamp_time"]))
         end = float(last["best_effort_timestamp_time"]) - origin
         frame_duration = float(last.get("duration_time", last.get("pkt_duration_time", 0)))
-        details = VideoDetails(end + (frame_duration if frame_duration > 0 else 1 / fps), origin, fps, start, has_audio)
+        details = VideoDetails(
+            end + (frame_duration if frame_duration > 0 else 1 / fps),
+            origin,
+            fps,
+            start,
+            has_audio,
+            width,
+            height,
+        )
     return details
 
 

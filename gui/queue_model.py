@@ -102,8 +102,8 @@ COLUMN_COUNT = len(QueueColumn)
 FIXED_COLUMN_WIDTHS: dict[QueueColumn, int] = {
     QueueColumn.RESOLUTION: 96,
     QueueColumn.DURATION: 84,
-    QueueColumn.SOURCE_BITRATE: 132,
-    QueueColumn.TARGET_BITRATE: 132,
+    QueueColumn.SOURCE_BITRATE: 116,
+    QueueColumn.TARGET_BITRATE: 116,
     QueueColumn.QUALITY: 142,
     QueueColumn.STATUS: 136,
     QueueColumn.PROGRESS: 92,
@@ -116,11 +116,11 @@ def format_kbps_value(bps: int | None) -> str:
     return f"{bps / 1000:,.0f}"
 
 FLEX_COLUMN_SPECS: dict[QueueColumn, tuple[int, int]] = {
-    QueueColumn.NAME: (28, 180),
-    QueueColumn.FOLDER: (20, 160),
-    QueueColumn.ENCODER: (14, 130),
-    QueueColumn.OUTPUT: (20, 150),
-    QueueColumn.TAGS: (18, 120),
+    QueueColumn.NAME: (28, 160),
+    QueueColumn.FOLDER: (20, 140),
+    QueueColumn.ENCODER: (14, 120),
+    QueueColumn.OUTPUT: (20, 140),
+    QueueColumn.TAGS: (18, 100),
 }
 
 

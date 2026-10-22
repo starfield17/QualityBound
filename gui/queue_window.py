@@ -1,6 +1,15 @@
 from __future__ import annotations
 
-from PySide6.QtWidgets import QLabel, QMainWindow, QProgressBar, QVBoxLayout, QWidget
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import (
+    QLabel,
+    QMainWindow,
+    QProgressBar,
+    QToolBar,
+    QVBoxLayout,
+    QWidget,
+)
 
 from core.i18n import Translator
 from gui.queue_model import QueueTableModel, format_duration
@@ -25,10 +34,19 @@ class QueueWindow(QMainWindow):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
 
+        self.action_toolbar = QToolBar(self)
+        self.action_toolbar.setMovable(False)
+        self.action_toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.action_toolbar.setIconSize(QSize(18, 18))
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.action_toolbar)
+
         self.summary_label = QLabel()
         self.queue_progress_label = QLabel()
         self.queue_progress_bar = QProgressBar()
         self.queue_progress_bar.setRange(0, 1000)
+        self.hint_label = QLabel()
+        self.hint_label.setObjectName("setupSummary")
+        self.hint_label.setWordWrap(True)
 
         self.table_view = create_queue_view(self)
         self.table_view.setModel(self.model)
@@ -37,11 +55,18 @@ class QueueWindow(QMainWindow):
         layout.addWidget(self.queue_progress_label)
         layout.addWidget(self.queue_progress_bar)
         layout.addWidget(self.table_view, 1)
+        layout.addWidget(self.hint_label)
+
+    def attach_actions(self, actions: list[QAction]) -> None:
+        for action in actions:
+            self.action_toolbar.addAction(action)
 
     def apply_translations(self, tr: Translator) -> None:
         self.translator = tr
         self.setWindowTitle(self.translator.t("gui.window.queue"))
+        self.hint_label.setText(self.translator.t("gui.window.queue_hint"))
         self.model.set_translator(tr)
+        self.table_view.horizontalHeader().setToolTip(self.translator.t("gui.tooltip.table_header"))
 
     def update_metrics(self, metrics: QueueMetrics) -> None:
         states_text = self.translator.t(

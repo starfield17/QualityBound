@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QComboBox
 
 from cli.cli_entry import _build_parser, _normalize_auto_backend_preset, run_cli
 from core.media.bitrate import DEFAULT_RATIO
@@ -96,7 +96,13 @@ def _capabilities_by_codec(
 
 def _backend_combo_items(window: MainWindow) -> list[str]:
     combo = window.options_panel.backend_combo
-    return [combo.itemText(index) for index in range(combo.count())]
+    return [str(combo.itemData(index)) for index in range(combo.count())]
+
+
+def _select_combo_data(combo: QComboBox, value: str) -> None:
+    index = combo.findData(value)
+    assert index >= 0
+    combo.setCurrentIndex(index)
 
 
 def _plan_item(encoder_name: str, backend: BackendChoice, options: EncodeOptions | None = None) -> EncodePlanItem:
@@ -295,10 +301,10 @@ class GuiPresetSelectionTestCase(unittest.TestCase):
                 )
             )
             panel = window.options_panel
-            panel.backend_combo.setCurrentText("nvenc")
+            _select_combo_data(panel.backend_combo, "nvenc")
             panel.refresh_encoder_preset_choices()
             self.assertEqual(panel.encoder_preset_combo.itemText(1), "p1")
-            panel.backend_combo.setCurrentText("qsv")
+            _select_combo_data(panel.backend_combo, "qsv")
             panel.refresh_encoder_preset_choices()
             self.assertEqual(panel.encoder_preset_combo.itemText(1), "veryfast")
         finally:
@@ -336,10 +342,10 @@ class GuiPresetSelectionTestCase(unittest.TestCase):
                 )
             )
             panel = window.options_panel
-            panel.codec_combo.setCurrentText("hevc")
+            _select_combo_data(panel.codec_combo, "hevc")
             self.assertEqual(_backend_combo_items(window), ["auto", "qsv", "cpu"])
 
-            panel.codec_combo.setCurrentText("av1")
+            _select_combo_data(panel.codec_combo, "av1")
             self.assertEqual(_backend_combo_items(window), ["auto", "cpu"])
         finally:
             window.close()
@@ -359,7 +365,7 @@ class GuiPresetSelectionTestCase(unittest.TestCase):
                     backend=BackendChoice.QSV,
                 )
             )
-            self.assertEqual(panel.backend_combo.currentText(), "auto")
+            self.assertEqual(panel.backend_combo.currentData(), "auto")
             options = panel.read_options()
             self.assertEqual(options.backend, BackendChoice.AUTO)
         finally:
@@ -380,7 +386,7 @@ class GuiPresetSelectionTestCase(unittest.TestCase):
         window = MainWindow(self.repo_root, language="en")
         try:
             panel = window.options_panel
-            panel.backend_combo.setCurrentText("auto")
+            _select_combo_data(panel.backend_combo, "auto")
             panel.refresh_encoder_preset_choices()
             self.assertEqual(panel.encoder_preset_combo.count(), 1)
             self.assertFalse(panel.encoder_preset_combo.isEnabled())
