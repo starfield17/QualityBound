@@ -8,9 +8,11 @@ from PySide6.QtGui import (
     QCloseEvent,
     QDesktopServices,
     QDragEnterEvent,
+    QDragLeaveEvent,
     QDragMoveEvent,
     QDropEvent,
     QKeySequence,
+    QResizeEvent,
     QShowEvent,
 )
 from PySide6.QtWidgets import (
@@ -32,7 +34,9 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QStackedWidget,
     QStatusBar,
+    QToolButton,
     QSystemTrayIcon,
     QToolBar,
     QVBoxLayout,
@@ -92,6 +96,8 @@ from gui.queue_view import ResponsiveQueueTableView, create_queue_view
 from gui.queue_window import QueueWindow
 from gui.settings_dialog import SettingsDialog
 from gui.icons import action_icon
+from gui.item_details_panel import ItemDetailsPanel
+from gui.notification_banner import NotificationBanner
 from gui.theme import apply_theme, current_tokens, theme_manager
 from gui.window_geometry import clamped_window_size
 
@@ -174,6 +180,11 @@ class MainWindow(QMainWindow):
         self._close_after_running_task_stops = False
         self._loading_initial_state = True
         self.comparison_windows: list[ComparisonWindow] = []
+        self._preset_dirty = False
+        self._applying_preset = False
+        self._completion_banner: tuple[str, list[tuple[str, Callable[[], None]]]] | None = None
+        self._banner_key: tuple[object, ...] | None = None
+        self._dismissed_banner_key: tuple[object, ...] | None = None
 
         self.queue_model = QueueTableModel(self.translator, self)
         self.queue_manager = QueueManager(self.queue_model, self)
@@ -315,6 +326,8 @@ class MainWindow(QMainWindow):
             append_log=self._append_log,
         )
         self.jobs_box = self._build_jobs_box()
+        self.setup_bar = self._build_setup_bar()
+        root_layout.addWidget(self.setup_bar)
         root_layout.addWidget(self.source_box)
         root_layout.addWidget(self.options_panel)
         root_layout.addWidget(self.jobs_box, 1)
@@ -472,13 +485,19 @@ class MainWindow(QMainWindow):
         root_layout.setSpacing(10)
         self.main_scroll_area = central
         self.main_content_widget = content
+        self.drop_overlay = QLabel(self)
+        self.drop_overlay.setObjectName("dropOverlay")
+        self.drop_overlay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.drop_overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.drop_overlay.setVisible(False)
         return root_layout
 
     def _build_source_box(self) -> QGroupBox:
         source_box = QGroupBox()
         source_layout = QGridLayout(source_box)
-        source_layout.setHorizontalSpacing(10)
-        source_layout.setVerticalSpacing(10)
+        source_layout.setContentsMargins(10, 6, 10, 6)
+        source_layout.setHorizontalSpacing(8)
+        source_layout.setVerticalSpacing(6)
 
         self.source_label = QLabel()
         self.source_combo = QComboBox()
@@ -518,88 +537,174 @@ class MainWindow(QMainWindow):
         source_layout.setColumnStretch(5, 1)
         return source_box
 
+    def _build_setup_bar(self) -> QWidget:
+        bar = QWidget()
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        self.setup_toggle = QToolButton()
+        self.setup_toggle.setCheckable(True)
+        self.setup_toggle.setChecked(True)
+        self.setup_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.setup_toggle.setArrowType(Qt.ArrowType.DownArrow)
+        self.setup_toggle.toggled.connect(self._on_setup_toggled)
+        self.setup_summary_label = QLabel()
+        self.setup_summary_label.setObjectName("setupSummary")
+        self.setup_summary_label.setVisible(False)
+        layout.addWidget(self.setup_toggle)
+        layout.addWidget(self.setup_summary_label, 1)
+        layout.addStretch(1)
+        return bar
+
+    def _on_setup_toggled(self, expanded: bool) -> None:
+        self._set_setup_collapsed(not expanded, persist=not self._loading_initial_state)
+
+    def _set_setup_collapsed(self, collapsed: bool, *, persist: bool = False) -> None:
+        self.setup_toggle.blockSignals(True)
+        self.setup_toggle.setChecked(not collapsed)
+        self.setup_toggle.blockSignals(False)
+        self.setup_toggle.setArrowType(
+            Qt.ArrowType.RightArrow if collapsed else Qt.ArrowType.DownArrow
+        )
+        self.source_box.setVisible(not collapsed)
+        self.options_panel.setVisible(not collapsed)
+        self.setup_summary_label.setVisible(collapsed)
+        self._update_setup_summary()
+        self.app_config["setup_collapsed"] = collapsed
+        if persist:
+            self._persist_runtime_state()
+
+    def _update_setup_summary(self) -> None:
+        self.setup_summary_label.setText(self.options_panel.summary_text())
+
+    def _on_options_changed(self) -> None:
+        self._update_setup_summary()
+        self._mark_preset_modified()
+
+    def _build_empty_state(self) -> QWidget:
+        frame = QFrame()
+        frame.setObjectName("emptyState")
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(8)
+        layout.addStretch(1)
+        icon = QLabel()
+        tokens = current_tokens()
+        icon.setPixmap(action_icon("queue", tokens.accent, tokens.icon_disabled).pixmap(44, 44))
+        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(icon)
+        self.empty_title_label = QLabel()
+        self.empty_title_label.setObjectName("emptyTitle")
+        self.empty_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.empty_title_label)
+        self.empty_body_label = QLabel()
+        self.empty_body_label.setObjectName("emptyBody")
+        self.empty_body_label.setWordWrap(True)
+        self.empty_body_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.empty_body_label)
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        self.empty_add_files_button = QPushButton()
+        self.empty_add_files_button.setProperty("role", "primary")
+        self.empty_add_folder_button = QPushButton()
+        self.empty_add_files_button.clicked.connect(lambda: self.add_files_action.trigger())
+        self.empty_add_folder_button.clicked.connect(lambda: self.add_folder_action.trigger())
+        buttons.addWidget(self.empty_add_files_button)
+        buttons.addWidget(self.empty_add_folder_button)
+        buttons.addStretch(1)
+        layout.addLayout(buttons)
+        self.empty_drop_label = QLabel()
+        self.empty_drop_label.setObjectName("setupSummary")
+        self.empty_drop_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.empty_drop_label)
+        layout.addStretch(1)
+        return frame
+
+    @staticmethod
+    def _stat_card(title: QLabel, value: QLabel) -> QFrame:
+        card = QFrame()
+        card.setObjectName("statCard")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(10, 6, 10, 6)
+        layout.setSpacing(1)
+        layout.addWidget(title)
+        layout.addWidget(value)
+        return card
+
     def _build_jobs_box(self) -> QGroupBox:
         jobs_box = QGroupBox()
         jobs_layout = QVBoxLayout(jobs_box)
-        jobs_layout.setContentsMargins(12, 12, 12, 12)
-        jobs_layout.setSpacing(8)
+        jobs_layout.setContentsMargins(12, 10, 12, 10)
+        jobs_layout.setSpacing(7)
 
-        summary_widget = QWidget()
-        summary_layout = QHBoxLayout(summary_widget)
-        summary_layout.setContentsMargins(0, 0, 0, 0)
-        summary_layout.setSpacing(12)
-
-        left_summary = QWidget()
-        left_layout = QGridLayout(left_summary)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setHorizontalSpacing(10)
-        left_layout.setVerticalSpacing(6)
-
-        right_summary = QWidget()
-        right_layout = QGridLayout(right_summary)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setHorizontalSpacing(10)
-        right_layout.setVerticalSpacing(6)
-
-        divider = QFrame()
-        divider.setFrameShape(QFrame.Shape.VLine)
-        divider.setFrameShadow(QFrame.Shadow.Sunken)
+        self.notification_banner = NotificationBanner(self.translator, self)
+        jobs_layout.addWidget(self.notification_banner)
 
         self.total_items_title = QLabel()
-        self.total_items_value = QLabel("-")
+        self.total_items_value = QLabel("0")
         self.total_duration_title = QLabel()
-        self.total_duration_value = QLabel("-")
+        self.total_duration_value = QLabel("—")
         self.states_title = QLabel()
-        self.states_value = QLabel("-")
+        self.states_value = QLabel("—")
         self.saved_space_title = QLabel()
-        self.saved_space_value = QLabel("-")
-        for label in [
+        self.saved_space_value = QLabel("—")
+        for label in (
             self.total_items_title,
             self.total_duration_title,
             self.states_title,
             self.saved_space_title,
-        ]:
+        ):
             label.setObjectName("summaryTitle")
-        for label in [
+        for label in (
             self.total_items_value,
             self.total_duration_value,
             self.states_value,
             self.saved_space_value,
-        ]:
+        ):
             label.setObjectName("summaryValue")
+        self.states_value.setWordWrap(True)
 
-        left_layout.addWidget(self.total_items_title, 0, 0)
-        left_layout.addWidget(self.total_items_value, 0, 1)
-        left_layout.addWidget(self.total_duration_title, 1, 0)
-        left_layout.addWidget(self.total_duration_value, 1, 1)
-        left_layout.setColumnStretch(1, 1)
-
-        right_layout.addWidget(self.states_title, 0, 0)
-        right_layout.addWidget(self.states_value, 0, 1)
-        right_layout.addWidget(self.saved_space_title, 1, 0)
-        right_layout.addWidget(self.saved_space_value, 1, 1)
-        right_layout.setColumnStretch(1, 1)
-
-        summary_layout.addWidget(left_summary, 1)
-        summary_layout.addWidget(divider)
-        summary_layout.addWidget(right_summary, 1)
+        summary_layout = QHBoxLayout()
+        summary_layout.setContentsMargins(0, 0, 0, 0)
+        summary_layout.setSpacing(8)
+        summary_layout.addWidget(self._stat_card(self.total_items_title, self.total_items_value), 1)
+        summary_layout.addWidget(self._stat_card(self.total_duration_title, self.total_duration_value), 1)
+        summary_layout.addWidget(self._stat_card(self.states_title, self.states_value), 2)
+        summary_layout.addWidget(self._stat_card(self.saved_space_title, self.saved_space_value), 1)
+        jobs_layout.addLayout(summary_layout)
 
         self.queue_state_label = QLabel()
-        self.queue_state_label.setObjectName("summaryValue")
+        self.queue_state_label.setObjectName("statusPill")
         self.queue_progress_text = QLabel()
+        self.queue_progress_text.setObjectName("setupSummary")
         self.queue_progress_bar = QProgressBar()
         self.queue_progress_bar.setRange(0, 1000)
+        progress_layout = QHBoxLayout()
+        progress_layout.setContentsMargins(0, 0, 0, 0)
+        progress_layout.setSpacing(8)
+        progress_layout.addWidget(self.queue_state_label, 0)
+        progress_layout.addWidget(self.queue_progress_text, 2)
+        progress_layout.addWidget(self.queue_progress_bar, 3)
+        jobs_layout.addLayout(progress_layout)
 
         self.table_view = create_queue_view(self)
         self.table_view.setModel(self.queue_model)
         self.table_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table_view.horizontalHeader().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
 
-        jobs_layout.addWidget(summary_widget)
-        jobs_layout.addWidget(self.queue_state_label)
-        jobs_layout.addWidget(self.queue_progress_text)
-        jobs_layout.addWidget(self.queue_progress_bar)
-        jobs_layout.addWidget(self.table_view, 1)
+        self.empty_state = self._build_empty_state()
+        self.queue_stack = QStackedWidget()
+        self.queue_stack.addWidget(self.table_view)
+        self.queue_stack.addWidget(self.empty_state)
+        jobs_layout.addWidget(self.queue_stack, 1)
+
+        self.details_panel = ItemDetailsPanel(self.translator, self)
+        jobs_layout.addWidget(self.details_panel)
+        self.details_panel.openSource.connect(self._open_selected_source_folder)
+        self.details_panel.openOutput.connect(self._open_selected_output_folder)
+        self.details_panel.compare.connect(lambda: self._show_comparison(self._selected_record()))
+        self.details_panel.resolve.connect(self._resolve_selected_decision)
+        self.details_panel.closeRequested.connect(self._clear_details_panel)
         return jobs_box
 
     def _build_status_bar(self) -> None:
@@ -657,7 +762,11 @@ class MainWindow(QMainWindow):
         self.options_panel.analysis_profile_changed.connect(lambda _name: self._persist_runtime_state())
         self.source_combo.activated.connect(lambda *_args: self._persist_runtime_state())
         self.output_edit.editingFinished.connect(self._persist_runtime_state)
+        self.source_combo.currentTextChanged.connect(self._refresh_path_validation)
+        self.output_edit.textChanged.connect(self._refresh_path_validation)
         self.preset_combo.currentIndexChanged.connect(self._preset_combo_changed)
+        self.options_panel.options_changed.connect(self._on_options_changed)
+        self.notification_banner.dismissed.connect(self._on_banner_dismissed)
 
         self.table_view.filesDropped.connect(self._handle_dropped_paths)
         self.queue_window.table_view.filesDropped.connect(self._handle_dropped_paths)
@@ -665,6 +774,14 @@ class MainWindow(QMainWindow):
             view.doubleClicked.connect(
                 lambda index, source_view=view: self._on_queue_row_activated(source_view, index)
             )
+            view.removeRequested.connect(self._remove_selected_queue_rows)
+            view.activateRequested.connect(
+                lambda index, source_view=view: self._on_queue_row_activated(source_view, index)
+            )
+            view.dragActivityChanged.connect(self._set_drop_overlay_visible)
+        selection_model = maybe_none(self.table_view.selectionModel())
+        if selection_model is not None:
+            selection_model.selectionChanged.connect(lambda *_args: self._update_details_panel())
 
         self.queue_model.metricsChanged.connect(self._update_queue_metrics)
         self.queue_manager.log.connect(self._append_log)
@@ -705,9 +822,12 @@ class MainWindow(QMainWindow):
             if preset_index >= 0:
                 self.preset_combo.setCurrentIndex(preset_index)
                 try:
+                    self._applying_preset = True
                     self.options_panel.apply_options(load_preset(default_preset, self.config_dir))
                 except FileNotFoundError:
                     self.options_panel.apply_options(EncodeOptions())
+                finally:
+                    self._applying_preset = False
             else:
                 self.options_panel.apply_options(EncodeOptions())
         else:
@@ -721,6 +841,12 @@ class MainWindow(QMainWindow):
 
         self._set_status_snapshot("-", "-", "-", "-", None)
         self._restore_header_state()
+        default_collapsed = self.height() < 820
+        self._set_setup_collapsed(
+            bool(self.app_config.get("setup_collapsed", default_collapsed))
+        )
+        self._refresh_path_validation()
+        self._update_setup_summary()
 
     def _apply_translations(self) -> None:
         self.translator = self.catalog.translator(self.language)
@@ -748,6 +874,14 @@ class MainWindow(QMainWindow):
         self.view_menu.setTitle(self.translator.t("gui.menu.view"))
         self.tools_menu.setTitle(self.translator.t("gui.menu.tools"))
         self.help_menu.setTitle(self.translator.t("gui.menu.help"))
+        self.setup_toggle.setText(self.translator.t("gui.button.setup"))
+        self.empty_title_label.setText(self.translator.t("gui.empty.title"))
+        self.empty_body_label.setText(self.translator.t("gui.empty.body"))
+        self.empty_add_files_button.setText(self.translator.t("gui.button.add_files"))
+        self.empty_add_folder_button.setText(self.translator.t("gui.button.add_folder"))
+        self.empty_drop_label.setText(self.translator.t("gui.empty.drop"))
+        self.notification_banner.apply_translations(self.translator)
+        self.details_panel.apply_translations(self.translator)
         self._sync_action_tips()
 
         self.source_label.setText(self.translator.t("gui.label.source"))
@@ -764,6 +898,7 @@ class MainWindow(QMainWindow):
         self.manage_presets_button.setText(self.translator.t("gui.button.manage_presets"))
 
         self.options_panel.set_translator(self.translator)
+        self._refresh_presets()
 
         self.total_items_title.setText(self.translator.t("gui.summary.total_items"))
         self.states_title.setText(self.translator.t("gui.summary.states"))
@@ -776,11 +911,16 @@ class MainWindow(QMainWindow):
         self.output_edit.setPlaceholderText(self.translator.t("gui.placeholder.default_output"))
 
         self.queue_model.set_translator(self.translator)
+        for view in (self.table_view, self.queue_window.table_view):
+            view.horizontalHeader().setToolTip(self.translator.t("gui.tooltip.table_header"))
         self.activity_log_window.apply_translations(self.translator)
         self.queue_window.apply_translations(self.translator)
         for comparison in self.comparison_windows:
             comparison.apply_translations(self.translator)
         self._render_queue_state()
+        self._refresh_path_validation()
+        self._update_setup_summary()
+        self._update_details_panel()
         self._set_status_snapshot(
             self._status_stage,
             self._status_file,
@@ -952,18 +1092,31 @@ class MainWindow(QMainWindow):
             )
         )
         self.total_duration_value.setText(format_duration(metrics.total_duration_sec))
-        saved_bytes = metrics.estimated_saved_bytes
-        if saved_bytes is None:
-            self.saved_space_value.setText(self.translator.t("gui.value.unknown"))
-        elif metrics.estimated_saved_is_floor:
-            self.saved_space_value.setText(
+        measured = metrics.actual_saved_bytes
+        if measured is not None:
+            self.saved_space_title.setText(self.translator.t("gui.summary.measured_saved"))
+            self.saved_space_value.setText(format_size(measured))
+            self.saved_space_value.setToolTip(
                 self.translator.t(
-                    "gui.summary.saved_at_least",
-                    value=format_size(saved_bytes),
+                    "gui.summary.measured_saved_tooltip",
+                    count=metrics.measured_saved_items,
                 )
             )
         else:
-            self.saved_space_value.setText(format_size(saved_bytes))
+            self.saved_space_title.setText(self.translator.t("gui.summary.estimated_saved"))
+            self.saved_space_value.setToolTip("")
+            saved_bytes = metrics.estimated_saved_bytes
+            if saved_bytes is None:
+                self.saved_space_value.setText(self.translator.t("gui.value.unknown"))
+            elif metrics.estimated_saved_is_floor:
+                self.saved_space_value.setText(
+                    self.translator.t(
+                        "gui.summary.saved_at_least",
+                        value=format_size(saved_bytes),
+                    )
+                )
+            else:
+                self.saved_space_value.setText(format_size(saved_bytes))
         eta_text = format_duration(metrics.eta_sec) if metrics.eta_sec else self.translator.t("gui.value.unknown")
         self.queue_progress_text.setText(
             self.translator.t(
@@ -976,7 +1129,144 @@ class MainWindow(QMainWindow):
         )
         self.queue_progress_bar.setValue(int(round(metrics.queue_percent * 10)))
         self.queue_window.update_metrics(metrics)
+        self._update_queue_empty_state(metrics)
+        self._update_decision_banner(metrics)
         self._refresh_action_state()
+
+    def _set_drop_overlay_visible(self, visible: bool) -> None:
+        if not hasattr(self, "drop_overlay"):
+            return
+        if visible and not (
+            self.active_worker is not None or self.queue_busy or self.queue_manager.is_busy()
+        ):
+            self.drop_overlay.setText(self.translator.t("gui.drop.overlay"))
+            self._position_drop_overlay()
+            self.drop_overlay.raise_()
+            self.drop_overlay.setVisible(True)
+        else:
+            self.drop_overlay.setVisible(False)
+
+    def _position_drop_overlay(self) -> None:
+        if not hasattr(self, "drop_overlay"):
+            return
+        rect = self.main_scroll_area.geometry()
+        self.drop_overlay.setGeometry(rect.adjusted(12, 12, -12, -12))
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._position_drop_overlay()
+
+    def dragLeaveEvent(self, event: QDragLeaveEvent) -> None:
+        self._set_drop_overlay_visible(False)
+        super().dragLeaveEvent(event)
+
+    def _refresh_path_validation(self) -> None:
+        text = self.source_combo.currentText().strip()
+        invalid_source = bool(text) and not Path(text).expanduser().exists()
+        self.source_combo.setProperty("invalid", invalid_source)
+        self.source_combo.setToolTip(
+            self.translator.t("gui.message.path_missing") if invalid_source else ""
+        )
+        self.source_combo.style().unpolish(self.source_combo)
+        self.source_combo.style().polish(self.source_combo)
+
+        output_text = self.output_edit.text().strip()
+        invalid_output = bool(output_text) and Path(output_text).expanduser().is_file()
+        self.output_edit.setProperty("invalid", invalid_output)
+        self.output_edit.setToolTip(
+            self.translator.t("gui.message.path_missing") if invalid_output else ""
+        )
+        self.output_edit.style().unpolish(self.output_edit)
+        self.output_edit.style().polish(self.output_edit)
+
+    def _update_queue_empty_state(self, metrics: QueueMetrics) -> None:
+        if metrics.total_items == 0:
+            self.queue_stack.setCurrentWidget(self.empty_state)
+            self.details_panel.set_record(None, self.translator)
+        else:
+            self.queue_stack.setCurrentWidget(self.table_view)
+
+    def _update_details_panel(self) -> None:
+        selection_model = maybe_none(self.table_view.selectionModel())
+        rows = (
+            sorted(index.row() for index in selection_model.selectedRows())
+            if selection_model is not None
+            else []
+        )
+        record = self.queue_model.record_for_row(rows[0]) if rows else None
+        self.details_panel.set_record(record, self.translator)
+
+    def _selected_record(self) -> QueueItemRecord | None:
+        selection_model = maybe_none(self.table_view.selectionModel())
+        rows = (
+            sorted(index.row() for index in selection_model.selectedRows())
+            if selection_model is not None
+            else []
+        )
+        if not rows:
+            rows = self._selected_rows_from_view(self.queue_window.table_view)
+        return self.queue_model.record_for_row(rows[0]) if rows else None
+
+    def _open_selected_source_folder(self) -> None:
+        record = self._selected_record()
+        if record is not None:
+            self._open_folder(record.source_path.parent)
+
+    def _open_selected_output_folder(self) -> None:
+        record = self._selected_record()
+        if record is not None and record.plan_item is not None:
+            self._open_folder(record.output_path.parent)
+
+    def _resolve_selected_decision(self) -> None:
+        record = self._selected_record()
+        if record is None:
+            return
+        row, current = self.queue_model.record_for_id(record.item_id)
+        if row is not None and current is not None:
+            self._resolve_queue_decision(row, current)
+
+    def _clear_details_panel(self) -> None:
+        self.table_view.clearSelection()
+        self.details_panel.set_record(None, self.translator)
+
+    def _resolve_next_decision(self) -> None:
+        for row, record in enumerate(self.queue_model.records()):
+            if record.status == QueueItemStatus.NEEDS_DECISION:
+                self._resolve_queue_decision(row, record)
+                return
+
+    def _on_banner_dismissed(self) -> None:
+        self._dismissed_banner_key = self._banner_key
+
+    def _update_decision_banner(self, metrics: QueueMetrics) -> None:
+        if metrics.needs_decision_items > 0:
+            key: tuple[object, ...] = ("decision", metrics.needs_decision_items)
+            self._banner_key = key
+            if key == self._dismissed_banner_key:
+                self.notification_banner.hide_message()
+                return
+            self.notification_banner.show_message(
+                self.translator.t("gui.banner.needs_decision", count=metrics.needs_decision_items),
+                severity="warning",
+                actions=[(self.translator.t("gui.banner.resolve"), self._resolve_next_decision)],
+            )
+            return
+        if self._completion_banner is not None:
+            text, actions = self._completion_banner
+            key = ("completion", text)
+            self._banner_key = key
+            if key == self._dismissed_banner_key:
+                self.notification_banner.hide_message()
+                return
+            self.notification_banner.show_message(text, severity="success", actions=actions)
+            return
+        self._banner_key = None
+        self.notification_banner.hide_message()
+
+    def _show_completion_banner(self, text: str, actions: list[tuple[str, Callable[[], None]]]) -> None:
+        self._completion_banner = (text, actions)
+        self._dismissed_banner_key = None
+        self._update_decision_banner(self.queue_model.metrics())
 
     def _language_changed(self, language: str) -> None:
         self.language = language
@@ -1004,26 +1294,59 @@ class MainWindow(QMainWindow):
             self._persist_runtime_state()
 
     def _refresh_presets(self) -> None:
-        current = self.preset_combo.currentText()
+        current_name = self.preset_combo.currentData()
         self.preset_combo.blockSignals(True)
         self.preset_combo.clear()
-        self.preset_combo.addItem("")
-        self.preset_combo.addItems(list_presets(self.config_dir))
-        index = self.preset_combo.findText(current)
+        self.preset_combo.addItem(self.translator.t("gui.value.preset_custom"), "")
+        for name in list_presets(self.config_dir):
+            label = (
+                self.translator.t("gui.label.preset_modified", name=name)
+                if self._preset_dirty and name == current_name
+                else name
+            )
+            self.preset_combo.addItem(label, name)
+        index = self.preset_combo.findData(current_name)
         if index >= 0:
             self.preset_combo.setCurrentIndex(index)
         self.preset_combo.blockSignals(False)
 
+    def _select_preset(self, name: str) -> None:
+        index = self.preset_combo.findData(name)
+        if index >= 0:
+            self.preset_combo.setCurrentIndex(index)
+
+    def _mark_preset_modified(self) -> None:
+        if self._loading_initial_state or self._applying_preset:
+            return
+        name = self.preset_combo.currentData()
+        if not isinstance(name, str) or not name:
+            return
+        self._preset_dirty = True
+        index = self.preset_combo.findData(name)
+        if index >= 0:
+            self.preset_combo.blockSignals(True)
+            self.preset_combo.setItemText(
+                index,
+                self.translator.t("gui.label.preset_modified", name=name),
+            )
+            self.preset_combo.blockSignals(False)
+
     def _preset_combo_changed(self) -> None:
         self._persist_runtime_state()
-        name = self.preset_combo.currentText().strip()
-        if not name:
+        name = self.preset_combo.currentData()
+        if not isinstance(name, str) or not name:
+            self._preset_dirty = False
             return
         try:
+            self._applying_preset = True
             self.options_panel.apply_options(load_preset(name, self.config_dir))
+            self._preset_dirty = False
+            self._refresh_presets()
         except Exception as exc:
             QMessageBox.critical(self, self.translator.t("gui.message.error"), str(exc))
             return
+        finally:
+            self._applying_preset = False
         self._append_log(self.translator.t("gui.log.preset_loaded", name=name))
 
     def _open_settings_dialog(self) -> None:
@@ -1064,26 +1387,35 @@ class MainWindow(QMainWindow):
 
         try:
             if action == "load":
-                options = load_preset(name, self.config_dir)
-                self.options_panel.apply_options(options)
-                self.preset_combo.setCurrentText(name)
+                self._applying_preset = True
+                try:
+                    options = load_preset(name, self.config_dir)
+                    self.options_panel.apply_options(options)
+                finally:
+                    self._applying_preset = False
+                self._preset_dirty = False
+                self._refresh_presets()
+                self._select_preset(name)
                 self._append_log(self.translator.t("gui.log.preset_loaded", name=name))
             elif action == "save":
                 options = self.options_panel.read_options()
                 path = save_preset(name, options, self.config_dir)
                 self.app_config["default_preset_name"] = name
+                self._preset_dirty = False
                 self._refresh_presets()
-                self.preset_combo.setCurrentText(name)
+                self._select_preset(name)
                 self._append_log(self.translator.t("gui.log.preset_saved", name=name, path=path))
             elif action == "delete":
                 delete_preset(name, self.config_dir)
                 if self.app_config.get("default_preset_name") == name:
                     self.app_config["default_preset_name"] = ""
+                if self.preset_combo.currentData() == name:
+                    self._preset_dirty = False
                 self._refresh_presets()
                 self._append_log(self.translator.t("gui.log.preset_deleted", name=name))
             elif action == "set_default":
                 self.app_config["default_preset_name"] = name
-                self.preset_combo.setCurrentText(name)
+                self._select_preset(name)
                 self._append_log(self.translator.t("gui.log.default_preset_set", name=name))
             self._persist_runtime_state()
         except Exception as exc:
@@ -1143,6 +1475,7 @@ class MainWindow(QMainWindow):
             analysis_profile,
             post_action,
             tuple(recent_paths),
+            bool(self.app_config.get("setup_collapsed", False)),
         )
         if snapshot == self._persisted_snapshot:
             return
@@ -1411,6 +1744,8 @@ class MainWindow(QMainWindow):
                 existing.add(key)
                 unique.append(record)
         self.queue_model.add_records(unique)
+        self._completion_banner = None
+        self._dismissed_banner_key = None
         self._append_log(self.translator.t("gui.log.sources_added", count=len(unique)))
         self._refresh_action_state()
 
@@ -1433,6 +1768,8 @@ class MainWindow(QMainWindow):
     def _start_queue(self) -> None:
         if self.active_worker is not None or self.queue_manager.is_busy():
             return
+        self._completion_banner = None
+        self._dismissed_banner_key = None
         max_workers = parse_encode_workers(self.app_config.get("encode_workers", 1))
         records = self.queue_model.draft_records()
         if not records:
@@ -1729,8 +2066,15 @@ class MainWindow(QMainWindow):
             action.setCheckable(True)
             action.setChecked(not view.isColumnHidden(column))
             action.setData(column)
+        menu.addSeparator()
+        reset_action = menu.addAction(self.translator.t("gui.menu.reset_queue_order"))
+        reset_action.setEnabled(self.queue_model.has_sort_order())
         chosen = maybe_none(menu.exec(header.mapToGlobal(pos)))
         if chosen is None:
+            return
+        if chosen == reset_action:
+            self.queue_model.reset_order()
+            self._persist_header_state(view)
             return
         column = int(chosen.data())
         view.setColumnHidden(column, not chosen.isChecked())
@@ -1792,6 +2136,7 @@ class MainWindow(QMainWindow):
             urls = [Path(u.toLocalFile()) for u in event.mimeData().urls() if u.isLocalFile()]
             if urls:
                 event.acceptProposedAction()
+                self._set_drop_overlay_visible(True)
                 return
         super().dragEnterEvent(event)
 
@@ -1803,6 +2148,7 @@ class MainWindow(QMainWindow):
             urls = [Path(u.toLocalFile()) for u in event.mimeData().urls() if u.isLocalFile()]
             if urls:
                 event.acceptProposedAction()
+                self._set_drop_overlay_visible(True)
                 return
         super().dragMoveEvent(event)
 
@@ -1814,6 +2160,7 @@ class MainWindow(QMainWindow):
             urls = [Path(u.toLocalFile()) for u in event.mimeData().urls() if u.isLocalFile()]
             if urls:
                 event.acceptProposedAction()
+                self._set_drop_overlay_visible(False)
                 self._handle_dropped_paths(urls)
                 return
         super().dropEvent(event)
@@ -1933,4 +2280,60 @@ class MainWindow(QMainWindow):
             key: result for key, result in self._asked_analysis_decisions.items() if key[0] != completion.run_id
         }
         records = self._records_for_ids(completion.item_ids)
+        self._register_completion_banner(records)
         self.queue_completion_handler.handle(records, self.translator, self.app_config)
+
+    def _register_completion_banner(self, records: list[QueueItemRecord]) -> None:
+        done = [record for record in records if record.status == QueueItemStatus.DONE]
+        failed = [record for record in records if record.status == QueueItemStatus.FAILED]
+        cancelled = [record for record in records if record.status == QueueItemStatus.CANCELLED]
+        if not done and not failed and not cancelled:
+            return
+        actions: list[tuple[str, Callable[[], None]]] = []
+        output_record = next(
+            (record for record in done if record.plan_item is not None),
+            None,
+        )
+        if output_record is not None:
+            output_parent = output_record.output_path.parent
+            actions.append(
+                (
+                    self.translator.t("gui.completion.open_output"),
+                    lambda path=output_parent: self._open_folder(path),
+                )
+            )
+        actions.append(
+            (
+                self.translator.t("gui.completion.view_log"),
+                self._show_activity_log,
+            )
+        )
+        if done:
+            measured = self.queue_model.metrics()
+            saved = measured.actual_saved_bytes or 0
+            source_bytes = measured.actual_source_bytes or 0
+            ratio = (saved / source_bytes * 100.0) if source_bytes > 0 else 0.0
+            text = self.translator.t(
+                "gui.completion.title",
+            ) + " · " + self.translator.t(
+                "gui.completion.summary",
+                count=len(done),
+                saved=format_size(saved),
+                ratio=f"{ratio:.1f}",
+            )
+            if failed or cancelled:
+                text += "\n" + self.translator.t(
+                    "gui.completion.incomplete",
+                    failed=len(failed),
+                    cancelled=len(cancelled),
+                )
+            self._show_completion_banner(text, actions)
+        else:
+            self._show_completion_banner(
+                self.translator.t(
+                    "gui.completion.incomplete",
+                    failed=len(failed),
+                    cancelled=len(cancelled),
+                ),
+                actions,
+            )

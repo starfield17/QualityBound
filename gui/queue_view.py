@@ -1,15 +1,116 @@
 from pathlib import Path
 
-from PySide6.QtCore import QAbstractItemModel, QEvent, QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent, QResizeEvent, QShowEvent
-from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableView, QWidget
+from PySide6.QtCore import (
+    QAbstractItemModel,
+    QEvent,
+    QModelIndex,
+    QObject,
+    QPersistentModelIndex,
+    Qt,
+    QTimer,
+    Signal,
+)
+from PySide6.QtGui import (
+    QDragEnterEvent,
+    QDragLeaveEvent,
+    QDragMoveEvent,
+    QDropEvent,
+    QFontDatabase,
+    QKeyEvent,
+    QPainter,
+    QResizeEvent,
+    QShowEvent,
+)
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QApplication,
+    QHeaderView,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionProgressBar,
+    QStyleOptionViewItem,
+    QTableView,
+    QWidget,
+)
 
 from gui.queue_model import FLEX_COLUMN_SPECS, FIXED_COLUMN_WIDTHS, QueueColumn, QueueTableModel
 from gui.qt_optionals import maybe_none
 
 
+class QueueItemDelegate(QStyledItemDelegate):
+    """Column-aware alignment, elision, tabular numbers and progress cells."""
+
+    _ELIDE_MIDDLE = {int(QueueColumn.FOLDER), int(QueueColumn.OUTPUT)}
+    _ELIDE_RIGHT = {int(QueueColumn.STATUS), int(QueueColumn.TAGS), int(QueueColumn.ENCODER)}
+    _NUMERIC = {
+        int(QueueColumn.RESOLUTION),
+        int(QueueColumn.DURATION),
+        int(QueueColumn.SOURCE_BITRATE),
+        int(QueueColumn.TARGET_BITRATE),
+        int(QueueColumn.QUALITY),
+        int(QueueColumn.PROGRESS),
+    }
+
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionViewItem,
+        index: QModelIndex | QPersistentModelIndex,
+    ) -> None:
+        column = index.column()
+        if column == int(QueueColumn.PROGRESS):
+            self._paint_progress(painter, option, index)
+            return
+        styled = QStyleOptionViewItem(option)
+        if column in self._ELIDE_MIDDLE:
+            styled.textElideMode = Qt.TextElideMode.ElideMiddle
+        elif column in self._ELIDE_RIGHT:
+            styled.textElideMode = Qt.TextElideMode.ElideRight
+        else:
+            styled.textElideMode = Qt.TextElideMode.ElideNone
+        if column in self._NUMERIC:
+            base = QApplication.font()
+            fixed = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+            if base.pointSizeF() > 0:
+                fixed.setPointSizeF(base.pointSizeF() * 0.94)
+            styled.font = fixed
+        super().paint(painter, styled, index)
+
+    @staticmethod
+    def _paint_progress(
+        painter: QPainter,
+        option: QStyleOptionViewItem,
+        index: QModelIndex | QPersistentModelIndex,
+    ) -> None:
+        text = str(index.data(Qt.ItemDataRole.DisplayRole) or "")
+        try:
+            value = int(round(float(text.rstrip("%")) * 10))
+        except ValueError:
+            value = 0
+        progress = QStyleOptionProgressBar()
+        progress.initFrom(option.widget)
+        progress.rect = option.rect.adjusted(4, 5, -4, -5)
+        progress.minimum = 0
+        progress.maximum = 1000
+        progress.progress = max(0, min(1000, value))
+        progress.text = text
+        progress.textVisible = True
+        progress.textAlignment = Qt.AlignmentFlag.AlignCenter
+        progress.palette = option.palette
+        progress.direction = option.direction
+        QApplication.style().drawControl(
+            QStyle.ControlElement.CE_ProgressBar,
+            progress,
+            painter,
+            option.widget,
+        )
+
+
 class ResponsiveQueueTableView(QTableView):
     filesDropped = Signal(list)
+    removeRequested = Signal()
+    activateRequested = Signal(QModelIndex)
+    dragActivityChanged = Signal(bool)
 
     _RELEVANT_EVENT_TYPES = {
         QEvent.Type.Show,
@@ -68,6 +169,7 @@ class ResponsiveQueueTableView(QTableView):
             urls = [Path(u.toLocalFile()) for u in event.mimeData().urls() if u.isLocalFile()]
             if urls:
                 event.acceptProposedAction()
+                self.dragActivityChanged.emit(True)
                 return
         super().dragEnterEvent(event)
 
@@ -79,6 +181,7 @@ class ResponsiveQueueTableView(QTableView):
             urls = [Path(u.toLocalFile()) for u in event.mimeData().urls() if u.isLocalFile()]
             if urls:
                 event.acceptProposedAction()
+                self.dragActivityChanged.emit(True)
                 return
         super().dragMoveEvent(event)
 
@@ -90,9 +193,25 @@ class ResponsiveQueueTableView(QTableView):
             urls = [Path(u.toLocalFile()) for u in event.mimeData().urls() if u.isLocalFile()]
             if urls:
                 event.acceptProposedAction()
+                self.dragActivityChanged.emit(False)
                 self.filesDropped.emit(urls)
                 return
         super().dropEvent(event)
+
+    def dragLeaveEvent(self, event: QDragLeaveEvent) -> None:
+        self.dragActivityChanged.emit(False)
+        super().dragLeaveEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+            self.removeRequested.emit()
+            event.accept()
+            return
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.activateRequested.emit(self.currentIndex())
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         result = super().eventFilter(watched, event)
@@ -276,6 +395,7 @@ def configure_header_resize_modes(header: QHeaderView) -> None:
 
 def create_queue_view(parent: QWidget | None = None) -> ResponsiveQueueTableView:
     view = ResponsiveQueueTableView(parent)
+    view.setItemDelegate(QueueItemDelegate(view))
     view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
     view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
     view.setAlternatingRowColors(True)

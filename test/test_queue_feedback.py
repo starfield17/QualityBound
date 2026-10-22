@@ -191,11 +191,10 @@ class QueueFeedbackTestCase(unittest.TestCase):
                 zh.t("gui.tag.two_pass"),
                 zh.t("gui.tag.overwrite"),
                 zh.t("gui.tag.external_subtitles"),
-                zh.t("gui.tag.decision"),
             ],
         )
         english_tags = build_tags(record, self.catalog.translator("en"))
-        self.assertEqual(english_tags, ["Two-pass", "Overwrite", "ExtSub", "Decision"])
+        self.assertEqual(english_tags, ["Two-pass", "Overwrite", "ExtSub"])
 
         tooltip = build_tooltip(record, zh)
         self.assertIn(zh.t("gui.tooltip.source", path=record.source_path), tooltip)

@@ -17,8 +17,8 @@ from PySide6.QtCore import (
 from PySide6.QtWidgets import QApplication, QStyle
 
 from core.i18n import Translator
-from core.media import human_kbps, validate_unique_output_paths
-from core.models import DecisionOption, EncodeOptions, EncodeResult, EncodePlan
+from core.media import validate_unique_output_paths
+from core.models import CompressionMode, DecisionOption, EncodeOptions, EncodeResult, EncodePlan
 from core.progress_events import ProgressEvent
 from gui.queue_actions import (
     accept_size_miss as accept_size_miss_action,
@@ -59,7 +59,7 @@ from gui.theme import status_color
 
 def format_duration(seconds: float | None) -> str:
     if not seconds:
-        return "n/a"
+        return "—"
     total = int(round(seconds))
     hours, rem = divmod(total, 3600)
     minutes, secs = divmod(rem, 60)
@@ -70,7 +70,7 @@ def format_duration(seconds: float | None) -> str:
 
 def format_size(size_bytes: int | None) -> str:
     if size_bytes is None:
-        return "n/a"
+        return "—"
     negative = size_bytes < 0
     value = float(abs(size_bytes))
     for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
@@ -102,12 +102,18 @@ COLUMN_COUNT = len(QueueColumn)
 FIXED_COLUMN_WIDTHS: dict[QueueColumn, int] = {
     QueueColumn.RESOLUTION: 96,
     QueueColumn.DURATION: 84,
-    QueueColumn.SOURCE_BITRATE: 110,
-    QueueColumn.TARGET_BITRATE: 110,
-    QueueColumn.QUALITY: 126,
-    QueueColumn.STATUS: 108,
+    QueueColumn.SOURCE_BITRATE: 132,
+    QueueColumn.TARGET_BITRATE: 132,
+    QueueColumn.QUALITY: 142,
+    QueueColumn.STATUS: 136,
     QueueColumn.PROGRESS: 92,
 }
+
+
+def format_kbps_value(bps: int | None) -> str:
+    if not bps:
+        return "—"
+    return f"{bps / 1000:,.0f}"
 
 FLEX_COLUMN_SPECS: dict[QueueColumn, tuple[int, int]] = {
     QueueColumn.NAME: (28, 180),
@@ -140,6 +146,7 @@ class QueueTableModel(QAbstractTableModel):
         self._records: list[QueueItemRecord] = []
         self._metrics = QueueMetrics()
         self._preparing = False
+        self._order_before_sort: list[str] | None = None
 
     def set_preparing(self, preparing: bool) -> None:
         self._preparing = preparing
@@ -200,27 +207,36 @@ class QueueTableModel(QAbstractTableModel):
                 return str(record.source_path.parent)
             if column == QueueColumn.RESOLUTION:
                 if media and media.width and media.height:
-                    return f"{media.width}x{media.height}"
-                return "n/a"
+                    return f"{media.width}×{media.height}"
+                return "—"
             if column == QueueColumn.DURATION:
                 return format_duration(media.duration if media else None)
             if column == QueueColumn.SOURCE_BITRATE:
-                return human_kbps(media.video_bitrate_bps) if media else "n/a"
+                return format_kbps_value(media.video_bitrate_bps if media else None)
             if column == QueueColumn.TARGET_BITRATE:
-                return human_kbps(record.bound_plan_item.target_video_bitrate_bps) if record.bound_plan_item.target_video_bitrate_bps else "n/a"
+                target_bps = record.bound_plan_item.target_video_bitrate_bps
+                if target_bps:
+                    return format_kbps_value(target_bps)
+                if record.bound_plan_item.options.compression_mode == CompressionMode.SMART:
+                    return self.translator.t("gui.table.pending_analysis")
+                return "—"
             if column == QueueColumn.QUALITY:
                 segmented = record.bound_plan_item.segmented_analysis_result
                 if segmented is not None:
-                    mean = segmented.final_mean_vmaf if segmented.final_mean_vmaf is not None else segmented.predicted_mean_vmaf
-                    return f"{mean:.1f}" if mean is not None else "-"
+                    measured = segmented.final_mean_vmaf
+                    mean = measured if measured is not None else segmented.predicted_mean_vmaf
+                    if mean is None:
+                        return "—"
+                    prefix = "" if measured is not None else "~"
+                    return f"{prefix}{mean:.1f}"
                 quality = record.bound_plan_item.quality_search_result
                 if quality is None or quality.min_vmaf is None:
-                    return "-"
+                    return "—"
                 ratio = quality.predicted_output_ratio or quality.required_output_ratio
                 return (
-                    f"{quality.min_vmaf:.1f} / {ratio * 100:.1f}%"
+                    f"~{quality.min_vmaf:.1f} / ~{ratio * 100:.1f}%"
                     if ratio is not None
-                    else f"{quality.min_vmaf:.1f}"
+                    else f"~{quality.min_vmaf:.1f}"
                 )
             if column == QueueColumn.ENCODER:
                 if record.assigned_encoder and record.assigned_backend:
@@ -252,7 +268,13 @@ class QueueTableModel(QAbstractTableModel):
             if column == QueueColumn.OUTPUT:
                 if record.plan_item is None:
                     return self.translator.t("gui.tooltip.start_binding")
-                return str(record.output_path)
+                lines = [str(record.output_path)]
+                if record.result is not None and record.result.actual_output_bytes is not None:
+                    lines.append(
+                        f"{self.translator.t('gui.details.actual_size')}: "
+                        f"{format_size(record.result.actual_output_bytes)}"
+                    )
+                return "\n".join(lines)
             return build_tooltip(record, self.translator)
         elif role == Qt.ItemDataRole.TextAlignmentRole:
             if column in {
@@ -261,9 +283,10 @@ class QueueTableModel(QAbstractTableModel):
                 QueueColumn.SOURCE_BITRATE,
                 QueueColumn.TARGET_BITRATE,
                 QueueColumn.QUALITY,
-                QueueColumn.STATUS,
                 QueueColumn.PROGRESS,
             }:
+                return int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            if column == QueueColumn.STATUS:
                 return int(Qt.AlignmentFlag.AlignCenter)
         elif role == Qt.ItemDataRole.ForegroundRole and column in {QueueColumn.STATUS, QueueColumn.PROGRESS}:
             return status_color(record.status.value)
@@ -326,6 +349,7 @@ class QueueTableModel(QAbstractTableModel):
         if any(record.status in ACTIVE_ITEM_STATUSES for record in moving):
             return False
 
+        self._order_before_sort = None
         self.beginMoveRows(source_parent, source_row, source_row + count - 1, destination_parent, destination_child)
         del self._records[source_row : source_row + count]
         if destination_child > source_row:
@@ -372,6 +396,7 @@ class QueueTableModel(QAbstractTableModel):
         )
         start = len(self._records)
         end = start + len(records) - 1
+        self._order_before_sort = None
         self.beginInsertRows(QModelIndex(), start, end)
         self._records.extend(records)
         self.endInsertRows()
@@ -394,12 +419,29 @@ class QueueTableModel(QAbstractTableModel):
             queue_column = QueueColumn(column)
         except ValueError:
             return
+        if self._order_before_sort is None:
+            self._order_before_sort = [record.item_id for record in self._records]
         self.beginResetModel()
         self._records.sort(
             key=self._sort_key(queue_column),
             reverse=order == Qt.SortOrder.DescendingOrder,
         )
         self.endResetModel()
+
+    def has_sort_order(self) -> bool:
+        return self._order_before_sort is not None
+
+    def reset_order(self) -> bool:
+        """Restore the record order from before the first header sort."""
+        if not self._order_before_sort or not self.can_sort():
+            return False
+        order = {item_id: index for index, item_id in enumerate(self._order_before_sort)}
+        self.beginResetModel()
+        self._records.sort(key=lambda record: order.get(record.item_id, len(order)))
+        self.endResetModel()
+        self._order_before_sort = None
+        self._emit_metrics_changed()
+        return True
 
     def _sort_key(self, column: QueueColumn) -> Callable[[QueueItemRecord], tuple[object, ...]]:
         if column == QueueColumn.NAME:
@@ -462,6 +504,8 @@ class QueueTableModel(QAbstractTableModel):
             return 0
         targets = sorted({row for row in rows if 0 <= row < len(self._records)}, reverse=True)
         removed = 0
+        if targets:
+            self._order_before_sort = None
         for row in targets:
             if self._records[row].status in ACTIVE_ITEM_STATUSES:
                 continue

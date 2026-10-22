@@ -255,6 +255,11 @@ _STYLESHEET = Template(
         border: 1px solid $border;
         border-radius: 6px;
     }
+    QFrame#emptyState {
+        background: $surface;
+        border: 1px dashed $border_strong;
+        border-radius: 8px;
+    }
     QFrame#banner {
         border-radius: 6px;
         border: 1px solid $border;

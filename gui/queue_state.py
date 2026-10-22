@@ -206,6 +206,10 @@ class QueueMetrics:
     completed_items: int = 0
     estimated_saved_bytes: int | None = None
     estimated_saved_is_floor: bool = False
+    actual_saved_bytes: int | None = None
+    actual_source_bytes: int | None = None
+    actual_output_bytes: int | None = None
+    measured_saved_items: int = 0
     current_item_id: str | None = None
     current_file_name: str = "-"
     current_file_percent: float | None = None
@@ -301,12 +305,8 @@ def build_tags(record: QueueItemRecord, translator: Translator) -> list[str]:
         tags.append(translator.t("gui.tag.external_subtitles"))
     if record.bound_plan_item.warnings:
         tags.append(translator.t("gui.tag.warning"))
-    if record.status == QueueItemStatus.SKIPPED:
-        tags.append(translator.t("gui.tag.skipped"))
-    if record.status == QueueItemStatus.FAILED:
-        tags.append(translator.t("gui.tag.failed"))
-    if record.status == QueueItemStatus.NEEDS_DECISION:
-        tags.append(translator.t("gui.tag.decision"))
+    # Status is already shown in the dedicated Status column; repeating it in
+    # Tags only steals width from the flags a user cannot see elsewhere.
     if record.error_summary and record.status not in {
         QueueItemStatus.SKIPPED,
         QueueItemStatus.FAILED,
@@ -482,6 +482,27 @@ def processed_weight(record: QueueItemRecord) -> float:
     return weight * max(0.0, min(100.0, record.file_progress)) / 100.0
 
 
+def _record_source_bytes(record: QueueItemRecord) -> int | None:
+    try:
+        return record.source_path.stat().st_size
+    except OSError:
+        media = record.media_info
+        if media is not None and media.duration > 0 and media.format_bitrate_bps:
+            return int(media.duration * media.format_bitrate_bps / 8.0)
+    return None
+
+
+def _record_output_bytes(record: QueueItemRecord) -> int | None:
+    if record.result is not None and record.result.actual_output_bytes is not None:
+        return record.result.actual_output_bytes
+    try:
+        if record.status == QueueItemStatus.DONE and record.output_path.exists():
+            return record.output_path.stat().st_size
+    except OSError:
+        return None
+    return None
+
+
 def compute_metrics(records: list[QueueItemRecord]) -> QueueMetrics:
     metrics = QueueMetrics()
     metrics.total_items = len(records)
@@ -516,6 +537,27 @@ def compute_metrics(records: list[QueueItemRecord]) -> QueueMetrics:
     metrics.completed_items = metrics.done_items + metrics.skipped_items
     if total_weight > 0:
         metrics.queue_percent = max(0.0, min(100.0, (completed_weight / total_weight) * 100.0))
+
+    actual_saved = 0
+    actual_source = 0
+    actual_output = 0
+    measured_items = 0
+    for record in records:
+        if record.status != QueueItemStatus.DONE:
+            continue
+        source_bytes = _record_source_bytes(record)
+        output_bytes = _record_output_bytes(record)
+        if source_bytes is None or output_bytes is None:
+            continue
+        actual_source += source_bytes
+        actual_output += output_bytes
+        actual_saved += source_bytes - output_bytes
+        measured_items += 1
+    if measured_items:
+        metrics.actual_saved_bytes = actual_saved
+        metrics.actual_source_bytes = actual_source
+        metrics.actual_output_bytes = actual_output
+        metrics.measured_saved_items = measured_items
 
     if running_record is not None:
         metrics.current_item_id = running_record.item_id

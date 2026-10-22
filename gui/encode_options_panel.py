@@ -109,6 +109,27 @@ class EncodeOptionsPanel(QWidget):
         self.backend_combo.currentIndexChanged.connect(self.refresh_encoder_preset_choices)
         self.decode_acceleration_combo.currentIndexChanged.connect(self.sync_dependent_controls)
         self.analysis_profile_combo.currentIndexChanged.connect(self._on_analysis_profile_changed)
+        for combo in (
+            self.codec_combo,
+            self.compression_mode_combo,
+            self.smart_algorithm_combo,
+            self.backend_combo,
+            self.container_combo,
+            self.audio_mode_combo,
+            self.viewing_context_combo,
+            self.analysis_profile_combo,
+        ):
+            combo.currentIndexChanged.connect(self._emit_options_changed)
+        for spin in (self.min_vmaf_spin, self.max_output_ratio_spin, self.min_bitrate_spin,
+                     self.max_bitrate_spin, self.maxrate_factor_spin, self.bufsize_factor_spin):
+            spin.valueChanged.connect(self._emit_options_changed)
+        for edit in (self.ratio_edit, self.audio_bitrate_edit, self.pix_fmt_edit):
+            edit.textChanged.connect(self._emit_options_changed)
+        for check in (self.overwrite_check, self.recursive_check, self.copy_subtitles_check,
+                      self.copy_external_subtitles_check, self.two_pass_check):
+            check.toggled.connect(self._emit_options_changed)
+        self.decode_acceleration_combo.currentIndexChanged.connect(self._emit_options_changed)
+        self.encoder_preset_combo.currentIndexChanged.connect(self._emit_options_changed)
 
     def _on_compression_mode_changed(self, *_args: object) -> None:
         self.sync_dependent_controls()
@@ -122,6 +143,63 @@ class EncodeOptionsPanel(QWidget):
         self.sync_dependent_controls()
         self.options_changed.emit()
 
+    def _emit_options_changed(self, *_args: object) -> None:
+        self.options_changed.emit()
+
+    def _codec_label(self, codec: CodecChoice) -> str:
+        if codec == CodecChoice.HEVC:
+            return self.translator.t("gui.value.codec_hevc")
+        return self.translator.t("gui.value.codec_av1")
+
+    def _container_label(self, container: ContainerChoice) -> str:
+        if container == ContainerChoice.MKV:
+            return self.translator.t("gui.value.container_mkv")
+        return self.translator.t("gui.value.container_mp4")
+
+    def _backend_label(self, backend: BackendChoice) -> str:
+        if backend == BackendChoice.AUTO:
+            return self.translator.t("gui.value.backend_auto")
+        if backend == BackendChoice.CPU:
+            return self.translator.t("gui.value.backend_cpu")
+        if backend == BackendChoice.NVENC:
+            return self.translator.t("gui.value.backend_nvenc")
+        if backend == BackendChoice.QSV:
+            return self.translator.t("gui.value.backend_qsv")
+        if backend == BackendChoice.AMF:
+            return self.translator.t("gui.value.backend_amf")
+        return self.translator.t("gui.value.backend_videotoolbox")
+
+    def _audio_mode_label(self, mode: AudioMode) -> str:
+        if mode == AudioMode.COPY:
+            return self.translator.t("gui.value.audio_copy")
+        return self.translator.t("gui.value.audio_aac")
+
+    def summary_text(self) -> str:
+        codec = self._current_codec()
+        mode_data = self.compression_mode_combo.currentData() or CompressionMode.SMART.value
+        smart = mode_data == CompressionMode.SMART.value
+        if smart:
+            quality = self.translator.t(
+                "gui.summary.quality_floor", value=f"{self.min_vmaf_spin.value():.1f}"
+            )
+            size = self.translator.t(
+                "gui.summary.size_ceiling", value=f"{self.max_output_ratio_spin.value():.0f}"
+            )
+        else:
+            ratio = self.ratio_edit.text().strip() or "—"
+            quality = f"{self.translator.t('gui.label.ratio')} {ratio}"
+            size = "—"
+        container = self._container_label(ContainerChoice(str(self.container_combo.currentData())))
+        mode = self.compression_mode_combo.currentText()
+        return self.translator.t(
+            "gui.summary.encoding_compact",
+            codec=self._codec_label(codec),
+            mode=mode,
+            quality=quality,
+            size=size,
+            container=container,
+        )
+
     # ------------------------------------------------------------------ building
 
     def _build_basic_tab(self) -> None:
@@ -133,7 +211,8 @@ class EncodeOptionsPanel(QWidget):
 
         self.codec_label = QLabel()
         self.codec_combo = QComboBox()
-        self.codec_combo.addItems(["hevc", "av1"])
+        self.codec_combo.addItem("", CodecChoice.HEVC.value)
+        self.codec_combo.addItem("", CodecChoice.AV1.value)
 
         self.compression_mode_label = QLabel()
         self.compression_mode_combo = QComboBox()
@@ -146,11 +225,13 @@ class EncodeOptionsPanel(QWidget):
 
         self.backend_label = QLabel()
         self.backend_combo = QComboBox()
-        self.backend_combo.addItems(["auto", "cpu"])
+        self.backend_combo.addItem("", BackendChoice.AUTO.value)
+        self.backend_combo.addItem("", BackendChoice.CPU.value)
 
         self.container_label = QLabel()
         self.container_combo = QComboBox()
-        self.container_combo.addItems(["mkv", "mp4"])
+        self.container_combo.addItem("", ContainerChoice.MKV.value)
+        self.container_combo.addItem("", ContainerChoice.MP4.value)
 
         self.ratio_label = QLabel()
         self.ratio_edit = QLineEdit()
@@ -283,7 +364,8 @@ class EncodeOptionsPanel(QWidget):
 
         self.audio_mode_label = QLabel()
         self.audio_mode_combo = QComboBox()
-        self.audio_mode_combo.addItems(["copy", "aac"])
+        self.audio_mode_combo.addItem("", AudioMode.COPY.value)
+        self.audio_mode_combo.addItem("", AudioMode.AAC.value)
 
         self.audio_bitrate_label = QLabel()
         self.audio_bitrate_edit = QLineEdit()
@@ -334,20 +416,20 @@ class EncodeOptionsPanel(QWidget):
             }
         )
         return EncodeOptions(
-            codec=CodecChoice(self.codec_combo.currentText()),
+            codec=CodecChoice(str(self.codec_combo.currentData())),
             compression_mode=CompressionMode(
                 self.compression_mode_combo.currentData()
                 or self.compression_mode_combo.currentText()
             ),
-            backend=BackendChoice(self.backend_combo.currentText()),
+            backend=BackendChoice(str(self.backend_combo.currentData())),
             ratio=float(ratio_text) if ratio_text else None,
             min_vmaf=float(self.min_vmaf_spin.value()),
             viewing_context=VmafViewingContext(self.viewing_context_combo.currentData()),
             max_output_ratio=float(self.max_output_ratio_spin.value()) / 100.0,
             min_video_kbps=int(self.min_bitrate_spin.value()),
             max_video_kbps=int(self.max_bitrate_spin.value()),
-            container=ContainerChoice(self.container_combo.currentText()),
-            audio_mode=AudioMode(self.audio_mode_combo.currentText()),
+            container=ContainerChoice(str(self.container_combo.currentData())),
+            audio_mode=AudioMode(str(self.audio_mode_combo.currentData())),
             audio_bitrate=self.audio_bitrate_edit.text().strip() or "128k",
             copy_subtitles=self.copy_subtitles_check.isChecked(),
             copy_external_subtitles=self.copy_external_subtitles_check.isChecked(),
@@ -373,7 +455,9 @@ class EncodeOptionsPanel(QWidget):
 
     def apply_options(self, options: EncodeOptions) -> None:
         self.smart_algorithm_combo.setCurrentIndex(self.smart_algorithm_combo.findData(options.smart_algorithm.value))
-        self.codec_combo.setCurrentText(options.codec.value)
+        codec_index = self.codec_combo.findData(options.codec.value)
+        if codec_index >= 0:
+            self.codec_combo.setCurrentIndex(codec_index)
         mode_index = self.compression_mode_combo.findData(options.compression_mode.value)
         if mode_index >= 0:
             self.compression_mode_combo.setCurrentIndex(mode_index)
@@ -390,8 +474,12 @@ class EncodeOptionsPanel(QWidget):
         self.max_output_ratio_spin.setValue(
             resolve_max_output_ratio(options.codec, options.max_output_ratio) * 100.0
         )
-        self.container_combo.setCurrentText(options.container.value)
-        self.audio_mode_combo.setCurrentText(options.audio_mode.value)
+        container_index = self.container_combo.findData(options.container.value)
+        if container_index >= 0:
+            self.container_combo.setCurrentIndex(container_index)
+        audio_index = self.audio_mode_combo.findData(options.audio_mode.value)
+        if audio_index >= 0:
+            self.audio_mode_combo.setCurrentIndex(audio_index)
         self.audio_bitrate_edit.setText(options.audio_bitrate)
         self.pix_fmt_edit.setText(options.pix_fmt)
         self.min_bitrate_spin.setValue(options.min_video_kbps)
@@ -448,6 +536,18 @@ class EncodeOptionsPanel(QWidget):
     def set_translator(self, translator: Translator) -> None:
         self.translator = translator
         self.codec_label.setText(self.translator.t("gui.label.codec"))
+        for codec in (CodecChoice.HEVC, CodecChoice.AV1):
+            index = self.codec_combo.findData(codec.value)
+            if index >= 0:
+                self.codec_combo.setItemText(index, self._codec_label(codec))
+        for container in (ContainerChoice.MKV, ContainerChoice.MP4):
+            index = self.container_combo.findData(container.value)
+            if index >= 0:
+                self.container_combo.setItemText(index, self._container_label(container))
+        for audio_mode in (AudioMode.COPY, AudioMode.AAC):
+            index = self.audio_mode_combo.findData(audio_mode.value)
+            if index >= 0:
+                self.audio_mode_combo.setItemText(index, self._audio_mode_label(audio_mode))
         self.compression_mode_label.setText(self.translator.t("gui.label.compression_mode"))
         self.smart_algorithm_label.setText(self.translator.t("gui.label.smart_algorithm"))
         self.smart_algorithm_combo.setItemText(0, self.translator.t("gui.value.smart_v1"))
@@ -546,7 +646,7 @@ class EncodeOptionsPanel(QWidget):
         self.codec_changed.emit(current_codec)
 
     def _current_codec(self) -> CodecChoice:
-        return CodecChoice(self.codec_combo.currentText())
+        return CodecChoice(str(self.codec_combo.currentData()))
 
     def _runtime_capabilities(self) -> dict | None:
         return (
@@ -624,9 +724,9 @@ class EncodeOptionsPanel(QWidget):
         preferred_backend: BackendChoice | None = None,
         log_reset: bool = False,
     ) -> None:
-        current_text = self.backend_combo.currentText().strip()
+        current_value = self.backend_combo.currentData()
         try:
-            current_backend = BackendChoice(current_text) if current_text else BackendChoice.AUTO
+            current_backend = BackendChoice(str(current_value)) if current_value else BackendChoice.AUTO
         except ValueError:
             current_backend = BackendChoice.AUTO
         desired_backend = preferred_backend or current_backend
@@ -655,8 +755,10 @@ class EncodeOptionsPanel(QWidget):
         self.backend_combo.blockSignals(True)
         self.backend_combo.clear()
         for backend in choices:
-            self.backend_combo.addItem(backend.value, backend.value)
-        self.backend_combo.setCurrentText(selected_backend.value)
+            self.backend_combo.addItem(self._backend_label(backend), backend.value)
+        selected_index = self.backend_combo.findData(selected_backend.value)
+        if selected_index >= 0:
+            self.backend_combo.setCurrentIndex(selected_index)
         self.backend_combo.blockSignals(False)
         tooltip_key = "gui.tooltip.backend_filtered" if self._runtime_capabilities() is not None else "gui.tooltip.backend_detecting"
         self.backend_combo.setToolTip(self.translator.t(tooltip_key))
@@ -682,7 +784,7 @@ class EncodeOptionsPanel(QWidget):
         self.viewing_context_label.setVisible(smart_mode)
         self.viewing_context_combo.setVisible(smart_mode)
         self.viewing_context_combo.setEnabled(smart_mode)
-        self.audio_bitrate_edit.setEnabled(self.audio_mode_combo.currentText() == AudioMode.AAC.value)
+        self.audio_bitrate_edit.setEnabled(self.audio_mode_combo.currentData() == AudioMode.AAC.value)
 
     def _refresh_smart_mode_availability(self, *, force_unavailable: bool = False) -> None:
         capabilities = self._runtime_capabilities()
@@ -744,7 +846,7 @@ class EncodeOptionsPanel(QWidget):
         log_invalid: bool = False,
     ) -> None:
         desired_preset = self._current_encoder_preset() if preset is _PRESET_UNSET else preset
-        if self.backend_combo.currentText() == BackendChoice.AUTO.value:
+        if self.backend_combo.currentData() == BackendChoice.AUTO.value:
             # ``apply_options`` may request an explicit backend before the
             # worker has produced a snapshot.  Keep its preset alongside the
             # pending backend; a true AUTO selection must discard it.
@@ -772,7 +874,7 @@ class EncodeOptionsPanel(QWidget):
         choices = preset_choices_from_capabilities(
             capabilities,
             self._current_codec(),
-            BackendChoice(self.backend_combo.currentText()),
+            BackendChoice(str(self.backend_combo.currentData())),
         )
         self._set_encoder_preset_items(choices)
         self.encoder_preset_combo.setEnabled(bool(choices))
