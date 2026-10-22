@@ -1,4 +1,5 @@
-`app.svg` is the canonical project icon. Regenerate the committed platform
+`app.svg` is the canonical project icon: a white rounded tile with a navy video
+frame, a teal play mark, and a Q-shaped tail. Regenerate the committed platform
 assets after editing it:
 
 ```bash

@@ -1,17 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
   <title id="title">QualityBound</title>
-  <desc id="desc">A light video file made thinner, with a play mark.</desc>
+  <desc id="desc">A white app tile with a navy video frame, a teal play mark and a Q tail.</desc>
   <defs>
-    <linearGradient id="plate" x1="154" y1="116" x2="870" y2="908" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#F7FAFD"/>
-      <stop offset="1" stop-color="#E4EBF4"/>
+    <linearGradient id="plate" x1="156" y1="108" x2="872" y2="916" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.58" stop-color="#FBFDFF"/>
+      <stop offset="1" stop-color="#EAF2FA"/>
     </linearGradient>
   </defs>
+  <rect x="72" y="72" width="880" height="880" rx="224" fill="url(#plate)" stroke="#C7D5E5" stroke-width="16"/>
+  <rect x="80" y="80" width="864" height="864" rx="216" fill="none" stroke="#FFFFFF" stroke-opacity="0.7" stroke-width="12"/>
 
-  <rect x="72" y="72" width="880" height="880" rx="224" fill="url(#plate)" stroke="#C3D0E0" stroke-width="16"/>
-
-  <rect x="628" y="332" width="156" height="360" rx="56" fill="#D5DEE9" stroke="#2B4A6F" stroke-width="28"/>
-  <rect x="232" y="300" width="460" height="424" rx="80" fill="#FFFFFF" stroke="#2B4A6F" stroke-width="36"/>
-
-  <path d="M402 412L402 612L582 512Z" fill="#2EC4B6"/>
+  <rect x="220" y="250" width="584" height="500" rx="112" fill="none" stroke="#2B4A6F" stroke-width="60"/>
+  <path d="M425 390L425 610L605 500Z" fill="#18B5A6"/>
+  <path d="M670 670L840 840" stroke="#18B5A6" stroke-width="78" stroke-linecap="round"/>
 </svg>
