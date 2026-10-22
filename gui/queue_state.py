@@ -43,6 +43,40 @@ STATUS_KEY_BY_VALUE = {
     QueueItemStatus.CANCELLED: "gui.status.cancelled",
 }
 
+PROGRESS_STAGE_KEYS = {
+    "planning": "gui.stage.planning",
+    "analysis": "gui.stage.analysis",
+    "encode": "gui.stage.encode",
+}
+
+PROGRESS_STATE_KEYS = {
+    "probing": "gui.state.probing",
+    "started": "gui.state.started",
+    "starting_file": "gui.state.starting_file",
+    "running_pass": "gui.state.running_pass",
+    "validating": "gui.state.validating",
+    "needs_decision": "gui.state.needs_decision",
+    "finished_file": "gui.state.finished_file",
+    "cancelled_file": "gui.state.cancelled_file",
+    "failed_file": "gui.state.failed_file",
+    "paused": "gui.state.paused",
+    "cancelled": "gui.state.cancelled",
+    "cancelling": "gui.state.cancelling",
+    "finished": "gui.state.finished",
+    "skipped": "gui.state.skipped",
+    "waiting_analysis": "gui.state.waiting_analysis",
+    "analysis_finished": "gui.state.analysis_finished",
+}
+
+
+def progress_stage_key(stage: str) -> str:
+    return PROGRESS_STAGE_KEYS.get(stage, "gui.stage.unknown")
+
+
+def progress_state_key(state: str) -> str:
+    return PROGRESS_STATE_KEYS.get(state, "gui.state.unknown")
+
+
 ACTIVE_ITEM_STATUSES = {
     QueueItemStatus.ANALYZING,
     QueueItemStatus.ENCODING,

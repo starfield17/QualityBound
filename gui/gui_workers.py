@@ -46,6 +46,13 @@ class EncoderCapabilityDetectWorker(QThread):
         super().__init__()
         self.ffmpeg_path = ffmpeg_path
         self.force_refresh = force_refresh
+        self._cancel_event = threading.Event()
+
+    def cancel(self) -> None:
+        self._cancel_event.set()
+
+    def _cancelled(self) -> bool:
+        return self._cancel_event.is_set()
 
     def _emit_log(self, message: str) -> None:
         self.log.emit(message)
@@ -53,22 +60,29 @@ class EncoderCapabilityDetectWorker(QThread):
 
     def run(self) -> None:
         try:
+            if self._cancelled():
+                return
             ffmpeg = find_binary(self.ffmpeg_path, "ffmpeg")
             capabilities = ensure_encoder_capabilities(
                 ffmpeg,
                 force_refresh=self.force_refresh,
                 progress_callback=self._emit_log,
             )
-            vmaf_models = [
-                probe_vmaf_runtime(ffmpeg, model, VmafBackend.CPU)
-                for model in VMAF_PRODUCTION_MODELS
-            ]
+            if self._cancelled():
+                return
+            vmaf_models = []
+            for model in VMAF_PRODUCTION_MODELS:
+                if self._cancelled():
+                    return
+                vmaf_models.append(probe_vmaf_runtime(ffmpeg, model, VmafBackend.CPU))
             vmaf_errors = [
                 f"{support.model}: {support.error_message}"
                 for support in vmaf_models
                 if not support.runnable and support.error_message
             ]
             capabilities = dict(capabilities)
+            if self._cancelled():
+                return
             capabilities["vmaf"] = {
                 "runnable": all(support.runnable for support in vmaf_models),
                 "models": {

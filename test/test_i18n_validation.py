@@ -115,7 +115,12 @@ class SourceLiteralKeyTestCase(unittest.TestCase):
                 if (
                     isinstance(arg, ast.Call)
                     and isinstance(arg.func, ast.Name)
-                    and arg.func.id in {"status_key", "post_encode_action_key"}
+                    and arg.func.id in {
+                        "status_key",
+                        "post_encode_action_key",
+                        "progress_stage_key",
+                        "progress_state_key",
+                    }
                 ):
                     continue
                 unlisted.append((file, ast.unparse(arg)))

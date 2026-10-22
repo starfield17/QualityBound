@@ -646,6 +646,12 @@ def _theme_manager() -> ThemeManager | None:
     return _manager
 
 
+def theme_manager() -> ThemeManager | None:
+    """Return the active application theme manager, if one has been applied."""
+
+    return _manager
+
+
 def apply_theme(widget: QWidget | None = None) -> None:
     """Apply the palette-aware theme to the whole application."""
 
