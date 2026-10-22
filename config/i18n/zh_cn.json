@@ -308,7 +308,7 @@
   "gui.tooltip.smart_v2": "逐镜头分配码率，候选搜索使用样本，最终输出完整评分。运行时间可能显著增加。",
   "gui.label.mean_vmaf_v2": "整片平均 VMAF 目标",
   "gui.tooltip.mean_vmaf_v2": "按时长加权的整片平均目标；每镜头平均不低于目标减4，最差连续一秒不低于目标减8。",
-  "gui.tag.two_pass": "两遍",
+  "gui.tag.two_pass": "双遍",
   "gui.tag.overwrite": "覆盖",
   "gui.tag.external_subtitles": "外挂字幕",
   "gui.tag.warning": "警告",
@@ -535,5 +535,7 @@
   "gui.window.queue_hint": "右键行可执行操作；拖动行可调整顺序。表头排序会改变执行顺序。",
   "gui.tray.show": "显示 QualityBound",
   "gui.tray.quit": "退出 QualityBound",
-  "gui.button.ok": "确定"
+  "gui.button.ok": "确定",
+  "gui.banner.needs_decision_one": "1 个项目等待决定。",
+  "gui.banner.needs_decision_many": "{count} 个项目等待决定。"
 }

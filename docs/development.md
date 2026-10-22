@@ -77,8 +77,8 @@ colour tokens (window, surface, border, text, accent, danger, success, warning)
 and generates one application-wide stylesheet plus a matching `QPalette`; it
 refreshes when Qt reports a colour-scheme change. Status colours are read from the
 same tokens, so a theme change repaints the queue model and toolbar icons instead
-of leaving hard-coded colours behind. `gui_entry` and `MainWindow` call
-`apply_theme()`; no window keeps a private light-only stylesheet.
+of leaving hard-coded colours behind. `MainWindow` calls `apply_theme()` during
+construction; no window keeps a private light-only stylesheet.
 
 The queue is the primary workspace. `MainWindow` builds a collapsible source and
 encoding card, a compact stat row, a stacked empty/table area and a

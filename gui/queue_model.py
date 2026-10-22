@@ -116,11 +116,11 @@ def format_kbps_value(bps: int | None) -> str:
     return f"{bps / 1000:,.0f}"
 
 FLEX_COLUMN_SPECS: dict[QueueColumn, tuple[int, int]] = {
-    QueueColumn.NAME: (28, 160),
-    QueueColumn.FOLDER: (20, 140),
-    QueueColumn.ENCODER: (14, 120),
-    QueueColumn.OUTPUT: (20, 140),
-    QueueColumn.TAGS: (18, 100),
+    QueueColumn.NAME: (28, 150),
+    QueueColumn.FOLDER: (20, 130),
+    QueueColumn.ENCODER: (14, 115),
+    QueueColumn.OUTPUT: (20, 135),
+    QueueColumn.TAGS: (18, 120),
 }
 
 
@@ -242,7 +242,7 @@ class QueueTableModel(QAbstractTableModel):
                 if record.assigned_encoder and record.assigned_backend:
                     return f"{record.assigned_encoder} ({record.assigned_backend})"
                 encoder = record.bound_plan_item.encoder_info
-                return f"{encoder.encoder_name} ({encoder.backend.value})" if encoder else "n/a"
+                return f"{encoder.encoder_name} ({encoder.backend.value})" if encoder else "—"
             if column == QueueColumn.OUTPUT:
                 return record.output_path.name
             if column == QueueColumn.TAGS:

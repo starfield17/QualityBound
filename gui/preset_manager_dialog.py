@@ -43,8 +43,6 @@ class PresetManagerDialog(QDialog):
         layout.setSpacing(8)
 
         self.info_label = QLabel()
-        self.status_label = QLabel()
-        self.status_label.setObjectName("setupSummary")
         self.list_widget = QListWidget()
 
         buttons = QHBoxLayout()
@@ -62,7 +60,6 @@ class PresetManagerDialog(QDialog):
 
         layout.addWidget(self.info_label)
         layout.addWidget(self.list_widget, 1)
-        layout.addWidget(self.status_label)
         layout.addLayout(buttons)
 
         self.load_button.clicked.connect(self._request_load)

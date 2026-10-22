@@ -308,7 +308,7 @@
   "gui.tooltip.smart_v2": "Per-shot bitrate allocation. Candidate search uses samples; the final output is fully scored. May take substantially longer.",
   "gui.label.mean_vmaf_v2": "Whole-video mean VMAF target",
   "gui.tooltip.mean_vmaf_v2": "Time-weighted mean target; each shot mean must be at least target minus 4, and the worst one-second score at least target minus 8.",
-  "gui.tag.two_pass": "Two-pass",
+  "gui.tag.two_pass": "2-pass",
   "gui.tag.overwrite": "Overwrite",
   "gui.tag.external_subtitles": "ExtSub",
   "gui.tag.warning": "Warn",
@@ -535,5 +535,7 @@
   "gui.window.queue_hint": "Right-click a row for actions; drag rows to reorder. Header sorting changes the execution order.",
   "gui.tray.show": "Show QualityBound",
   "gui.tray.quit": "Quit QualityBound",
-  "gui.button.ok": "OK"
+  "gui.button.ok": "OK",
+  "gui.banner.needs_decision_one": "1 item needs a decision.",
+  "gui.banner.needs_decision_many": "{count} items need a decision."
 }

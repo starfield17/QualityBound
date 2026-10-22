@@ -1400,8 +1400,16 @@ class MainWindow(QMainWindow):
             if key == self._dismissed_banner_key:
                 self.notification_banner.hide_message()
                 return
+            decision_text = (
+                self.translator.t("gui.banner.needs_decision_one")
+                if metrics.needs_decision_items == 1
+                else self.translator.t(
+                    "gui.banner.needs_decision_many",
+                    count=metrics.needs_decision_items,
+                )
+            )
             self.notification_banner.show_message(
-                self.translator.t("gui.banner.needs_decision", count=metrics.needs_decision_items),
+                decision_text,
                 severity="warning",
                 actions=[(self.translator.t("gui.banner.resolve"), self._resolve_next_decision)],
             )
