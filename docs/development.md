@@ -313,8 +313,9 @@ mode. It reports nothing now; the findings it started with were real typing
 mistakes rather than style:
 
 - `scripts/build_icons.py` passed a `str` to `QImage.save(device, format)`, which
-takes `bytes`, and returned `QByteArray` where `bytes` was declared — now
-  `b"PNG"` and `bytes(encoded.data())`;
+  its type stub declares as `bytes`, but the PySide6 binding rejects `bytes` for
+  a `QBuffer` at runtime; it now uses `QImageWriter(buffer, b"PNG")` and returns
+  `bytes(encoded.data())`;
 - `scripts/prepare_ffmpeg.py` typed `_copy_stream` as `BinaryIO` while `zipfile`
   and `tarfile` hand it `IO[bytes]`, and iterated `data["licenses"]` without
   narrowing it out of `object`;

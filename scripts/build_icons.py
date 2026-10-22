@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QRectF
-from PySide6.QtGui import QColor, QImage, QPainter
+from PySide6.QtGui import QColor, QImage, QImageWriter, QPainter
 from PySide6.QtSvg import QSvgRenderer
 
 
@@ -42,8 +42,13 @@ def render_png(svg_path: Path, size: int) -> bytes:
 
     encoded = QByteArray()
     buffer = QBuffer(encoded)
-    if not buffer.open(QIODevice.OpenModeFlag.WriteOnly) or not image.save(buffer, b"PNG"):
-        raise RuntimeError(f"Could not encode {size}px PNG icon.")
+    if not buffer.open(QIODevice.OpenModeFlag.WriteOnly):
+        raise RuntimeError(f"Could not open the PNG buffer for {size}px icon.")
+    # QImage.save's QBuffer overload rejects the bytes format that its stub
+    # declares on current PySide6; QImageWriter is the stable path.
+    writer = QImageWriter(buffer, b"PNG")
+    if not writer.write(image):
+        raise RuntimeError(f"Could not encode {size}px PNG icon: {writer.errorString()}")
     return bytes(encoded.data())
 
 
