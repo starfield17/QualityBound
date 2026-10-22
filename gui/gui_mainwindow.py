@@ -2486,6 +2486,10 @@ class MainWindow(QMainWindow):
                     row, current = self.queue_model.record_for_id(record.item_id)
                     if row is not None and current is not None:
                         self._resolve_queue_decision(row, current)
+                    # Ask for one decision per post-processing pass. The remaining
+                    # items stay visible in the queue and the decision banner, so a
+                    # batch does not bury the operator under stacked modal dialogs.
+                    break
         if self._postprocessing_cancel_requested or self._close_after_running_task_stops:
             self._on_postprocessing_finished(True)
             return

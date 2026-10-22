@@ -88,7 +88,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                         loop.exec()
                         timer.stop()
                         self.assertFalse(window._postprocessing)
-                        self.assertEqual(choose.call_count, 2)
+                        self.assertEqual(choose.call_count, 1)
                         self.assertEqual(copied.output_path.read_bytes(), copied.source_path.read_bytes())
                         self.assertEqual(result_of(copied).skipped_output_outcome, SkippedOutputOutcome.COPIED)
                         self.assertEqual(result_of(asked).skipped_output_outcome, SkippedOutputOutcome.IGNORED)

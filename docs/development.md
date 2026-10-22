@@ -93,8 +93,10 @@ Analysis values are labelled as estimates in the queue (`VMAF / size (est.)`,
 `~` prefixes), while actual output size and measured saved space come from the
 completed files. Constraint decisions open a structured dialog that shows the
 quality or size metrics, the preserved path and consequence-labelled actions; a
-size miss can open the preserved file in the comparison window. A banner carries
-the pending-decision count and the completion summary. The comparison window has
+size miss can open the preserved file in the comparison window. A post-processing
+pass asks for one decision at a time; the remaining items stay pending in the
+queue and the banner, rather than stacking modal dialogs. The banner carries the
+pending-decision count and the completion summary. The comparison window has
 a compact file bar, timestamp-aligned pane labels, a collapsible shortcut help,
 drag-and-drop loading and a clamped size.
 
