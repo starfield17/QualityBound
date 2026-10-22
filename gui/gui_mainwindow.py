@@ -838,6 +838,9 @@ class MainWindow(QMainWindow):
         selection_model = maybe_none(self.table_view.selectionModel())
         if selection_model is not None:
             selection_model.selectionChanged.connect(self._on_queue_selection_changed)
+        queue_selection_model = maybe_none(self.queue_window.table_view.selectionModel())
+        if queue_selection_model is not None:
+            queue_selection_model.selectionChanged.connect(self._on_queue_selection_changed)
 
         self.queue_model.metricsChanged.connect(self._update_queue_metrics)
         self.queue_manager.log.connect(self._append_log)
@@ -1345,14 +1348,7 @@ class MainWindow(QMainWindow):
             self.queue_stack.setCurrentWidget(self.table_view)
 
     def _update_details_panel(self) -> None:
-        selection_model = maybe_none(self.table_view.selectionModel())
-        rows = (
-            sorted(index.row() for index in selection_model.selectedRows())
-            if selection_model is not None
-            else []
-        )
-        record = self.queue_model.record_for_row(rows[0]) if rows else None
-        self.details_panel.set_record(record, self.translator)
+        self.details_panel.set_record(self._selected_record(), self.translator)
 
     def _selected_record(self) -> QueueItemRecord | None:
         selection_model = maybe_none(self.table_view.selectionModel())
@@ -1385,6 +1381,7 @@ class MainWindow(QMainWindow):
 
     def _clear_details_panel(self) -> None:
         self.table_view.clearSelection()
+        self.queue_window.table_view.clearSelection()
         self.details_panel.set_record(None, self.translator)
 
     def _resolve_next_decision(self) -> None:
