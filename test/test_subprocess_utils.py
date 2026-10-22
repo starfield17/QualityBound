@@ -12,7 +12,7 @@ from core.ffmpeg.subprocess import (
     hidden_process_creationflags,
     noninteractive_run_kwargs,
 )
-from gui.gui_workers import _safe_console_print
+from gui.options.capability_worker import _safe_console_print
 
 
 class SubprocessPolicyTestCase(unittest.TestCase):
@@ -86,7 +86,7 @@ class SubprocessCallSiteTestCase(unittest.TestCase):
 
 class SafeConsolePrintTestCase(unittest.TestCase):
     def test_none_stdout_is_ignored(self) -> None:
-        with patch("gui.gui_workers.sys.stdout", None):
+        with patch("gui.options.capability_worker.sys.stdout", None):
             _safe_console_print("message")
 
     def test_broken_stdout_is_ignored(self) -> None:
@@ -97,7 +97,7 @@ class SafeConsolePrintTestCase(unittest.TestCase):
             def flush(self) -> None:
                 raise OSError("invalid handle")
 
-        with patch("gui.gui_workers.sys.stdout", BrokenStream()):
+        with patch("gui.options.capability_worker.sys.stdout", BrokenStream()):
             _safe_console_print("message")
 
     def test_stdout_flush_failure_is_ignored(self) -> None:
@@ -113,14 +113,14 @@ class SafeConsolePrintTestCase(unittest.TestCase):
                 raise OSError("invalid handle")
 
         stream = FlushFailingStream()
-        with patch("gui.gui_workers.sys.stdout", stream):
+        with patch("gui.options.capability_worker.sys.stdout", stream):
             _safe_console_print("message")
 
         self.assertEqual(stream.value, "message\n")
 
     def test_valid_stdout_receives_message(self) -> None:
         stream = io.StringIO()
-        with patch("gui.gui_workers.sys.stdout", stream):
+        with patch("gui.options.capability_worker.sys.stdout", stream):
             _safe_console_print("message")
 
         self.assertEqual(stream.getvalue(), "message\n")

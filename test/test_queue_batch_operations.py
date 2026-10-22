@@ -22,14 +22,14 @@ from core.models import (
     QualitySearchStatus,
     EncodeResult,
 )
-from gui.queue_actions import (
+from gui.queue.actions import (
     apply_options_to_record,
     apply_output_dir_to_record,
     can_edit_record,
 )
-from gui.queue_model import QueueColumn, QueueTableModel
-from gui.queue_state import QueueItemRecord, QueueSourceDraft, QueueItemStatus, QueueJobSnapshot
-from gui.queue_view import create_queue_view
+from gui.queue.model import QueueColumn, QueueTableModel
+from gui.queue.state import QueueItemRecord, QueueSourceDraft, QueueItemStatus, QueueJobSnapshot
+from gui.queue.view import create_queue_view
 
 
 def draft_of(record: QueueItemRecord) -> QueueSourceDraft:

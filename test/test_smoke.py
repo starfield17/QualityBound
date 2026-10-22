@@ -28,9 +28,9 @@ from core.models import (
 )
 from core.config.store import app_config_path
 from gui.gui_mainwindow import MainWindow
-from gui.queue_manager import QueueManager
-from gui.queue_model import QueueColumn, QueueTableModel
-from gui.queue_view import create_queue_view
+from gui.queue.manager import QueueManager
+from gui.queue.model import QueueColumn, QueueTableModel
+from gui.queue.view import create_queue_view
 from main import main
 
 

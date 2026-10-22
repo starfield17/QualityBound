@@ -33,10 +33,10 @@ from PySide6.QtWidgets import (
 
 from core.i18n import Translator
 from core.media import VIDEO_EXTENSIONS
-from gui.comparison_decode import (ComparisonMedia, DecodeCancelled, FramePair,
+from gui.comparison.decode import (ComparisonMedia, DecodeCancelled, FramePair,
                                    ToolRunner, decode_pair, inspect_pair, preview_pair)
-from gui.comparison_state import ComparisonPhase, ComparisonTimeline
-from gui.comparison_playback import PlaybackSession
+from gui.comparison.state import ComparisonPhase, ComparisonTimeline
+from gui.comparison.playback import PlaybackSession
 from gui.window_geometry import clamped_window_size
 
 

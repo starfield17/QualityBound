@@ -421,7 +421,7 @@ class V2AdapterTests(unittest.TestCase):
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         from PySide6.QtWidgets import QApplication
         from core.i18n import get_translator
-        from gui.encode_options_panel import EncodeOptionsPanel
+        from gui.options.encode_options_panel import EncodeOptionsPanel
         app = QApplication.instance() or QApplication([])
         panel = EncodeOptionsPanel(get_translator("en"), {})
         panel.apply_options(EncodeOptions(smart_algorithm=SmartAlgorithm.V2_EXPERIMENTAL))

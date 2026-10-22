@@ -28,7 +28,7 @@ from core.smart import (
     prepare_size_miss_retry,
     reselect_after_quality_decision,
 )
-from gui.queue_state import (
+from gui.queue.state import (
     QueueItemRecord,
     QueueItemStatus,
     QueueSourceDraft,

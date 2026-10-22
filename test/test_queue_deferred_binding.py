@@ -16,12 +16,12 @@ from core.models import (
     BackendChoice, CodecChoice, CompressionMode, ContainerChoice, EncodeOptions,
     EncodePlanItem, EncodeRequest, MediaInfo, VideoFileItem,
 )
-from gui.gui_workers import QueueIntakeWorker
+from gui.queue.workers import QueueIntakeWorker
 from gui.gui_mainwindow import MainWindow
-from gui.queue_manager import QueueExecuteWorker, QueueExecutionItem
-from gui.queue_actions import apply_options_to_record, apply_output_dir_to_record
-from gui.queue_model import QueueColumn, QueueTableModel
-from gui.queue_state import (
+from gui.queue.manager import QueueExecuteWorker, QueueExecutionItem
+from gui.queue.actions import apply_options_to_record, apply_output_dir_to_record
+from gui.queue.model import QueueColumn, QueueTableModel
+from gui.queue.state import (
     QueueItemRecord,
     QueueSourceDraft,
     QueueItemStatus,
@@ -135,9 +135,9 @@ class DeferredQueueTestCase(unittest.TestCase):
         received = []
         worker.completed.connect(received.append)
         with (
-            patch("gui.gui_workers.find_binary", return_value=self.root / "ffprobe"),
-            patch("gui.gui_workers.probe_media_info", return_value=media(self.source)),
-            patch("gui.gui_workers.prepare_encode_requests") as build,
+            patch("gui.queue.workers.find_binary", return_value=self.root / "ffprobe"),
+            patch("gui.queue.workers.probe_media_info", return_value=media(self.source)),
+            patch("gui.queue.workers.prepare_encode_requests") as build,
         ):
             worker.run()
         self.assertEqual(len(received[0]), 1)
@@ -170,7 +170,7 @@ class DeferredQueueTestCase(unittest.TestCase):
 
     def test_output_collision_with_bound_record_does_not_partially_bind(self) -> None:
         plan = self.prepare([self.request(EncodeOptions(backend=BackendChoice.CPU))])
-        from gui.queue_state import create_queue_records
+        from gui.queue.state import create_queue_records
         self.model.add_records(create_queue_records(plan, self.root / "work"))
         with self.assertRaisesRegex(RuntimeError, "collision"):
             self.model.apply_prepared_plan([self.record.item_id], plan, self.root / "work")
@@ -186,7 +186,7 @@ class DeferredQueueTestCase(unittest.TestCase):
         self.assertEqual(plan.items[0].output_path, self.root / "folder_compressed_hevc" / "sub" / "clip_hevc.mp4")
 
     def test_prepare_lock_blocks_edit_and_decision_resume(self) -> None:
-        from gui.queue_manager import QueueManager
+        from gui.queue.manager import QueueManager
         from PySide6.QtCore import QModelIndex
         another = copy.deepcopy(self.record)
         another.item_id = "another"
@@ -235,7 +235,7 @@ class DeferredQueueTestCase(unittest.TestCase):
         try:
             with (
                 patch.object(window.options_panel, "read_options", return_value=options),
-                patch("gui.gui_workers.prepare_encode_requests", side_effect=prepare),
+                patch("gui.queue.workers.prepare_encode_requests", side_effect=prepare),
                 patch.object(window.queue_manager, "start", return_value=True) as start,
                 patch("gui.gui_mainwindow.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes),
             ):
@@ -278,7 +278,7 @@ class DeferredQueueTestCase(unittest.TestCase):
             window.close()
 
     def test_mixed_tool_contexts_analyze_all_before_encoding(self) -> None:
-        from gui.queue_state import create_queue_records
+        from gui.queue.state import create_queue_records
         plan = self.prepare([self.request(EncodeOptions(backend=BackendChoice.CPU))])
         first = create_queue_records(plan, self.root / "work-a")[0]
         second = copy.deepcopy(first)
@@ -299,8 +299,8 @@ class DeferredQueueTestCase(unittest.TestCase):
             return [object()]
 
         with (
-            patch("gui.queue_manager.run_analysis_phase", side_effect=analyze),
-            patch("gui.queue_manager.execute_plan_concurrent", side_effect=encode),
+            patch("gui.queue.manager.run_analysis_phase", side_effect=analyze),
+            patch("gui.queue.manager.execute_plan_concurrent", side_effect=encode),
         ):
             worker.run()
         self.assertEqual([event[0] for event in events], ["analyze", "analyze", "encode", "encode"])
@@ -326,9 +326,9 @@ class DeferredQueueTestCase(unittest.TestCase):
     def test_explicit_probe_pair_honors_selected_ffmpeg(self) -> None:
         worker = QueueIntakeWorker(None, False, None, [draft_of(self.record).file_item], ffmpeg_path="selected-ffmpeg")
         with (
-            patch("gui.gui_workers.discover_ffmpeg_tools", return_value=(self.root / "ffmpeg", self.root / "paired-ffprobe")) as discover,
-            patch("gui.gui_workers.find_binary") as fallback,
-            patch("gui.gui_workers.probe_media_info", return_value=media(self.source)) as probe,
+            patch("gui.queue.workers.discover_ffmpeg_tools", return_value=(self.root / "ffmpeg", self.root / "paired-ffprobe")) as discover,
+            patch("gui.queue.workers.find_binary") as fallback,
+            patch("gui.queue.workers.probe_media_info", return_value=media(self.source)) as probe,
         ):
             worker.run()
         discover.assert_called_once_with("selected-ffmpeg", None)
@@ -376,7 +376,7 @@ class DeferredQueueTestCase(unittest.TestCase):
 
     def test_mixed_context_decision_callback_and_pause_keep_item_identity(self) -> None:
         from core.models import EncodeResult
-        from gui.queue_state import create_queue_records
+        from gui.queue.state import create_queue_records
         plan = self.prepare([self.request(EncodeOptions(backend=BackendChoice.CPU))])
         first = create_queue_records(plan, self.root / "work-a")[0]
         second = copy.deepcopy(first)
@@ -402,8 +402,8 @@ class DeferredQueueTestCase(unittest.TestCase):
             return [result for result in kwargs["analysis_results"] if result is not None]
 
         with (
-            patch("gui.queue_manager.run_analysis_phase", side_effect=analyze),
-            patch("gui.queue_manager.execute_plan_concurrent", side_effect=encode),
+            patch("gui.queue.manager.run_analysis_phase", side_effect=analyze),
+            patch("gui.queue.manager.execute_plan_concurrent", side_effect=encode),
         ):
             worker.run()
         self.assertEqual(received, [("second", terminal)])

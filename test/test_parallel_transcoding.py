@@ -36,7 +36,7 @@ from core.models import (
     MediaInfo,
 )
 from gui.gui_mainwindow import MainWindow
-from gui.settings_dialog import SettingsDialog
+from gui.options.settings_dialog import SettingsDialog
 
 
 def _media(path: Path) -> MediaInfo:

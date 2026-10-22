@@ -20,7 +20,7 @@ from core.i18n import Translator
 from core.media import validate_unique_output_paths
 from core.models import CompressionMode, DecisionOption, EncodeOptions, EncodeResult, EncodePlan
 from core.progress_events import ProgressEvent
-from gui.queue_actions import (
+from gui.queue.actions import (
     accept_size_miss as accept_size_miss_action,
     apply_options_to_record as apply_options_to_record_action,
     apply_output_dir_to_record as apply_output_dir_to_record_action,
@@ -31,7 +31,7 @@ from gui.queue_actions import (
     record_quality_result,
     retry_size_miss as retry_size_miss_action,
 )
-from gui.queue_state import (
+from gui.queue.state import (
     ACTIVE_ITEM_STATUSES,
     RUNNABLE_ITEM_STATUSES,
     QueueItemRecord,

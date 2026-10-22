@@ -112,6 +112,54 @@ selection/confirmation, settings validation/re-detection and comparison
 placeholders. Existing queue and architecture tests continue to own queue
 semantics and the `EncodeOptionsPanel` public contract.
 
+## Qt typing conventions
+
+Pyright checks every GUI module in strict mode. Its Qt conventions are:
+
+- each widget stores its application translator as `self.translator`
+  (`QObject.tr()` is Qt's own translation method, so assigning to `self.tr`
+  shadows it and leaves the attribute untyped);
+- PySide6 enums are accessed through their scoped enum
+  (`Qt.ContextMenuPolicy.CustomContextMenu`, `QMessageBox.StandardButton.Yes`,
+  `QStyle.StandardPixmap.SP_FileIcon`), which is the form the stubs declare;
+- a value that PySide6 declares non-nullable but Qt can return as `None`
+  (`QMenu.exec()`, `QListWidget.currentItem()`, `QAbstractItemView.model()`,
+  `QApplication.style()`, `QStandardItemModel.item()`,
+  `QGuiApplication.primaryScreen()`) passes through `gui.qt_optionals.maybe_none`
+  so its `None` guard stays instead of being flagged as dead code;
+- model overrides that accept the `QModelIndex | QPersistentModelIndex` union the
+  base class declares normalise it once with `_transient_index`, because Qt itself
+  always delivers a `QModelIndex`.
+
+## Task-local context
+
+Use the [architecture task index](architecture.md#task-entrypoints) to find the
+entry symbol, contract and focused test before reading an entire owner. GUI
+subpackage guides carry the queue, comparison and options details; the parent
+guide contains shared presentation contracts. The test directory stays flat,
+so the existing `unittest discover -s test` commands also find the split tests.
+Factory imports are direct imports from the underscored helper modules, using
+the test directory added by discovery; helpers never import test cases or Qt.
+
+The structure change was checked against revision `6893e18` with these three
+navigation samples. Counts describe source ranges, not measured model tokens
+or complete reading sets; callers and contracts still need inspection when the
+task affects them. Common root instructions are unchanged and excluded here.
+
+| Sample task | Navigation measure | Before | After |
+| --- | --- | --- | --- |
+| Queue decision | MainWindow span containing `_resolve_selected_decision`, `_resolve_next_decision`, `_resolve_queue_decision` | 900 lines | 80 lines |
+| Comparison seek | Applicable GUI guide text (parent plus comparison guide) | 152 lines | 66 lines |
+| Smart v1 holdout | Workflow test file plus all its shared runtime factories | 1,287 lines | 594 lines |
+
+The relocation preserved all 721 collected test scenarios. Production module
+AST comparisons normalized only the moved import paths; MainWindow method
+bodies and worker classes were unchanged. Test comparisons also account for
+the extracted session factory and updated architecture-probe paths. The
+generic test-integrity detector reports the two deleted umbrella test files;
+the mapped test inventory and body comparisons verify their replacement files
+rather than treating those deletions as lost coverage.
+
 ## Translations
 
 Built-in language packs live in `config/i18n/`. English is the complete

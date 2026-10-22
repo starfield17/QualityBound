@@ -49,8 +49,7 @@ measurement identity. A failed bounded search is not proof of infeasibility.
 Run Smart checks with:
 
 ```text
-python -m unittest discover -s test -p "test_smart_quality.py" -v
-python -m unittest discover -s test -p "test_analysis_runtime.py" -v
+python -m unittest discover -s test -p "test_smart_*.py" -v
 python -m unittest discover -s test -p "test_constraint_decisions.py" -v
 python -m unittest discover -s test -p "test_smart_v2.py" -v
 python -m unittest discover -s test -p "test_architecture.py" -v

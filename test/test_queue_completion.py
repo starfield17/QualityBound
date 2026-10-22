@@ -11,8 +11,8 @@ from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 from core.i18n import get_translator
 from core.media import PostEncodeAction, SystemPowerResult, publish_skipped_source
 from core.models import EncodeOptions, EncodePlanItem, EncodeResult, SkipOrigin, SkippedOutputPolicy, SkippedOutputOutcome
-from gui.queue_completion import QueueCompletionHandler
-from gui.queue_state import QueueItemRecord, QueueItemStatus, QueueJobSnapshot
+from gui.queue.completion import QueueCompletionHandler
+from gui.queue.state import QueueItemRecord, QueueItemStatus, QueueJobSnapshot
 
 
 def result_of(record: QueueItemRecord) -> EncodeResult:
@@ -82,8 +82,8 @@ class QueueCompletionTestCase(unittest.TestCase):
                 discarded = self._record(f"{prefix}-discard", QueueItemStatus.SKIPPED, SkippedOutputPolicy.COPY)
                 result_of(discarded).skip_origin = SkipOrigin.SIZE_MISS_DISCARD
                 with (
-                    patch("gui.queue_completion.QMessageBox.question", return_value=answer) as question,
-                    patch("gui.queue_completion.PowerActionCountdownDialog") as countdown,
+                    patch("gui.queue.completion.QMessageBox.question", return_value=answer) as question,
+                    patch("gui.queue.completion.PowerActionCountdownDialog") as countdown,
                 ):
                     self.handler.handle([copied, asked, ignored, discarded], self.tr, {})
                 self.assertEqual(copied.output_path.read_bytes(), copied.source_path.read_bytes())
@@ -110,7 +110,7 @@ class QueueCompletionTestCase(unittest.TestCase):
 
     def test_skipped_publication_is_not_repeated_when_run_resumes(self) -> None:
         record = self._record("copy-once", QueueItemStatus.SKIPPED, SkippedOutputPolicy.COPY)
-        with patch("gui.queue_completion.publish_skipped_source", wraps=publish_skipped_source) as publish:
+        with patch("gui.queue.completion.publish_skipped_source", wraps=publish_skipped_source) as publish:
             self.handler.handle([record], self.tr, {"desktop_notifications": False})
             self.handler.handle([record], self.tr, {"desktop_notifications": False})
         publish.assert_called_once()
@@ -127,8 +127,8 @@ class QueueCompletionTestCase(unittest.TestCase):
             )
         ]
         with (
-            patch("gui.queue_completion.PowerActionCountdownDialog") as countdown,
-            patch("gui.queue_completion.execute_power_action") as power,
+            patch("gui.queue.completion.PowerActionCountdownDialog") as countdown,
+            patch("gui.queue.completion.execute_power_action") as power,
         ):
             self.handler.handle(records, self.tr, {"post_encode_action": "shutdown"})
         self.notify.assert_called_once()
@@ -160,7 +160,7 @@ class QueueCompletionTestCase(unittest.TestCase):
         def finished(cancelled):
             completions.append(cancelled)
             loop.quit()
-        with patch("gui.queue_completion.QMessageBox.question", return_value=QMessageBox.StandardButton.No) as question:
+        with patch("gui.queue.completion.QMessageBox.question", return_value=QMessageBox.StandardButton.No) as question:
             self.handler.process_stopped(records, self.tr, apply_result, finished)
             timer.start(5000)
             loop.exec()
@@ -182,9 +182,9 @@ class QueueCompletionTestCase(unittest.TestCase):
                 with self.subTest(action=action, accepted=accepted):
                     self.close.reset_mock()
                     with (
-                        patch("gui.queue_completion.PowerActionCountdownDialog") as countdown,
+                        patch("gui.queue.completion.PowerActionCountdownDialog") as countdown,
                         patch(
-                            "gui.queue_completion.execute_power_action", return_value=SystemPowerResult(True, action)
+                            "gui.queue.completion.execute_power_action", return_value=SystemPowerResult(True, action)
                         ) as power,
                     ):
                         countdown.return_value.exec.return_value = (

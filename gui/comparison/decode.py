@@ -13,7 +13,7 @@ import threading
 import time
 
 from core.ffmpeg import discover_ffmpeg_tools, noninteractive_run_kwargs, terminate_process
-from gui.comparison_state import ComparisonTimeline, VideoDetails, select_frame
+from gui.comparison.state import ComparisonTimeline, VideoDetails, select_frame
 
 
 class DecodeCancelled(Exception):

@@ -12,9 +12,9 @@ from PySide6.QtWidgets import (
 )
 
 from core.i18n import Translator
-from gui.queue_model import QueueTableModel, format_duration
-from gui.queue_state import QueueMetrics
-from gui.queue_view import create_queue_view
+from gui.queue.model import QueueTableModel, format_duration
+from gui.queue.state import QueueMetrics
+from gui.queue.view import create_queue_view
 from gui.window_geometry import clamped_window_size
 
 

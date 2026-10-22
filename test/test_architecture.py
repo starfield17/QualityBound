@@ -106,7 +106,7 @@ def _codec_import_violations(code: str) -> list[str]:
 def _layer_violations(source: str, path: Path) -> list[str]:
     layer = _top_level(source)
     allowed = set(sys.stdlib_module_names) | {layer, "core"}
-    if layer == "gui" and source not in {"gui.queue_state", "gui.queue_actions"}:
+    if layer == "gui" and source not in {"gui.queue.state", "gui.queue.actions"}:
         allowed.add("PySide6")
     return [name for name in _imports(source, path) if _top_level(name) not in allowed]
 
@@ -210,13 +210,13 @@ class ArchitectureTestCase(unittest.TestCase):
     def test_layer_checks_reject_forbidden_imports(self) -> None:
         cases = [
             ("core.example", "example.py", "import requests", "requests"),
-            ("core.example", "example.py", "from gui import queue_model", "gui"),
+            ("core.example", "example.py", "from gui.queue import model", "gui.queue"),
             ("gui.example", "example.py", "from cli import cli_entry", "cli"),
             ("gui.example", "example.py", "import main", "main"),
-            ("gui.queue_state", "queue_state.py", "from PySide6.QtCore import QObject", "PySide6.QtCore"),
-            ("gui.queue_actions", "queue_actions.py", "import PySide6", "PySide6"),
-            ("core.example", "example.py", "from ..gui import queue_model", "gui"),
-            ("core", "__init__.py", "from ..gui import queue_model", "gui"),
+            ("gui.queue.state", "state.py", "from PySide6.QtCore import QObject", "PySide6.QtCore"),
+            ("gui.queue.actions", "actions.py", "import PySide6", "PySide6"),
+            ("core.example", "example.py", "from ..gui.queue import model", "gui.queue"),
+            ("core", "__init__.py", "from ..gui.queue import model", "gui.queue"),
         ]
         with tempfile.TemporaryDirectory() as directory:
             for source, filename, code, expected in cases:
@@ -293,10 +293,10 @@ class ArchitectureTestCase(unittest.TestCase):
         violations: list[str] = []
         modules = _app_modules()
         for source, path in modules.items():
-            if source not in {"gui.queue_state", "gui.queue_model"}:
+            if source not in {"gui.queue.state", "gui.queue.model"}:
                 continue
             for imported in _imports(source, path):
-                if imported.startswith("gui.queue_view"):
+                if imported.startswith("gui.queue.view"):
                     violations.append(f"{path.relative_to(ROOT)} imports {imported!r}")
         self.assertFalse(
             violations,
@@ -468,7 +468,7 @@ class ArchitectureTestCase(unittest.TestCase):
         )
 
     def test_queue_model_has_no_domain_side_effect_dependencies(self) -> None:
-        path = _app_modules()["gui.queue_model"]
+        path = _app_modules()["gui.queue.model"]
         forbidden = (
             "core.smart.v1.receipts",
             "core.smart.v1.decisions",
@@ -476,25 +476,25 @@ class ArchitectureTestCase(unittest.TestCase):
         )
         violations = [
             imported
-            for imported in _imports("gui.queue_model", path)
+            for imported in _imports("gui.queue.model", path)
             if imported.startswith(forbidden)
         ]
         self.assertFalse(
             violations,
             "QueueTableModel should emit Qt notifications and delegate record mutations "
-            f"to gui.queue_actions, not own domain/file side effects: {violations}",
+            f"to gui.queue.actions, not own domain/file side effects: {violations}",
         )
 
     def test_queue_completion_is_consumed_only_by_main_window(self) -> None:
         graph = _dependency_graph()
-        callers = {source for source, dependencies in graph.items() if "gui.queue_completion" in dependencies}
+        callers = {source for source, dependencies in graph.items() if "gui.queue.completion" in dependencies}
         self.assertEqual(callers, {"gui.gui_mainwindow"})
-        self.assertFalse(graph["gui.queue_completion"] & {
-            "gui.gui_mainwindow", "gui.queue_manager", "gui.gui_workers", "gui.queue_view",
+        self.assertFalse(graph["gui.queue.completion"] & {
+            "gui.gui_mainwindow", "gui.queue.manager", "gui.queue.workers", "gui.options.capability_worker", "gui.queue.view",
         })
 
     def test_options_panel_does_not_probe_ffmpeg(self) -> None:
-        path = _app_modules()["gui.encode_options_panel"]
+        path = _app_modules()["gui.options.encode_options_panel"]
         forbidden_names = {
             "discover_ffmpeg_tools",
             "list_available_encoders",
@@ -550,14 +550,14 @@ class ArchitectureTestCase(unittest.TestCase):
         )
 
     def test_queue_view_depends_on_model(self) -> None:
-        view_path = _app_modules().get("gui.queue_view")
+        view_path = _app_modules().get("gui.queue.view")
         assert view_path is not None
         self.assertTrue(
             any(
-                imported.startswith("gui.queue_model")
-                for imported in _imports("gui.queue_view", view_path)
+                imported.startswith("gui.queue.model")
+                for imported in _imports("gui.queue.view", view_path)
             ),
-            "gui.queue_view must use the column definitions from gui.queue_model",
+            "gui.queue.view must use the column definitions from gui.queue.model",
         )
 
 

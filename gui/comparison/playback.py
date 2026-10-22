@@ -20,7 +20,7 @@ from PySide6.QtGui import QImage
 from PySide6.QtMultimedia import QAudioDevice, QAudioFormat, QAudioSink, QMediaDevices
 
 from core.ffmpeg import noninteractive_run_kwargs, terminate_process
-from gui.comparison_decode import ComparisonMedia, DecodeCancelled
+from gui.comparison.decode import ComparisonMedia, DecodeCancelled
 from gui.qt_optionals import maybe_none
 
 

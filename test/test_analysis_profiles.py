@@ -30,7 +30,7 @@ from core.models import (
 )
 from core.config.store import _default_app_config
 from gui.gui_mainwindow import MainWindow
-from gui.settings_dialog import SettingsDialog
+from gui.options.settings_dialog import SettingsDialog
 
 
 class AnalysisProfileCoreTestCase(unittest.TestCase):

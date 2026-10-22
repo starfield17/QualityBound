@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 
 from core.i18n import Translator
 from core.models import ConstraintFailureKind, DecisionActionCode, DecisionOption
-from gui.queue_state import QueueItemRecord
+from gui.queue.state import QueueItemRecord
 from gui.window_geometry import clamped_window_size
 
 

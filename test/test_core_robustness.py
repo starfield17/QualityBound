@@ -29,7 +29,7 @@ from core.models import (
     MediaInfo,
     OperationCancelledError,
 )
-from gui.queue_state import (
+from gui.queue.state import (
     QueueItemRecord,
     QueueItemStatus,
     QueueJobSnapshot,

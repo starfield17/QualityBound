@@ -7,6 +7,9 @@ PySide6 GUI. `main.py` is the composition root.
 main.py
 ├── cli/       command-line entrypoint and presentation
 ├── gui/       PySide6 entrypoint and presentation
+│   ├── queue/       records, decisions, model/view, workers and completion
+│   ├── comparison/  independent read-only A/B inspection and playback
+│   └── options/     encoding controls, settings, presets and capabilities
 └── core/
     ├── config/    paths, settings, presets, and translations
     ├── media/     source discovery, subtitles, and file validation
@@ -26,11 +29,45 @@ main.py
 The recursive architecture test enforces the root allowlist, capability-package
 DAG, public adapters, and layer boundaries.
 
+## Task entrypoints
+
+GUI entry/composition stays in `gui/gui_entry.py` and `gui/gui_mainwindow.py`.
+MainWindow groups its methods under searchable task comments; its method bodies
+and instance ownership are unchanged by the directory arrangement. GUI packages
+have empty initializers and callers import the concrete owner.
+
+| Task | Entry and implementation | Contract to inspect | Focused tests under `test/` |
+| --- | --- | --- | --- |
+| Start or resume a queue | MainWindow `_start_queue`; `gui/queue/workers.py:QueuePrepareWorker`; `gui/queue/manager.py:QueueManager.start` | `gui/queue/state.py:QueueItemRecord`, `core.models.EncodeRequest` | `test_queue_deferred_binding.py`, `test_queue_run_completion.py` |
+| Resolve a quality/size decision | MainWindow `Constraint decisions` section; `gui/queue/model.py` delegates to `gui/queue/actions.py` | `core.models.DecisionOption`, `core.smart` decision operations | `test_constraint_decisions.py`, `test_smart_execution.py` |
+| Inspect or seek comparison playback | `gui/comparison/window.py:ComparisonWindow.seek`; follow `state.py`, `decode.py` or `playback.py` for the affected operation | `decode.py:ComparisonMedia`, `state.py:ComparisonTimeline`; SPEC N11 | `test_video_comparison.py` |
+| Change encoding controls or capabilities | `gui/options/encode_options_panel.py:EncodeOptionsPanel`; `capability_worker.py:EncoderCapabilityDetectWorker` | Panel contract in `gui/options/AGENTS.md`, `core.models.EncodeOptions` | `test_smart_gui.py`, `test_gui_workers.py`, `test_gui_presentation.py` |
+| Change Smart v1 measurement | `core/smart/v1/measurement.py:score_candidate`; session owns references and resource state | `core.models.QualityCandidateResult`, runtime execution plans; SPEC F2/F3 | `test_smart_measurement.py`, `test_smart_measurement_cache.py`, `test_smart_session.py` |
+| Change Smart v1 search/holdout | `core/smart/v1/search.py:run_search`; workflow owns setup and receipts | `core.models.QualitySearchResult`, `sampling/planner.py:SamplePlan`; SPEC F1/F2 | `test_smart_search.py`, `test_smart_workflow.py` |
+
+Run a listed test with `python -m unittest discover -s test -p "<filename>" -v`.
+`test_smart_budget.py`, `test_smart_configuration.py`, `test_smart_parallel.py`,
+`test_smart_runtime.py` and `test_smart_receipts.py` cover the remaining v1
+owners. Shared factories live in `_smart_quality_fixtures.py` and
+`_analysis_runtime_fixtures.py`; these import neither Qt nor test cases.
+Experimental v2 retains `test_smart_v2.py` and its existing owner map.
+
+For a local change, locate the symbol before opening the file, for example:
+
+```text
+rg --files gui/comparison
+rg -n 'def seek|def _request_frame' gui/comparison/window.py
+rg -n 'def _refine_holdouts|def run_search' core/smart/v1/search.py
+```
+
+Expand to callers, dependencies or shared factories when a concrete question
+needs them. The table identifies starting points, not complete impact sets.
+
 ## GUI presentation
 
 `gui/theme.py` owns palette-aware semantic colour tokens and the single
 application-wide stylesheet; `gui/icons.py` renders the toolbar line-icon set.
-`gui/notification_banner.py` and `gui/item_details_panel.py` are view-only
+`gui/notification_banner.py` and `gui/queue/item_details_panel.py` are view-only
 widgets that display queue state and emit user actions. `MainWindow` remains the
 composition root: it owns the menu, shortcuts, tray menu, window geometry and the
 collapsible queue-first layout. Presentation widgets never mutate queue records

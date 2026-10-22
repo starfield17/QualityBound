@@ -21,9 +21,9 @@ from core.models import (
     EncoderInfo,
     MediaInfo,
 )
-from gui.queue_manager import QueueManager, QueueRunCompletion
-from gui.queue_model import QueueTableModel
-from gui.queue_state import QueueItemRecord, QueueItemStatus, QueueJobSnapshot
+from gui.queue.manager import QueueManager, QueueRunCompletion
+from gui.queue.model import QueueTableModel
+from gui.queue.state import QueueItemRecord, QueueItemStatus, QueueJobSnapshot
 
 
 def _record(root: Path, name: str, status: QueueItemStatus) -> QueueItemRecord:
@@ -172,7 +172,7 @@ class QueueRunCompletionTestCase(unittest.TestCase):
         self.manager._reconcile_pending_run()
         self.assertIs(self.manager._pending_run, completion)
 
-        with patch("gui.queue_manager.QueueExecuteWorker") as worker_class:
+        with patch("gui.queue.manager.QueueExecuteWorker") as worker_class:
             self.assertTrue(self.manager.start(max_workers=2))
 
         execution_items = worker_class.call_args.args[0]
@@ -192,7 +192,7 @@ class QueueRunCompletionTestCase(unittest.TestCase):
         self.model.add_records([ready, waiting])
         completion = QueueRunCompletion("run-mixed", (ready.item_id, waiting.item_id))
         self.manager._pending_run = completion
-        with patch("gui.queue_manager.QueueExecuteWorker") as worker_class:
+        with patch("gui.queue.manager.QueueExecuteWorker") as worker_class:
             self.assertTrue(self.manager.resume_after_decision(2))
         execution_items = worker_class.call_args.args[0]
         self.assertEqual([item.item_id for item in execution_items], [ready.item_id])

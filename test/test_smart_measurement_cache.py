@@ -10,7 +10,7 @@ from unittest.mock import patch
 from core.smart.v1.measurement import score_candidate
 from core.smart.v1.runtime import AnalysisExecutionPlan, AnalysisTier
 from core.smart.v1.vmaf import VmafWindowScore
-import test_analysis_runtime as runtime_tests
+from _analysis_runtime_fixtures import _session
 from core.models import OperationCancelledError, QualityCandidateResult
 
 
@@ -18,7 +18,7 @@ class WindowMeasurementCacheTest(unittest.TestCase):
     def test_failure_and_cancellation_do_not_publish_measurement(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            session = runtime_tests.AnalysisSessionTestCase()._session(root)
+            session = _session(root)
             reference = root / "reference.mkv"
             reference.write_bytes(b"reference")
             for failure in (RuntimeError("invalid score"), OperationCancelledError("cancelled")):
@@ -35,7 +35,7 @@ class WindowMeasurementCacheTest(unittest.TestCase):
     def test_reuse_expansion_parameter_change_and_forced_remeasurement(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            session = runtime_tests.AnalysisSessionTestCase()._session(root)
+            session = _session(root)
             references = [root / f"source-{index}.mkv" for index in range(3)]
             for reference in references:
                 reference.write_bytes(b"reference")
@@ -83,7 +83,7 @@ class WindowMeasurementCacheTest(unittest.TestCase):
     def test_partial_rejection_is_cached_by_window_not_list_position(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            session = runtime_tests.AnalysisSessionTestCase()._session(root)
+            session = _session(root)
             references = [root / f"ref-{index}.mkv" for index in range(3)]
             for reference in references:
                 reference.write_bytes(b"reference")

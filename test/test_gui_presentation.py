@@ -24,12 +24,12 @@ from core.models import (
     QualitySearchStatus,
 )
 from gui.activity_log_window import ActivityLogWindow
-from gui.comparison_window import ComparisonWindow
+from gui.comparison.window import ComparisonWindow
 from gui.gui_mainwindow import MainWindow
-from gui.preset_manager_dialog import PresetManagerDialog
-from gui.queue_model import QueueColumn, QueueTableModel, format_duration
-from gui.queue_state import QueueItemRecord, QueueItemStatus, QueueJobSnapshot, build_tags
-from gui.settings_dialog import SettingsDialog
+from gui.options.preset_manager_dialog import PresetManagerDialog
+from gui.queue.model import QueueColumn, QueueTableModel, format_duration
+from gui.queue.state import QueueItemRecord, QueueItemStatus, QueueJobSnapshot, build_tags
+from gui.options.settings_dialog import SettingsDialog
 from gui.theme import DARK, LIGHT, apply_theme, build_stylesheet
 
 
@@ -155,10 +155,10 @@ class GuiPresentationTestCase(unittest.TestCase):
             self.assertEqual(dialog._selected_preset_name(), "default_hevc")
             dialog.list_widget.setCurrentRow(1)
             self.assertEqual(dialog._selected_preset_name(), "anime")
-            with patch("gui.preset_manager_dialog.QMessageBox.question", return_value=QMessageBox.StandardButton.No):
+            with patch("gui.options.preset_manager_dialog.QMessageBox.question", return_value=QMessageBox.StandardButton.No):
                 dialog._request_delete()
             self.assertIsNone(dialog.selected_action)
-            with patch("gui.preset_manager_dialog.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
+            with patch("gui.options.preset_manager_dialog.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
                 dialog._request_delete()
             self.assertEqual(dialog.selected_action, {"action": "delete", "name": "anime"})
         finally:

@@ -25,8 +25,8 @@ from core.media import (
 )
 from core.models import EncodePlanItem, EncodeResult, SkippedOutputPolicy, SkippedOutputOutcome, OperationCancelledError
 from gui.power_action_dialog import PowerActionCountdownDialog
-from gui.queue_model import format_size
-from gui.queue_state import QueueItemRecord, QueueItemStatus
+from gui.queue.model import format_size
+from gui.queue.state import QueueItemRecord, QueueItemStatus
 
 
 class SkippedSourceCopyWorker(QThread):

@@ -12,8 +12,8 @@ from PySide6.QtCore import QObject, QThread, Signal
 from core.encoding import execute_plan, execute_plan_concurrent, run_analysis_phase
 from core.models import EncodePlan, EncodeResult, OperationCancelledError
 from core.progress_events import ProgressEvent
-from gui.queue_state import ACTIVE_ITEM_STATUSES, RUNNABLE_ITEM_STATUSES, QueueItemRecord, QueueItemStatus, create_queue_records
-from gui.queue_model import QueueTableModel
+from gui.queue.state import ACTIVE_ITEM_STATUSES, RUNNABLE_ITEM_STATUSES, QueueItemRecord, QueueItemStatus, create_queue_records
+from gui.queue.model import QueueTableModel
 
 
 @dataclass(slots=True)

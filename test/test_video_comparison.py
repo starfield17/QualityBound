@@ -16,15 +16,15 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from core.i18n import TranslationCatalog
-from gui.comparison_decode import (
+from gui.comparison.decode import (
     ComparisonMedia, DecodeCancelled, DecodedFrame, FramePair, ToolRunner,
     frame_time, inspect_pair, inspect_video,
 )
-from gui.comparison_state import (
+from gui.comparison.state import (
     ComparisonPhase, ComparisonTimeline, VideoDetails, select_frame,
 )
-from gui.comparison_window import ComparisonWindow
-from gui.comparison_playback import (AudioPlaybackWorker, PlaybackClock, PlaybackSession,
+from gui.comparison.window import ComparisonWindow
+from gui.comparison.playback import (AudioPlaybackWorker, PlaybackClock, PlaybackSession,
                                      PcmBuffer, VideoPlaybackWorker, audio_output_device, read_ppm)
 
 
@@ -78,7 +78,7 @@ class DecodeTests(unittest.TestCase):
     def test_shared_playback_clock_starts_after_preparation(self) -> None:
         clock = PlaybackClock(2)
         self.assertEqual(clock.now(), 2)
-        with patch("gui.comparison_playback.time.monotonic", side_effect=[10, 12]):
+        with patch("gui.comparison.playback.time.monotonic", side_effect=[10, 12]):
             clock.start()
             self.assertEqual(clock.now(), 4)
 
@@ -87,7 +87,7 @@ class DecodeTests(unittest.TestCase):
         clock.audio_master = True
         clock.start()
         clock.update_audio(0.3)
-        with patch("gui.comparison_playback.time.monotonic", return_value=100000):
+        with patch("gui.comparison.playback.time.monotonic", return_value=100000):
             self.assertEqual(clock.now(), 2.3)
         clock.update_audio(0.3)
         self.assertEqual(clock.now(), 2.3)
@@ -123,7 +123,7 @@ class DecodeTests(unittest.TestCase):
             self.assertEqual(QCoreApplication.libraryPaths(), [])
             raise ValueError("device unavailable")
 
-        with patch("gui.comparison_playback.QMediaDevices.defaultAudioOutput", side_effect=selected_device):
+        with patch("gui.comparison.playback.QMediaDevices.defaultAudioOutput", side_effect=selected_device):
             with self.assertRaisesRegex(ValueError, "device unavailable"):
                 audio_output_device()
         self.assertEqual(QCoreApplication.libraryPaths(), original)
@@ -234,7 +234,7 @@ class ComparisonWindowTests(unittest.TestCase):
         self.player_patch = patch.object(self.window, "playback", self.session)
         self.player_patch.start()
         self.png = b"P6\n4 4\n255\n" + b"\x00\x00\xff" * 16
-        self.preview_patch = patch("gui.comparison_window.preview_pair", side_effect=self._preview)
+        self.preview_patch = patch("gui.comparison.window.preview_pair", side_effect=self._preview)
         self.preview_patch.start()
         self.launch_patch = patch.object(self.window, "_launch", side_effect=self._complete_task)
         self.launch_patch.start()
@@ -334,7 +334,7 @@ class ComparisonWindowTests(unittest.TestCase):
     def test_stale_worker_result_cannot_change_session(self) -> None:
         self.launch_patch.stop()
         callbacks: list[object] = []
-        with patch("gui.comparison_window.ComparisonWorker.start"):
+        with patch("gui.comparison.window.ComparisonWorker.start"):
             self.window._launch(lambda _runner: "old", callbacks.append)
             old = self.window._jobs[-1]
             self.window._launch(lambda _runner: "new", callbacks.append)
@@ -389,7 +389,7 @@ class ComparisonWindowTests(unittest.TestCase):
         image.fill(Qt.GlobalColor.red)
         # The PNG path itself is verified with real FFmpeg in the acceptance run;
         # this test checks session application independently of that decoder.
-        with patch("gui.comparison_window.QImage.fromData", return_value=image):
+        with patch("gui.comparison.window.QImage.fromData", return_value=image):
             self.window._frames_ready(FramePair(DecodedFrame(1.04, b"a"),
                                                 DecodedFrame(1.06, b"b"), 0, 1.055), False, 0, 0)
         self.assertEqual(self.window.timestamps, [1.04, 1.06])
@@ -426,8 +426,8 @@ class ComparisonWindowTests(unittest.TestCase):
         device = MagicMock()
         device.isNull.return_value = False
         device.isFormatSupported.return_value = True
-        with (patch("gui.comparison_playback.QMediaDevices.defaultAudioOutput", return_value=device),
-              patch("gui.comparison_playback.QAudioSink"),
+        with (patch("gui.comparison.playback.QMediaDevices.defaultAudioOutput", return_value=device),
+              patch("gui.comparison.playback.QAudioSink"),
               patch.object(VideoPlaybackWorker, "start"), patch.object(AudioPlaybackWorker, "start")):
             session.start(media, 2, 1, 1)
             audio = [worker for worker in session.workers if isinstance(worker, AudioPlaybackWorker)]
@@ -450,7 +450,7 @@ class ComparisonWindowTests(unittest.TestCase):
         with patch.object(session, "sink", sink), patch.object(session, "device", MagicMock()):
             session.buffer = PcmBuffer(8192)
             self.assertEqual(session.tick(), 2.3)
-            with patch("gui.comparison_playback.time.monotonic", return_value=100000):
+            with patch("gui.comparison.playback.time.monotonic", return_value=100000):
                 self.assertEqual(session.tick(), 2.3)
             self.assertEqual(session.tick(), 2.32)
         session.stop()

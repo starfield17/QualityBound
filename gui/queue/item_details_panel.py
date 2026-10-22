@@ -13,8 +13,8 @@ from PySide6.QtWidgets import (
 )
 
 from core.i18n import Translator
-from gui.queue_model import format_size
-from gui.queue_state import QueueItemRecord, QueueItemStatus, build_tags, status_key
+from gui.queue.model import format_size
+from gui.queue.state import QueueItemRecord, QueueItemStatus, build_tags, status_key
 
 
 class ItemDetailsPanel(QFrame):

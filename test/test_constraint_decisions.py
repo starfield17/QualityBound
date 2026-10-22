@@ -49,10 +49,10 @@ from core.smart.v1.sampling.planner import PlannedWindow, SamplePlan
 from core.smart.v1.sampling.scout import SamplingResult
 from core.i18n import get_translator
 from core.progress_events import ProgressEvent
-from gui.queue_model import QueueTableModel
-from gui.queue_manager import QueueManager
-from gui.queue_state import QueueItemRecord, QueueItemStatus, compute_metrics, mark_finished
-from gui.queue_state import QueueJobSnapshot
+from gui.queue.model import QueueTableModel
+from gui.queue.manager import QueueManager
+from gui.queue.state import QueueItemRecord, QueueItemStatus, compute_metrics, mark_finished
+from gui.queue.state import QueueJobSnapshot
 
 
 def _item(root: Path) -> EncodePlanItem:

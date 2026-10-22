@@ -25,8 +25,8 @@ from core.models import (
     SkippedOutputOutcome,
 )
 from gui.gui_mainwindow import MainWindow
-from gui.queue_manager import QueueRunCompletion
-from gui.queue_state import (
+from gui.queue.manager import QueueRunCompletion
+from gui.queue.state import (
     QueueItemRecord,
     QueueItemStatus,
     QueueJobSnapshot,
@@ -80,7 +80,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                 try:
                     with (
                         patch("gui.gui_mainwindow.choose_quality_decision", return_value=None) as choose,
-                        patch("gui.queue_completion.QMessageBox.question", return_value=QMessageBox.StandardButton.No) as copy_ask,
+                        patch("gui.queue.completion.QMessageBox.question", return_value=QMessageBox.StandardButton.No) as copy_ask,
                     ):
                         window.queue_manager._worker_outcome = "finished"
                         window.queue_manager._on_worker_thread_finished()
@@ -366,11 +366,11 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                 )
                 with (
                     patch(
-                        "gui.queue_completion.PowerActionCountdownDialog",
+                        "gui.queue.completion.PowerActionCountdownDialog",
                         return_value=dialog,
                     ),
-                    patch("gui.queue_completion.execute_power_action", return_value=failure),
-                    patch("gui.queue_completion.QMessageBox.critical") as critical,
+                    patch("gui.queue.completion.execute_power_action", return_value=failure),
+                    patch("gui.queue.completion.QMessageBox.critical") as critical,
                     patch.object(window.queue_completion_handler, "_append_log") as append_log,
                 ):
                     window.queue_completion_handler.handle([record], window.translator, window.app_config)

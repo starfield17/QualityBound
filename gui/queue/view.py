@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from gui.queue_model import FLEX_COLUMN_SPECS, FIXED_COLUMN_WIDTHS, QueueColumn, QueueTableModel
+from gui.queue.model import FLEX_COLUMN_SPECS, FIXED_COLUMN_WIDTHS, QueueColumn, QueueTableModel
 from gui.qt_optionals import maybe_none
 
 

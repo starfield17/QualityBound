@@ -103,11 +103,11 @@ validate on a disjoint holdout.
 
 - F1 Search windows and validation windows are disjoint. ← S1 — check:
   `python -m unittest discover -s test -p "test_smart_v2.py" -k nonoverlapping_holdout`
-  and `python -m unittest discover -s test -p "test_smart_quality.py" -k non_overlapping_windows`.
+  and `python -m unittest discover -s test -p "test_smart_budget.py" -k non_overlapping_windows`.
 - F2 Measurement identity binds source, FFmpeg, bound encoder, measurement
   settings and sample scheme. ← S1, S3 — check:
   `python -m unittest discover -s test -p "test_smart_v2.py" -k measurement_identity_excludes_policy`
-  and `python -m unittest discover -s test -p "test_smart_quality.py" -k analysis_from_a_different_encoder_is_never_published`.
+  and `python -m unittest discover -s test -p "test_smart_execution.py" -k analysis_from_a_different_encoder_is_never_published`.
 - F3 Measurements are cached by window coordinate and measurement settings, never
   by a window's position in a list. ← S1 — check:
   `python -m unittest discover -s test -p "test_smart_measurement_cache.py" -k partial_rejection_is_cached`.

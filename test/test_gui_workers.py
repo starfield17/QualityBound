@@ -8,7 +8,7 @@ from PySide6.QtCore import QCoreApplication
 
 from core.models import VmafBackend, VmafRuntimeSupport
 from core.smart.v1.vmaf import VMAF_PRODUCTION_MODELS
-from gui.gui_workers import EncoderCapabilityDetectWorker
+from gui.options.capability_worker import EncoderCapabilityDetectWorker
 
 
 class EncoderCapabilityDetectWorkerTestCase(unittest.TestCase):
@@ -36,9 +36,9 @@ class EncoderCapabilityDetectWorkerTestCase(unittest.TestCase):
         worker.completed.connect(completed.append)
         worker.failed.connect(failed.append)
         with (
-            patch("gui.gui_workers.find_binary", return_value=Path("ffmpeg")),
-            patch("gui.gui_workers.ensure_encoder_capabilities", return_value={}),
-            patch("gui.gui_workers.probe_vmaf_runtime", side_effect=probe) as run_probe,
+            patch("gui.options.capability_worker.find_binary", return_value=Path("ffmpeg")),
+            patch("gui.options.capability_worker.ensure_encoder_capabilities", return_value={}),
+            patch("gui.options.capability_worker.probe_vmaf_runtime", side_effect=probe) as run_probe,
         ):
             worker.run()
 

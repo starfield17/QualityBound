@@ -25,8 +25,8 @@ from core.models import (
     SegmentedAnalysisResult,
     SmartAlgorithm,
 )
-from gui.queue_model import QueueTableModel
-from gui.queue_state import (
+from gui.queue.model import QueueTableModel
+from gui.queue.state import (
     QueueItemRecord,
     QueueItemStatus,
     QueueJobSnapshot,
