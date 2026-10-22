@@ -70,6 +70,46 @@ the process. These are playback-correctness checks, not Smart quality evidence.
 Cross-platform packaging/runtime checks remain owned by the existing CI and
 Verify profiles.
 
+## GUI presentation
+
+The GUI follows the system light/dark colour scheme. `gui/theme.py` owns semantic
+colour tokens (window, surface, border, text, accent, danger, success, warning)
+and generates one application-wide stylesheet plus a matching `QPalette`; it
+refreshes when Qt reports a colour-scheme change. Status colours are read from the
+same tokens, so a theme change repaints the queue model and toolbar icons instead
+of leaving hard-coded colours behind. `gui_entry` and `MainWindow` call
+`apply_theme()`; no window keeps a private light-only stylesheet.
+
+The queue is the primary workspace. `MainWindow` builds a collapsible source and
+encoding card, a compact stat row, a stacked empty/table area and a
+selection-driven details panel. The setup card collapses to a one-line summary
+that names the current codec, compression mode, quality floor, size ceiling and
+container. The empty state offers Add Files/Add Folder and explains the three
+steps. The status bar always keeps Stage, File, Speed, Elapsed and Current progress
+visible; activity messages go to the timestamped, searchable,
+level-filtered `ActivityLogWindow` and never call `QStatusBar.showMessage()`.
+
+Analysis values are labelled as estimates in the queue (`VMAF / size (est.)`,
+`~` prefixes), while actual output size and measured saved space come from the
+completed files. Constraint decisions open a structured dialog that shows the
+quality or size metrics, the preserved path and consequence-labelled actions; a
+size miss can open the preserved file in the comparison window. A banner carries
+the pending-decision count and the completion summary. The comparison window has
+a compact file bar, timestamp-aligned pane labels, a collapsible shortcut help,
+drag-and-drop loading and a clamped size.
+
+Accessibility is part of the presentation contract: form labels set buddies and
+accessible names, inputs/buttons/checkboxes have visible focus states, the menu
+bar exposes keyboard shortcuts, and the tray menu can show, pause, stop or quit.
+Window geometry is persisted for the main, queue and activity-log windows, with
+clamped initial sizes for Settings and Comparison.
+
+`test/test_gui_presentation.py` protects the theme tokens, live status bar,
+empty state, details panel, estimate markers, localized log levels, preset
+selection/confirmation, settings validation/re-detection and comparison
+placeholders. Existing queue and architecture tests continue to own queue
+semantics and the `EncodeOptionsPanel` public contract.
+
 ## Translations
 
 Built-in language packs live in `config/i18n/`. English is the complete
@@ -195,8 +235,8 @@ for `test/` and `scripts/` — is recorded with its reason in the same section.
 `pyproject.toml` turns off six strict rules: `reportMissingTypeArgument`,
 `reportUnknownArgumentType`, `reportUnknownLambdaType`, `reportUnknownMemberType`,
 `reportUnknownParameterType`, `reportUnknownVariableType`. Measured over the current
-scope (`core`, `cli`, `gui`, `main.py`) they hold back 610 diagnostics: 483 in
-`core`, 116 in `gui`, 11 in `cli`. The dominant pattern is capability snapshots,
+scope (`core`, `cli`, `gui`, `main.py`) they hold back 588 diagnostics: 483 in
+`core`, 94 in `gui`, 11 in `cli`. The dominant pattern is capability snapshots,
 preset documents and analysis receipts travelling as `dict[str, object]` or
 JSON-decoded mappings, so the checker cannot name the types that flow through them.
 

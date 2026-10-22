@@ -26,9 +26,13 @@ and Smart/Fixed control syncing.
   `apply_analysis_profile_settings()`, `current_analysis_profile_name()`,
   `sync_dependent_controls()`,
   `set_runtime_capabilities()`, `notify_capability_detection_failed()`,
-  `begin_capability_detection()`, `set_translator()`, `set_busy()`.
+  `begin_capability_detection()`, `set_translator()`, `set_busy()`,
+  `set_visible()`, `summary_text()`.
 - Semantic signals: `codec_changed`, `compression_mode_changed`,
-  `analysis_profile_changed`, `options_changed`.
+  `analysis_profile_changed`, `options_changed`, `smart_unavailable`.
+- Display labels for codec, container, backend, audio mode and log level live in
+  `EncodeOptionsPanel`/`SettingsDialog`; the combo item data keeps the raw enum
+  value. Do not read enum choices from `currentText()`.
 - `MainWindow` must not reach into the panel's raw widgets; tests that need widget
   state access them via `window.options_panel.<widget>`.
 - The panel renders the capability snapshot produced by `EncoderCapabilityDetectWorker`.
@@ -82,6 +86,32 @@ and Smart/Fixed control syncing.
   never import MainWindow or the queue. A generation token rejects stale decode
   results after seeks, file replacement, playback or closing.
 
+## Presentation layer
+
+- `gui.theme` owns the palette-aware light/dark tokens and the application-wide
+  stylesheet. `apply_theme()` must be called through `MainWindow` or the GUI
+  entrypoint; do not reintroduce a light-only per-widget stylesheet. Status
+  colours come from `gui.theme.status_color()`.
+- `gui.icons` renders the internal line-icon set for toolbar actions. Icons are
+  regenerated when the application theme changes.
+- `gui.notification_banner` and `gui.item_details_panel` are presentation-only:
+  they may read queue records and emit actions, but they never mutate a record or
+  start work themselves.
+- The queue is the primary workspace. The setup card collapses to a compact
+  summary; the empty state, queue table and selected-item details share the
+  remaining height. Preserve the `queue_stack`/`details_panel` composition points
+  when changing the layout.
+- The status bar always keeps Stage, File, Speed, Elapsed and Current progress
+  visible. Log messages go to `ActivityLogWindow`; they must not call
+  `QStatusBar.showMessage()` or replace the live state. Stage/state progress
+  labels are translated through `progress_stage_key()`/`progress_state_key()`.
+- Predicted analysis values are marked as estimates (`~`, `(est.)`); measured
+  output size and saved space are shown separately. Do not label a search
+  prediction as measured.
+- `MainWindow` owns the menu bar, shortcuts, tray menu and window-geometry
+  persistence. New user-visible text goes through `config/i18n/`; label buddies
+  and accessible names are set in the translation pass.
+
 ## MainWindow scope
 
 `MainWindow` remains the GUI composition root and owns source selection, queue
@@ -117,5 +147,6 @@ ruff check .
 pyright
 python -m unittest discover -s test -p "test_architecture.py" -v
 python -m unittest discover -s test -p "test_queue_completion.py" -v
+python -m unittest discover -s test -p "test_gui_presentation.py" -v
 python -m unittest discover -s test -p "test_*.py" -v
 ```

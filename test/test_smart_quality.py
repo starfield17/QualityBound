@@ -1054,7 +1054,7 @@ class SmartGuiTestCase(unittest.TestCase):
             panel = window.options_panel
             smart_index = panel.compression_mode_combo.findData(CompressionMode.SMART.value)
             panel.compression_mode_combo.setCurrentIndex(smart_index)
-            self.assertFalse(panel.ratio_edit.isEnabled())
+            self.assertTrue(panel.ratio_edit.isHidden())
             self.assertTrue(panel.min_vmaf_spin.isEnabled())
             self.assertEqual(panel.min_vmaf_spin.value(), 90.0)
             self.assertFalse(panel.viewing_context_combo.isHidden())

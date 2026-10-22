@@ -87,10 +87,13 @@ python main.py
 ```
 
 In the GUI, add or drop files first, adjust encoding settings and the output
-directory, then click **Start Queue**. Settings are bound at Start. Right-click
-overrides apply only to the selected sources; parameter and output-directory
-overrides are independent and can each be reset to follow the global settings.
-Resume keeps the current run's settings; a manual retry selects settings again.
+directory, then click **Start Queue**. The queue is the primary workspace: the
+source and encoding card collapses to a compact constraint summary, and selecting
+a row shows its planned and measured details. The window follows the system
+light/dark appearance. Settings are bound at Start. Right-click overrides apply
+only to the selected sources; parameter and output-directory overrides are
+independent and can each be reset to follow the global settings. Resume keeps the
+current run's settings; a manual retry selects settings again.
 
 Plan or encode from the CLI:
 

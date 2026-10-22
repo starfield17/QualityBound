@@ -70,8 +70,18 @@ class PresetManagerDialog(QDialog):
         self.delete_button.clicked.connect(self._request_delete)
         self.default_button.clicked.connect(self._request_set_default)
         self.close_button.clicked.connect(self.reject)
-        self.list_widget.currentItemChanged.connect(lambda *_args: self._update_button_state())
-        self.list_widget.itemDoubleClicked.connect(lambda _item: self._request_load())
+        self.list_widget.currentItemChanged.connect(self._on_current_item_changed)
+        self.list_widget.itemDoubleClicked.connect(self._on_item_double_clicked)
+
+    def _on_current_item_changed(
+        self,
+        _current: QListWidgetItem | None,
+        _previous: QListWidgetItem | None,
+    ) -> None:
+        self._update_button_state()
+
+    def _on_item_double_clicked(self, _item: QListWidgetItem) -> None:
+        self._request_load()
 
     def apply_translations(self, tr: Translator) -> None:
         self.translator = tr

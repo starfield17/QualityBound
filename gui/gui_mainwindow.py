@@ -488,8 +488,9 @@ class MainWindow(QMainWindow):
 
     def _active_queue_view(self) -> ResponsiveQueueTableView:
         focus = QApplication.focusWidget()
-        if focus is not None and self.queue_window.table_view.isAncestorOf(focus):
-            return self.queue_window.table_view
+        queue_view = self.queue_window.table_view
+        if focus is not None and (focus is queue_view or queue_view.isAncestorOf(focus)):
+            return queue_view
         return self.table_view
 
     def _build_central_content(self) -> QVBoxLayout:
@@ -639,8 +640,8 @@ class MainWindow(QMainWindow):
         self.empty_add_files_button = QPushButton()
         self.empty_add_files_button.setProperty("role", "primary")
         self.empty_add_folder_button = QPushButton()
-        self.empty_add_files_button.clicked.connect(lambda: self.add_files_action.trigger())
-        self.empty_add_folder_button.clicked.connect(lambda: self.add_folder_action.trigger())
+        self.empty_add_files_button.clicked.connect(self._trigger_add_files)
+        self.empty_add_folder_button.clicked.connect(self._trigger_add_folder)
         buttons.addWidget(self.empty_add_files_button)
         buttons.addWidget(self.empty_add_folder_button)
         buttons.addStretch(1)
@@ -734,7 +735,7 @@ class MainWindow(QMainWindow):
         jobs_layout.addWidget(self.details_panel)
         self.details_panel.openSource.connect(self._open_selected_source_folder)
         self.details_panel.openOutput.connect(self._open_selected_output_folder)
-        self.details_panel.compare.connect(lambda: self._show_comparison(self._selected_record()))
+        self.details_panel.compare.connect(self._compare_selected_record)
         self.details_panel.resolve.connect(self._resolve_selected_decision)
         self.details_panel.closeRequested.connect(self._clear_details_panel)
         return jobs_box
@@ -806,7 +807,7 @@ class MainWindow(QMainWindow):
         self.stop_action.triggered.connect(self._stop_active_task)
         self.queue_action.triggered.connect(self._show_queue_window)
         self.activity_log_action.triggered.connect(self._show_activity_log)
-        self.compare_action.triggered.connect(lambda: self._show_comparison())
+        self.compare_action.triggered.connect(self._show_manual_comparison)
         self.presets_action.triggered.connect(self._open_preset_manager)
         self.settings_action.triggered.connect(self._open_settings_dialog)
 
@@ -815,8 +816,8 @@ class MainWindow(QMainWindow):
         self.output_button.clicked.connect(self._browse_output)
         self.manage_presets_button.clicked.connect(self._open_preset_manager)
         self.post_encode_combo.currentIndexChanged.connect(self._post_encode_combo_changed)
-        self.options_panel.analysis_profile_changed.connect(lambda _name: self._persist_runtime_state())
-        self.source_combo.activated.connect(lambda *_args: self._persist_runtime_state())
+        self.options_panel.analysis_profile_changed.connect(self._on_analysis_profile_changed)
+        self.source_combo.activated.connect(self._on_source_activated)
         self.output_edit.editingFinished.connect(self._persist_runtime_state)
         self.source_combo.currentTextChanged.connect(self._refresh_path_validation)
         self.output_edit.textChanged.connect(self._refresh_path_validation)
@@ -828,17 +829,15 @@ class MainWindow(QMainWindow):
         self.table_view.filesDropped.connect(self._handle_dropped_paths)
         self.queue_window.table_view.filesDropped.connect(self._handle_dropped_paths)
         for view in [self.table_view, self.queue_window.table_view]:
-            view.doubleClicked.connect(
-                lambda index, source_view=view: self._on_queue_row_activated(source_view, index)
-            )
             view.removeRequested.connect(self._remove_selected_queue_rows)
-            view.activateRequested.connect(
-                lambda index, source_view=view: self._on_queue_row_activated(source_view, index)
-            )
             view.dragActivityChanged.connect(self._set_drop_overlay_visible)
+        self.table_view.doubleClicked.connect(self._on_main_row_activated)
+        self.table_view.activateRequested.connect(self._on_main_row_activated)
+        self.queue_window.table_view.doubleClicked.connect(self._on_queue_window_row_activated)
+        self.queue_window.table_view.activateRequested.connect(self._on_queue_window_row_activated)
         selection_model = maybe_none(self.table_view.selectionModel())
         if selection_model is not None:
-            selection_model.selectionChanged.connect(lambda *_args: self._update_details_panel())
+            selection_model.selectionChanged.connect(self._on_queue_selection_changed)
 
         self.queue_model.metricsChanged.connect(self._update_queue_metrics)
         self.queue_manager.log.connect(self._append_log)
@@ -850,22 +849,76 @@ class MainWindow(QMainWindow):
         self.queue_manager.workerFinished.connect(self._maybe_close_after_running_task)
         self.queue_manager.error.connect(self._on_queue_error)
 
-        self.table_view.customContextMenuRequested.connect(lambda pos: self._show_queue_context_menu(self.table_view, pos))
+        self.table_view.customContextMenuRequested.connect(self._show_main_queue_context_menu)
         self.queue_window.table_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.queue_window.table_view.customContextMenuRequested.connect(
-            lambda pos: self._show_queue_context_menu(self.queue_window.table_view, pos)
+            self._show_queue_window_context_menu
         )
         self.table_view.horizontalHeader().customContextMenuRequested.connect(
-            lambda pos: self._show_header_context_menu(self.table_view, pos)
+            self._show_main_header_context_menu
         )
         self.queue_window.table_view.horizontalHeader().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.queue_window.table_view.horizontalHeader().customContextMenuRequested.connect(
-            lambda pos: self._show_header_context_menu(self.queue_window.table_view, pos)
+            self._show_queue_window_header_context_menu
+        )
+        self.table_view.horizontalHeader().sectionMoved.connect(self._on_main_header_moved)
+        self.queue_window.table_view.horizontalHeader().sectionMoved.connect(
+            self._on_queue_window_header_moved
         )
 
-        for view in [self.table_view, self.queue_window.table_view]:
-            header = view.horizontalHeader()
-            header.sectionMoved.connect(lambda *_args, source_view=view: self._persist_header_state(source_view))
+    def _trigger_add_files(self, _checked: bool = False) -> None:
+        self.add_files_action.trigger()
+
+    def _trigger_add_folder(self, _checked: bool = False) -> None:
+        self.add_folder_action.trigger()
+
+    def _compare_selected_record(self) -> None:
+        self._show_comparison(self._selected_record())
+
+    def _show_manual_comparison(self) -> None:
+        self._show_comparison()
+
+    def _on_analysis_profile_changed(self, _name: object) -> None:
+        self._persist_runtime_state()
+
+    def _on_source_activated(self, _index: int) -> None:
+        self._persist_runtime_state()
+
+    def _on_main_row_activated(self, index: QModelIndex) -> None:
+        self._on_queue_row_activated(self.table_view, index)
+
+    def _on_queue_window_row_activated(self, index: QModelIndex) -> None:
+        self._on_queue_row_activated(self.queue_window.table_view, index)
+
+    def _on_queue_selection_changed(self, *_args: object) -> None:
+        self._update_details_panel()
+
+    def _show_main_queue_context_menu(self, pos: QPoint) -> None:
+        self._show_queue_context_menu(self.table_view, pos)
+
+    def _show_queue_window_context_menu(self, pos: QPoint) -> None:
+        self._show_queue_context_menu(self.queue_window.table_view, pos)
+
+    def _show_main_header_context_menu(self, pos: QPoint) -> None:
+        self._show_header_context_menu(self.table_view, pos)
+
+    def _show_queue_window_header_context_menu(self, pos: QPoint) -> None:
+        self._show_header_context_menu(self.queue_window.table_view, pos)
+
+    def _on_main_header_moved(self, *_args: object) -> None:
+        self._persist_header_state(self.table_view)
+
+    def _on_queue_window_header_moved(self, *_args: object) -> None:
+        self._persist_header_state(self.queue_window.table_view)
+
+    def _on_worker_finished_busy(self) -> None:
+        self._set_worker_busy(False)
+
+    @staticmethod
+    def _open_folder_action(path: Path) -> Callable[[], None]:
+        def open_folder() -> None:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+        return open_folder
 
     def _load_initial_state(self) -> None:
         self._set_source_history(list(self.app_config.get("recent_paths", [])))
@@ -1691,7 +1744,7 @@ class MainWindow(QMainWindow):
         worker.progress.connect(self._update_progress)
         if finished_slot is not None:
             worker.finished.connect(finished_slot)
-        worker.finished.connect(lambda: self._set_worker_busy(False))
+        worker.finished.connect(self._on_worker_finished_busy)
         worker.failed.connect(self._on_worker_failed)
         worker.cancelled.connect(self._on_worker_cancelled)
         worker.completed.connect(completed_slot)
@@ -2476,7 +2529,7 @@ class MainWindow(QMainWindow):
             actions.append(
                 (
                     self.translator.t("gui.completion.open_output"),
-                    lambda path=output_parent: self._open_folder(path),
+                    self._open_folder_action(output_parent),
                 )
             )
         actions.append(

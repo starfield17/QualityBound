@@ -151,7 +151,8 @@ _STYLESHEET = Template(
         background: $window;
     }
     QLabel#comparePlaceholder {
-        color: $muted;
+        background: #000000;
+        color: #CBD5E1;
         font-size: 14px;
     }
     QScrollArea {

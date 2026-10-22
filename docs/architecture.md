@@ -26,6 +26,16 @@ main.py
 The recursive architecture test enforces the root allowlist, capability-package
 DAG, public adapters, and layer boundaries.
 
+## GUI presentation
+
+`gui/theme.py` owns palette-aware semantic colour tokens and the single
+application-wide stylesheet; `gui/icons.py` renders the toolbar line-icon set.
+`gui/notification_banner.py` and `gui/item_details_panel.py` are view-only
+widgets that display queue state and emit user actions. `MainWindow` remains the
+composition root: it owns the menu, shortcuts, tray menu, window geometry and the
+collapsible queue-first layout. Presentation widgets never mutate queue records
+or start encoding work.
+
 ## Encoding ownership
 
 The planner binds each item to one concrete encoder before Smart analysis.

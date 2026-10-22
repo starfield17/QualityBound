@@ -115,7 +115,7 @@ class ActivityLogWindow(QMainWindow):
         self.search_timer.timeout.connect(self._refresh_log_view)
 
         self.filter_combo.currentIndexChanged.connect(self._refresh_log_view)
-        self.search_edit.textChanged.connect(lambda _text: self.search_timer.start())
+        self.search_edit.textChanged.connect(self._on_search_changed)
         self.clear_button.clicked.connect(self.clear_messages)
         self.export_button.clicked.connect(self._export_logs)
 
@@ -133,6 +133,9 @@ class ActivityLogWindow(QMainWindow):
         self.clear_button.setText(self.translator.t("gui.button.clear_log"))
         self.log_output.setPlaceholderText(self.translator.t("gui.log.empty"))
         self._refresh_log_view()
+
+    def _on_search_changed(self, _text: str) -> None:
+        self.search_timer.start()
 
     def _classify_message(self, message: str) -> str:
         if message.startswith("$ "):
@@ -161,6 +164,8 @@ class ActivityLogWindow(QMainWindow):
             message=message,
         )
         self.entries.append(entry)
+        if len(self.entries) > 50_000:
+            del self.entries[:1_000]
         self._pending_entries.append(entry)
         if not self.flush_timer.isActive():
             self.flush_timer.start()

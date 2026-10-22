@@ -16,9 +16,10 @@ from core.models import (
     OperationCancelledError,
     VideoFileItem,
     VmafBackend,
+    VmafRuntimeSupport,
 )
 from core.smart import VMAF_PRODUCTION_MODELS, probe_vmaf_runtime
-from gui.queue_state import QueueSourceDraft, create_draft_record
+from gui.queue_state import QueueItemRecord, QueueSourceDraft, create_draft_record
 
 
 def _safe_console_print(message: str) -> None:
@@ -70,7 +71,7 @@ class EncoderCapabilityDetectWorker(QThread):
             )
             if self._cancelled():
                 return
-            vmaf_models = []
+            vmaf_models: list[VmafRuntimeSupport] = []
             for model in VMAF_PRODUCTION_MODELS:
                 if self._cancelled():
                     return
@@ -127,7 +128,7 @@ class QueueIntakeWorker(QThread):
             else:
                 probe = find_binary(self.ffprobe_path, "ffprobe")
             input_root = self.input_path if self.input_path is not None and self.input_path.is_dir() else None
-            records = []
+            records: list[QueueItemRecord] = []
             for item in files:
                 if self._cancel_event.is_set():
                     raise OperationCancelledError("Source intake cancelled.")

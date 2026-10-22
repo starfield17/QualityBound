@@ -164,7 +164,10 @@ class SmokeTestCase(unittest.TestCase):
     def test_main_window_applies_desktop_polish_contract(self) -> None:
         window = MainWindow(self.repo_root, language="en")
         try:
-            self.assertIn("QualityBound theme", QApplication.instance().styleSheet())
+            app = QApplication.instance()
+            self.assertIsInstance(app, QApplication)
+            assert isinstance(app, QApplication)
+            self.assertIn("QualityBound theme", app.styleSheet())
             self.assertEqual(window.toolbar.toolButtonStyle(), Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
             for action in [
                 window.add_files_action,
