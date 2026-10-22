@@ -14,7 +14,6 @@ from PySide6.QtCore import (
     Qt,
     Signal,
 )
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication, QStyle
 
 from core.i18n import Translator
@@ -55,6 +54,7 @@ from gui.queue_state import (
     status_key,
 )
 from gui.qt_optionals import maybe_none
+from gui.theme import status_color
 
 
 def format_duration(seconds: float | None) -> str:
@@ -266,18 +266,7 @@ class QueueTableModel(QAbstractTableModel):
             }:
                 return int(Qt.AlignmentFlag.AlignCenter)
         elif role == Qt.ItemDataRole.ForegroundRole and column in {QueueColumn.STATUS, QueueColumn.PROGRESS}:
-            palette = {
-                QueueItemStatus.WAITING_ANALYSIS: QColor("#666666"),
-                QueueItemStatus.ANALYZING: QColor("#674EA7"),
-                QueueItemStatus.ENCODING: QColor("#0B5394"),
-                QueueItemStatus.VALIDATING: QColor("#134F5C"),
-                QueueItemStatus.DONE: QColor("#38761D"),
-                QueueItemStatus.FAILED: QColor("#A61C00"),
-                QueueItemStatus.NEEDS_DECISION: QColor("#B45F06"),
-                QueueItemStatus.CANCELLED: QColor("#7F6000"),
-                QueueItemStatus.SKIPPED: QColor("#666666"),
-            }
-            return palette.get(record.status)
+            return status_color(record.status.value)
         elif role == Qt.ItemDataRole.DecorationRole and column == QueueColumn.STATUS:
             style = maybe_none(QApplication.style())
             if style is None:
@@ -767,6 +756,14 @@ class QueueTableModel(QAbstractTableModel):
             for row in clean_rows:
                 self.dataChanged.emit(self.index(row, 0), self.index(row, self.columnCount() - 1))
         self._emit_metrics_changed()
+
+    def refresh_theme(self) -> None:
+        """Repaint role-provided colours after the application theme changes."""
+        if self._records:
+            self.dataChanged.emit(
+                self.index(0, 0),
+                self.index(len(self._records) - 1, self.columnCount() - 1),
+            )
 
     def _emit_metrics_changed(self) -> None:
         self._metrics = compute_metrics(self._records)
