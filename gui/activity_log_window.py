@@ -5,14 +5,16 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QRegularExpression, QTimer
-from PySide6.QtGui import QColor, QSyntaxHighlighter, QTextCharFormat
+from PySide6.QtCore import QEvent, QRegularExpression, QTimer
+from PySide6.QtGui import QColor, QResizeEvent, QSyntaxHighlighter, QTextCharFormat
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFileDialog,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QLineEdit,
     QMainWindow,
     QMessageBox,
@@ -74,19 +76,27 @@ class ActivityLogWindow(QMainWindow):
         self._pending_entries: list[LogEntry] = []
         self._flush_interval_ms = 75
         self._log_level = "debug"
+        self._controls_stacked: bool | None = None
 
         self._build_ui()
         self.apply_translations(tr)
 
     def _build_ui(self) -> None:
         self.resize(clamped_window_size(980, 640, minimum_width=560, minimum_height=360))
-        central = QWidget(self)
+        central = self.log_content = QWidget(self)
         self.setCentralWidget(central)
-        layout = QVBoxLayout(central)
+        layout = self.root_layout = QVBoxLayout(central)
+        layout.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
+        self.setMinimumSize(clamped_window_size(480, 320))
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
 
-        controls = QHBoxLayout()
+        self.controls_layout = QGridLayout()
+        self.controls_layout.setHorizontalSpacing(6)
+        self.controls_layout.setVerticalSpacing(6)
+        self.filter_controls = QWidget(central)
+        controls = QHBoxLayout(self.filter_controls)
+        controls.setContentsMargins(0, 0, 0, 0)
         self.filter_label = QLabel()
         self.filter_combo = QComboBox()
         self.filter_combo.addItem("", "all")
@@ -105,9 +115,13 @@ class ActivityLogWindow(QMainWindow):
         controls.addWidget(self.filter_label)
         controls.addWidget(self.filter_combo)
         controls.addWidget(self.search_edit, 1)
-        controls.addWidget(self.follow_check)
-        controls.addWidget(self.export_button)
-        controls.addWidget(self.clear_button)
+        self.log_actions = QWidget(central)
+        actions = QHBoxLayout(self.log_actions)
+        actions.setContentsMargins(0, 0, 0, 0)
+        actions.addWidget(self.follow_check)
+        actions.addStretch(1)
+        actions.addWidget(self.export_button)
+        actions.addWidget(self.clear_button)
 
         self.log_output = QPlainTextEdit()
         self.log_output.setReadOnly(True)
@@ -115,7 +129,7 @@ class ActivityLogWindow(QMainWindow):
         self.log_output.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self.highlighter = LogHighlighter(self.log_output.document())
 
-        layout.addLayout(controls)
+        layout.addLayout(self.controls_layout)
         layout.addWidget(self.log_output, 1)
 
         self.flush_timer = QTimer(self)
@@ -133,6 +147,30 @@ class ActivityLogWindow(QMainWindow):
         self.follow_check.toggled.connect(self._follow_changed)
         self.export_button.clicked.connect(self._export_logs)
 
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._reflow_controls()
+
+    def changeEvent(self, event: QEvent) -> None:
+        super().changeEvent(event)
+        if event.type() in {QEvent.Type.FontChange, QEvent.Type.StyleChange}:
+            self._reflow_controls()
+
+    def _reflow_controls(self) -> None:
+        if not hasattr(self, 'log_actions'):
+            return
+        margins = self.root_layout.contentsMargins()
+        available = self.log_content.width() - margins.left() - margins.right()
+        stacked = self.filter_controls.sizeHint().width() + self.log_actions.sizeHint().width() + 6 > available
+        if self._controls_stacked == stacked:
+            return
+        self._controls_stacked = stacked
+        for widget in (self.filter_controls, self.log_actions):
+            self.controls_layout.removeWidget(widget)
+        self.controls_layout.addWidget(self.filter_controls, 0, 0)
+        self.controls_layout.addWidget(self.log_actions, int(stacked), 0 if stacked else 1)
+        self.controls_layout.setColumnStretch(0, 1)
+
     def apply_translations(self, tr: Translator) -> None:
         self.translator = tr
         self.setWindowTitle(self.translator.t(Text(en='Activity Log', zh_cn='活动日志', ja='アクティビティログ')))
@@ -146,6 +184,7 @@ class ActivityLogWindow(QMainWindow):
         self.export_button.setText(self.translator.t(Text(en='Export filtered log', zh_cn='导出筛选后的日志', ja='フィルター適用ログをエクスポート')))
         self.clear_button.setText(self.translator.t(Text(en='Clear Log', zh_cn='清空日志', ja='ログを消去')))
         self.log_output.setPlaceholderText(self.translator.t(Text(en='No activity yet.', zh_cn='暂无活动。', ja='アクティビティはまだありません。')))
+        self._reflow_controls()
         self._refresh_log_view()
 
     def refresh_icons(self) -> None:

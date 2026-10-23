@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QRectF, Qt, QThread, QTimer, Signal
+from PySide6.QtCore import QEvent, QRectF, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import (
     QCloseEvent,
     QDragEnterEvent,
@@ -14,6 +14,7 @@ from PySide6.QtGui import (
     QMouseEvent,
     QPainter,
     QPaintEvent,
+    QResizeEvent,
     QShortcut,
 )
 from PySide6.QtWidgets import (
@@ -23,10 +24,15 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
     QFileDialog,
+    QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QPushButton,
     QSlider,
+    QScrollArea,
+    QSizePolicy,
     QStackedLayout,
     QStyle,
     QToolButton,
@@ -243,6 +249,7 @@ class ComparisonWindow(QWidget):
         self._generation = 0
         self._jobs: list[ComparisonWorker] = []
         self._intent = PlaybackIntent.PAUSED
+        self._layout_signature: tuple[int, bool] | None = None
         self._selected_side = 0
         self.setObjectName("comparisonWindow")
         self.setAcceptDrops(True)
@@ -278,7 +285,10 @@ class ComparisonWindow(QWidget):
         self._update_controls()
 
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
+        root = self.root_layout = QVBoxLayout(self)
+        # A row's previous minimum must not prevent the resize that reflows it.
+        root.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
+        self.setMinimumSize(clamped_window_size(720, 480))
         files = QHBoxLayout()
         self.open_buttons = [QPushButton(self), QPushButton(self)]
         for side, button in enumerate(self.open_buttons):
@@ -286,24 +296,28 @@ class ComparisonWindow(QWidget):
             files.addWidget(button)
         files.addStretch(1)
         root.addLayout(files)
-        options = QHBoxLayout()
+        self.options_layout = QGridLayout()
+        self.options_layout.setHorizontalSpacing(6)
+        self.options_layout.setVerticalSpacing(6)
         self.mode = QComboBox(self)
         self.mode.currentIndexChanged.connect(self._update_layout)
         self.precision = QComboBox(self)
         self.precision.currentIndexChanged.connect(self._precision_changed)
         self.audio = QComboBox(self)
         self.audio.currentIndexChanged.connect(self._set_audio)
-        self.switch_button = QPushButton(self)
+        self.switch_controls = QWidget(self)
+        switch_layout = QHBoxLayout(self.switch_controls)
+        switch_layout.setContentsMargins(0, 0, 0, 0)
+        self.switch_button = QPushButton(self.switch_controls)
         self.switch_button.clicked.connect(self.toggle_side)
-        self.help_button = QToolButton(self)
+        self.help_button = QToolButton(self.switch_controls)
         set_button_icon(self.help_button, "help")
         self.help_button.setCheckable(True)
         self.help_button.toggled.connect(self._toggle_help)
-        for widget in (self.mode, self.precision, self.audio, self.switch_button):
-            options.addWidget(widget)
-        options.addWidget(self.help_button)
-        options.addStretch(1)
-        root.addLayout(options)
+        switch_layout.addWidget(self.switch_button)
+        switch_layout.addWidget(self.help_button)
+        self._option_widgets = (self.mode, self.precision, self.audio, self.switch_controls)
+        root.addLayout(self.options_layout)
         self.panes = [VideoPane(self), VideoPane(self)]
         self.picture_layout = QHBoxLayout()
         for pane in self.panes:
@@ -320,39 +334,89 @@ class ComparisonWindow(QWidget):
         self.time_label = QLabel(self)
         timeline_row.addWidget(self.time_label)
         root.addLayout(timeline_row)
-        controls = QHBoxLayout()
-        self.play_button = QPushButton(self)
+        self.controls_layout = QGridLayout()
+        self.controls_layout.setHorizontalSpacing(6)
+        self.controls_layout.setVerticalSpacing(6)
+        self.transport_controls = QWidget(self)
+        transport = QHBoxLayout(self.transport_controls)
+        transport.setContentsMargins(0, 0, 0, 0)
+        self.play_button = QPushButton(self.transport_controls)
         self.play_button.clicked.connect(self.toggle_play)
-        self.previous_button = QPushButton(self)
-        self.next_button = QPushButton(self)
+        self.previous_button = QPushButton(self.transport_controls)
+        self.next_button = QPushButton(self.transport_controls)
         self.previous_button.clicked.connect(lambda: self.step_frame(-1))
         self.next_button.clicked.connect(lambda: self.step_frame(1))
         for button in (self.play_button, self.previous_button, self.next_button):
-            controls.addWidget(button)
-        controls.addStretch()
-        self.offset_label = QLabel(self)
+            transport.addWidget(button)
+        transport.addStretch()
+        self.offset_controls = QWidget(self)
+        controls = QHBoxLayout(self.offset_controls)
+        controls.setContentsMargins(0, 0, 0, 0)
+        self.offset_label = QLabel(self.offset_controls)
         controls.addWidget(self.offset_label)
-        self.offset = QDoubleSpinBox(self)
+        self.offset = QDoubleSpinBox(self.offset_controls)
         self.offset.setRange(-86_400_000, 86_400_000)
         self.offset.setDecimals(3)
         self.offset.setSingleStep(1)
         self.offset.setSuffix(" ms")
         self.offset.valueChanged.connect(self._offset_changed)
         controls.addWidget(self.offset)
-        self.offset_previous = QPushButton(self)
-        self.offset_next = QPushButton(self)
+        self.offset_previous = QPushButton(self.offset_controls)
+        self.offset_next = QPushButton(self.offset_controls)
         self.offset_previous.clicked.connect(lambda: self.step_frame(-1, side=1))
         self.offset_next.clicked.connect(lambda: self.step_frame(1, side=1))
         controls.addWidget(self.offset_previous)
         controls.addWidget(self.offset_next)
-        root.addLayout(controls)
+        root.addLayout(self.controls_layout)
         self.status = QLabel(self)
         self.status.setWordWrap(True)
         root.addWidget(self.status)
-        self.help_label = QLabel(self)
+        self.help_scroll = QScrollArea(self)
+        self.help_scroll.setWidgetResizable(True)
+        self.help_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.help_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.help_scroll.setMaximumHeight(84)
+        self.help_label = QLabel(self.help_scroll)
         self.help_label.setWordWrap(True)
-        self.help_label.setVisible(False)
-        root.addWidget(self.help_label)
+        self.help_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.help_scroll.setWidget(self.help_label)
+        self.help_label.hide()
+        self.help_scroll.hide()
+        root.addWidget(self.help_scroll)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._reflow_controls()
+
+    def changeEvent(self, event: QEvent) -> None:
+        super().changeEvent(event)
+        if event.type() in {QEvent.Type.FontChange, QEvent.Type.StyleChange}:
+            self._reflow_controls()
+
+    def _reflow_controls(self) -> None:
+        if not hasattr(self, 'help_scroll'):
+            return
+        margins = self.root_layout.contentsMargins()
+        available = max(1, self.width() - margins.left() - margins.right())
+        widest = max(widget.sizeHint().width() for widget in self._option_widgets)
+        columns = max(1, min(len(self._option_widgets), (available + 6) // (widest + 6)))
+        stacked = (self.transport_controls.minimumSizeHint().width()
+                   + self.offset_controls.minimumSizeHint().width() + 6 > available)
+        signature = (columns, stacked)
+        if self._layout_signature == signature:
+            return
+        self._layout_signature = signature
+        for column in range(len(self._option_widgets)):
+            self.options_layout.setColumnStretch(column, int(column < columns))
+        for index, widget in enumerate(self._option_widgets):
+            self.options_layout.removeWidget(widget)
+            self.options_layout.addWidget(widget, index // columns, index % columns)
+        for widget in (self.transport_controls, self.offset_controls):
+            self.controls_layout.removeWidget(widget)
+        self.controls_layout.addWidget(self.transport_controls, 0, 0)
+        self.controls_layout.addWidget(self.offset_controls, int(stacked), 0 if stacked else 1)
+        self.controls_layout.setColumnStretch(0, 1)
+        self.controls_layout.setColumnStretch(1, int(not stacked))
 
     def apply_translations(self, translator: Translator) -> None:
         self.translator = translator
@@ -390,9 +454,11 @@ class ComparisonWindow(QWidget):
             pane.placeholder.setText(t(COMPARE_WAITING_OTHER, side="AB"[1 - side]) if self.paths[side] is not None and self.media is None else t(COMPARE_PLACEHOLDER))
         self._update_labels()
         self._update_controls()
+        self._reflow_controls()
 
     def _toggle_help(self, visible: bool) -> None:
         self.help_label.setVisible(visible)
+        self.help_scroll.setVisible(visible)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if event.mimeData().hasUrls():
@@ -582,6 +648,7 @@ class ComparisonWindow(QWidget):
             self.slider.setValue(round(self.position * 1000))
             self.slider.blockSignals(False)
         self._update_layout()
+        self._reflow_controls()
 
     def _update_labels(self) -> None:
         for side, pane in enumerate(self.panes):
