@@ -20,6 +20,7 @@ class NotificationBanner(QFrame):
         self.setProperty("severity", "info")
         self.setVisible(False)
         self._actions: list[QPushButton] = []
+        self._action_specs: list[tuple[str, Callable[[], None]]] = []
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 6, 8, 6)
@@ -49,21 +50,29 @@ class NotificationBanner(QFrame):
         severity: str = "info",
         actions: list[tuple[str, Callable[[], None]]] | None = None,
         dismissible: bool = True,
+        actions_enabled: bool = True,
     ) -> None:
         self.text_label.setText(text)
-        self.setProperty("severity", severity)
-        self.style().unpolish(self)
-        self.style().polish(self)
+        if self.property("severity") != severity:
+            self.setProperty("severity", severity)
+            self.style().unpolish(self)
+            self.style().polish(self)
+        specs = actions or []
+        if specs != self._action_specs:
+            for button in self._actions:
+                self.actions_layout.removeWidget(button)
+                button.hide()
+                button.deleteLater()
+            self._actions = []
+            self._action_specs = list(specs)
+            for label, callback in specs:
+                button = QPushButton(label)
+                button.setAutoDefault(False)
+                button.clicked.connect(callback)
+                self.actions_layout.addWidget(button)
+                self._actions.append(button)
         for button in self._actions:
-            self.actions_layout.removeWidget(button)
-            button.deleteLater()
-        self._actions = []
-        for label, callback in actions or []:
-            button = QPushButton(label)
-            button.setAutoDefault(False)
-            button.clicked.connect(callback)
-            self.actions_layout.addWidget(button)
-            self._actions.append(button)
+            button.setEnabled(actions_enabled)
         self.dismiss_button.setVisible(dismissible)
         self.setVisible(True)
 

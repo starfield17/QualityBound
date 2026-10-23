@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from enum import Enum
+import math
 from typing import Final
 
 from PySide6.QtCore import Signal
-from PySide6.QtGui import QStandardItemModel
+from PySide6.QtGui import QResizeEvent, QStandardItemModel
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -101,6 +102,7 @@ class EncodeOptionsPanel(QWidget):
         layout.addWidget(self.options_tabs)
 
         self._connect_signals()
+        self.ratio_edit.textChanged.connect(self._validate_ratio)
 
     def _connect_signals(self) -> None:
         self.smart_algorithm_combo.currentIndexChanged.connect(self._on_smart_algorithm_changed)
@@ -420,8 +422,31 @@ class EncodeOptionsPanel(QWidget):
 
     # ------------------------------------------------------- encode options io
 
+    def recursive_scan_enabled(self) -> bool:
+        return self.recursive_check.isChecked()
+
+    def _validate_ratio(self) -> bool:
+        text = self.ratio_edit.text().strip()
+        smart = self.compression_mode_combo.currentData() == CompressionMode.SMART.value
+        try:
+            valid = smart or not text or (math.isfinite(float(text)) and float(text) > 0)
+        except ValueError:
+            valid = False
+        if self.ratio_edit.property("invalid") != (not valid):
+            self.ratio_edit.setProperty("invalid", not valid)
+            self.ratio_edit.style().unpolish(self.ratio_edit)
+            self.ratio_edit.style().polish(self.ratio_edit)
+        self.ratio_edit.setToolTip(
+            self.translator.t("gui.tooltip.ratio") if valid else self.translator.t("gui.message.invalid_ratio")
+        )
+        return valid
+
     def read_options(self) -> EncodeOptions:
         ratio_text = self.ratio_edit.text().strip()
+        if not self._validate_ratio():
+            self.ratio_edit.setFocus()
+            raise ValueError(self.translator.t("gui.message.invalid_ratio"))
+        fixed = self.compression_mode_combo.currentData() == CompressionMode.FIXED_BITRATE.value
         preset_value = self.encoder_preset_combo.currentData()
         encoder_preset = str(preset_value) if isinstance(preset_value, str) and preset_value else None
         pix_fmt = self.pix_fmt_edit.text().strip() or "yuv420p"
@@ -439,7 +464,7 @@ class EncodeOptionsPanel(QWidget):
                 or self.compression_mode_combo.currentText()
             ),
             backend=BackendChoice(str(self.backend_combo.currentData())),
-            ratio=float(ratio_text) if ratio_text else None,
+            ratio=float(ratio_text) if fixed and ratio_text else None,
             min_vmaf=float(self.min_vmaf_spin.value()),
             viewing_context=VmafViewingContext(self.viewing_context_combo.currentData()),
             max_output_ratio=float(self.max_output_ratio_spin.value()) / 100.0,
@@ -460,7 +485,7 @@ class EncodeOptionsPanel(QWidget):
             maxrate_factor=float(self.maxrate_factor_spin.value()),
             bufsize_factor=float(self.bufsize_factor_spin.value()),
             overwrite=self.overwrite_check.isChecked(),
-            recursive=self.recursive_check.isChecked(),
+            recursive=self.recursive_scan_enabled(),
             size_blocked_policy=size_policy,
             quality_unreachable_policy=unreachable_policy,
             skipped_output_policy=skipped_policy,
@@ -838,6 +863,7 @@ class EncodeOptionsPanel(QWidget):
         self.sync_dependent_controls()
 
     def sync_dependent_controls(self) -> None:
+        self._validate_ratio()
         mode_value = self.compression_mode_combo.currentData() or self.compression_mode_combo.currentText()
         smart_mode = mode_value == CompressionMode.SMART.value
         self.smart_algorithm_label.setVisible(smart_mode)
@@ -864,6 +890,47 @@ class EncodeOptionsPanel(QWidget):
         self.analysis_profile_combo.setEnabled(smart_mode)
         self.viewing_context_combo.setEnabled(smart_mode)
         self.audio_bitrate_edit.setEnabled(self.audio_mode_combo.currentData() == AudioMode.AAC.value)
+        self._reflow_basic_tab()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._reflow_basic_tab()
+
+    def _reflow_basic_tab(self) -> None:
+        layout = self.basic_tab.layout()
+        if not isinstance(layout, QGridLayout):
+            return
+        smart = self.compression_mode_combo.currentData() == CompressionMode.SMART.value
+        columns = 2 if self.width() < 900 else 3
+        signature = (smart, columns)
+        if getattr(self, "_basic_layout_signature", None) == signature:
+            return
+        self._basic_layout_signature = signature
+        while layout.count():
+            layout.takeAt(0)
+        pairs = [
+            (self.codec_label, self.codec_combo),
+            (self.compression_mode_label, self.compression_mode_combo),
+            (self.backend_label, self.backend_combo),
+            (self.container_label, self.container_combo),
+        ]
+        pairs += [
+            (self.min_vmaf_label, self.min_vmaf_spin),
+            (self.max_output_ratio_label, self.max_output_ratio_spin),
+            (self.analysis_profile_label, self.analysis_profile_combo),
+            (self.viewing_context_label, self.viewing_context_combo),
+            (self.smart_algorithm_label, self.smart_algorithm_combo),
+        ] if smart else [(self.ratio_label, self.ratio_edit)]
+        for index, (label, control) in enumerate(pairs):
+            row, column = divmod(index, columns)
+            label.setWordWrap(True)
+            layout.addWidget(label, row, column * 2)
+            layout.addWidget(control, row, column * 2 + 1)
+        row = (len(pairs) + columns - 1) // columns
+        layout.addWidget(self.overwrite_check, row, 0, 1, 2)
+        layout.addWidget(self.recursive_check, row, 2, 1, 2)
+        for column in range(7):
+            layout.setColumnStretch(column, 1 if column < columns * 2 and column % 2 else 0)
 
     def _refresh_smart_mode_availability(self, *, force_unavailable: bool = False) -> None:
         capabilities = self._runtime_capabilities()

@@ -275,7 +275,8 @@ class DeferredQueueTestCase(unittest.TestCase):
                 self.app.processEvents()
             window.queue_manager.abandon_run()
             window._close_after_running_task_stops = False
-            window.close()
+            with patch("gui.gui_mainwindow.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
+                window.close()
 
     def test_mixed_tool_contexts_analyze_all_before_encoding(self) -> None:
         from gui.queue.state import create_queue_records
@@ -349,7 +350,8 @@ class DeferredQueueTestCase(unittest.TestCase):
                 window._start_queue()
             self.assertEqual(window.queue_model.records()[0].bound_plan_item.options.min_vmaf, 91)
         finally:
-            window.close()
+            with patch("gui.gui_mainwindow.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
+                window.close()
 
     def test_prepared_analysis_is_not_run_again_and_rejects_wrong_identity(self) -> None:
         from core.encoding import execute_plan, execute_plan_concurrent

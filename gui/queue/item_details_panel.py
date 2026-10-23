@@ -30,6 +30,7 @@ class ItemDetailsPanel(QFrame):
         super().__init__(parent)
         self.translator = translator
         self.record: QueueItemRecord | None = None
+        self._busy = False
         self.setObjectName("detailsPanel")
         self.setVisible(False)
 
@@ -96,7 +97,12 @@ class ItemDetailsPanel(QFrame):
             self.setVisible(False)
             return
         self.setVisible(True)
-        self.details_view.setPlainText(self._details_text(record, translator))
+        text = self._details_text(record, translator)
+        if text != self.details_view.toPlainText():
+            scrollbar = self.details_view.verticalScrollBar()
+            position = scrollbar.value()
+            self.details_view.setPlainText(text)
+            scrollbar.setValue(position)
         can_compare = (
             record.status == QueueItemStatus.DONE
             or (record.result is not None and record.result.rejected_output_path is not None)
@@ -104,8 +110,14 @@ class ItemDetailsPanel(QFrame):
         has_output = record.plan_item is not None
         self.open_output_button.setEnabled(has_output)
         self.compare_button.setEnabled(can_compare and record.source_path.exists())
-        self.resolve_button.setEnabled(record.status == QueueItemStatus.NEEDS_DECISION)
+        self.resolve_button.setEnabled(record.status == QueueItemStatus.NEEDS_DECISION and not self._busy)
         self.resolve_button.setVisible(record.status == QueueItemStatus.NEEDS_DECISION)
+
+    def set_busy(self, busy: bool) -> None:
+        self._busy = busy
+        self.resolve_button.setEnabled(
+            not busy and self.record is not None and self.record.status == QueueItemStatus.NEEDS_DECISION
+        )
 
     def _details_text(self, record: QueueItemRecord, translator: Translator) -> str:
         tr = translator.t

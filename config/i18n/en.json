@@ -537,5 +537,7 @@
   "gui.tray.quit": "Quit QualityBound",
   "gui.button.ok": "OK",
   "gui.banner.needs_decision_one": "1 item needs a decision.",
-  "gui.banner.needs_decision_many": "{count} items need a decision."
+  "gui.banner.needs_decision_many": "{count} items need a decision.",
+  "gui.message.invalid_ratio": "Enter a finite number greater than 0, or leave blank to use the default ratio.",
+  "gui.log.export_failed": "Could not export the log to {path}:\n{error}"
 }

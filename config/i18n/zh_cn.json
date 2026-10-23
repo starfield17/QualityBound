@@ -537,5 +537,7 @@
   "gui.tray.quit": "退出 QualityBound",
   "gui.button.ok": "确定",
   "gui.banner.needs_decision_one": "1 个项目等待决定。",
-  "gui.banner.needs_decision_many": "{count} 个项目等待决定。"
+  "gui.banner.needs_decision_many": "{count} 个项目等待决定。",
+  "gui.message.invalid_ratio": "请输入大于 0 的有限数值，或留空使用默认比例。",
+  "gui.log.export_failed": "无法将日志导出至 {path}：\n{error}"
 }

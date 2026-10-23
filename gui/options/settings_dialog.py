@@ -172,7 +172,11 @@ class SettingsDialog(QDialog):
         policy_layout.addWidget(self.skipped_output_policy_combo, 2, 1)
         policy_layout.setColumnStretch(1, 1)
         for combo in (self.size_blocked_policy_combo, self.quality_unreachable_policy_combo, self.skipped_output_policy_combo):
-            combo.setMinimumWidth(300)
+            combo.setMinimumWidth(0)
+            combo.setMinimumContentsLength(18)
+            combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        for label in (self.size_blocked_policy_label, self.quality_unreachable_policy_label, self.skipped_output_policy_label):
+            label.setWordWrap(True)
         layout.addWidget(self.policy_group)
 
         self.analysis_group = QGroupBox()

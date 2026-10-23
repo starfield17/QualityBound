@@ -3,6 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
+    QGridLayout,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -16,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from core.i18n import Translator
 from gui.qt_optionals import maybe_none
+from gui.window_geometry import clamped_window_size
 
 
 class PresetManagerDialog(QDialog):
@@ -37,30 +39,33 @@ class PresetManagerDialog(QDialog):
         self.apply_translations(tr)
 
     def _build_ui(self) -> None:
-        self.resize(520, 440)
+        self.resize(clamped_window_size(560, 440))
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
 
         self.info_label = QLabel()
+        self.info_label.setWordWrap(True)
         self.list_widget = QListWidget()
 
-        buttons = QHBoxLayout()
+        buttons = QGridLayout()
         self.load_button = QPushButton()
         self.save_current_button = QPushButton()
         self.delete_button = QPushButton()
         self.default_button = QPushButton()
         self.close_button = QPushButton()
-        buttons.addWidget(self.load_button)
-        buttons.addWidget(self.save_current_button)
-        buttons.addWidget(self.delete_button)
-        buttons.addWidget(self.default_button)
-        buttons.addStretch(1)
-        buttons.addWidget(self.close_button)
+        buttons.addWidget(self.load_button, 0, 0)
+        buttons.addWidget(self.save_current_button, 0, 1)
+        buttons.addWidget(self.delete_button, 1, 0)
+        buttons.addWidget(self.default_button, 1, 1)
+        footer = QHBoxLayout()
+        footer.addStretch(1)
+        footer.addWidget(self.close_button)
 
         layout.addWidget(self.info_label)
         layout.addWidget(self.list_widget, 1)
         layout.addLayout(buttons)
+        layout.addLayout(footer)
 
         self.load_button.clicked.connect(self._request_load)
         self.save_current_button.clicked.connect(self._request_save)

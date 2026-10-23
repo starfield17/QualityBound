@@ -525,6 +525,7 @@ class ArchitectureTestCase(unittest.TestCase):
             "notify_capability_detection_failed",
             "options_changed",
             "read_options",
+            "recursive_scan_enabled",
             "smart_unavailable",
             "summary_text",
             "set_busy",

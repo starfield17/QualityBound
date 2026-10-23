@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 import tempfile
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -31,7 +32,11 @@ from gui.queue.state import (
     QueueItemStatus,
     QueueJobSnapshot,
     apply_progress_event,
+    QueueSourceDraft,
+    create_draft_record,
 )
+from core.models import CompressionMode, VideoFileItem
+from gui.activity_log_window import ActivityLogWindow
 
 
 def result_of(record: QueueItemRecord) -> EncodeResult:
@@ -100,7 +105,8 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                         copy_ask.assert_called_once()
                 finally:
                     window.queue_manager.abandon_run()
-                    window.close()
+                    with patch("gui.gui_mainwindow.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
+                        window.close()
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -449,7 +455,8 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                 self.assertFalse(window.queue_manager.has_pending_run())
                 self.assertFalse(window._asked_analysis_decisions)
         finally:
-            window.close()
+            with patch("gui.gui_mainwindow.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
+                window.close()
 
     def test_closing_after_execution_does_not_start_postprocessing(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -464,6 +471,222 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
         finally:
             window._close_after_running_task_stops = False
             window.close()
+
+
+class GuiRegressionTestCase(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = QApplication.instance() or QApplication([])
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.config_path = self.root / "app_config.json"
+        config_patch = patch("core.config.store.app_config_path", return_value=self.config_path)
+        config_patch.start()
+        self.addCleanup(config_patch.stop)
+        self.window = MainWindow(Path(__file__).resolve().parent.parent, language="en")
+        self.window._startup_encoder_detection_started = True
+        self.addCleanup(self._close_window)
+
+    def _close_window(self) -> None:
+        with patch("gui.gui_mainwindow.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
+            self.window.close()
+
+    def _record(self, name: str, status: QueueItemStatus) -> QueueItemRecord:
+        return MainWindowMaintenanceTestCase()._record(self.root, name, status)
+
+    def test_settings_only_change_survives_reopening(self) -> None:
+        window = self.window
+        window._persist_runtime_state()
+        dialog = MagicMock()
+        dialog.exec.return_value = QDialog.DialogCode.Accepted
+        dialog.redetect_requested = False
+        dialog.values.return_value = {
+            "language": "en", "encode_workers": 4, "desktop_notifications": False,
+            "size_blocked_policy": "ask", "analysis_profiles": {},
+        }
+        with patch("gui.gui_mainwindow.SettingsDialog", return_value=dialog):
+            window._open_settings_dialog()
+        saved = json.loads(self.config_path.read_text())
+        self.assertEqual(saved["encode_workers"], 4)
+        self.assertFalse(saved["desktop_notifications"])
+        self.assertEqual(saved["size_blocked_policy"], "ask")
+
+    def test_geometry_is_persisted_on_the_same_close(self) -> None:
+        self.window._persist_runtime_state()
+        self.window.resize(1030, 710)
+        self.window.close()
+        saved = json.loads(self.config_path.read_text())
+        for key in ("main_window_geometry", "queue_window_geometry", "activity_log_geometry"):
+            self.assertTrue(saved.get(key))
+            self.assertEqual(saved[key], self.window.app_config[key])
+
+    def test_new_source_queue_warns_before_close(self) -> None:
+        source = self.root / "source.mp4"
+        source.touch()
+        self.window.queue_model.add_records([create_draft_record(
+            QueueSourceDraft(VideoFileItem(source, Path(source.name)), None, None)
+        )])
+        with patch("gui.gui_mainwindow.QMessageBox.question", return_value=QMessageBox.StandardButton.No) as ask:
+            self.assertFalse(self.window.close())
+        ask.assert_called_once()
+
+    def test_detached_selection_drives_details_and_folder_action(self) -> None:
+        a = self._record("a", QueueItemStatus.DONE)
+        b = self._record("b", QueueItemStatus.DONE)
+        self.window.queue_model.add_records([a, b])
+        self.window.table_view.selectRow(0)
+        self.window.queue_window.table_view.selectRow(1)
+        self.assertIs(self.window.details_panel.record, b)
+        self.assertEqual(self.window.table_view.selectionModel().selectedRows()[0].row(), 1)
+        with patch.object(self.window, "_open_folder") as open_folder:
+            self.window._open_selected_output_folder()
+        open_folder.assert_called_once_with(b.output_path.parent)
+
+    def test_details_follow_failure_and_model_reset(self) -> None:
+        record = self._record("a", QueueItemStatus.QUEUED)
+        self.window.queue_model.add_records([record])
+        self.window.table_view.selectRow(0)
+        self.window.queue_model.mark_failed(record.item_id, "test failure")
+        self.assertIn("test failure", self.window.details_panel.details_view.toPlainText())
+        self.assertIn("Failed", self.window.details_panel.details_view.toPlainText())
+        self.window.queue_model.sort(0)
+        self.assertIsNone(self.window.details_panel.record)
+        self.assertTrue(self.window.details_panel.isHidden())
+
+    def test_comparison_prefers_preserved_file_over_old_output(self) -> None:
+        record = self._record("a", QueueItemStatus.NEEDS_DECISION)
+        record.output_path.write_bytes(b"old output")
+        preserved = self.root / "preserved.mp4"
+        preserved.write_bytes(b"new output")
+        result_of(record).rejected_output_path = preserved
+        with patch("gui.gui_mainwindow.ComparisonWindow") as comparison:
+            self.window._show_comparison(record)
+            comparison.return_value.load_paths.assert_called_once_with(record.source_path, preserved)
+        self.window.comparison_windows.clear()
+
+    def test_invalid_fixed_ratio_is_reported_before_start(self) -> None:
+        record = self._record("a", QueueItemStatus.QUEUED)
+        from gui.queue.state import unbind_for_retry
+        unbind_for_retry(record)
+        self.window.queue_model.add_records([record])
+        panel = self.window.options_panel
+        panel.compression_mode_combo.setCurrentIndex(panel.compression_mode_combo.findData(CompressionMode.FIXED_BITRATE.value))
+        for value in ("abc", "nan", "inf", "0", "-1"):
+            with self.subTest(value=value):
+                panel.ratio_edit.setText(value)
+                with patch("gui.gui_mainwindow.QMessageBox.warning") as warning, patch.object(self.window, "_start_worker") as start:
+                    self.window._start_queue()
+                warning.assert_called_once()
+                start.assert_not_called()
+                self.assertTrue(panel.ratio_edit.property("invalid"))
+        panel.ratio_edit.setText("0.75")
+        self.assertEqual(panel.read_options().ratio, 0.75)
+        self.assertFalse(panel.ratio_edit.property("invalid"))
+
+    def test_smart_and_directory_intake_ignore_unused_ratio(self) -> None:
+        panel = self.window.options_panel
+        panel.ratio_edit.setText("abc")
+        self.assertIsNone(panel.read_options().ratio)
+        panel.compression_mode_combo.setCurrentIndex(panel.compression_mode_combo.findData(CompressionMode.FIXED_BITRATE.value))
+        panel.recursive_check.setChecked(True)
+        self.window.source_combo.setEditText(str(self.root))
+        with patch("gui.gui_mainwindow.QueueIntakeWorker") as worker, patch.object(self.window, "_start_worker"):
+            self.window._plan_current_source()
+        self.assertTrue(worker.call_args.args[1])
+
+    def test_manual_decisions_are_blocked_during_preparation(self) -> None:
+        record = self._record("a", QueueItemStatus.NEEDS_DECISION)
+        result_of(record).rejected_output_path = self.root / "preserved.mp4"
+        self.window.queue_model.add_records([record])
+        self.window.table_view.selectRow(0)
+        self.window.queue_manager.begin_preparation()
+        try:
+            with patch("gui.gui_mainwindow.choose_size_miss_decision", return_value=None) as choose:
+                self.window._resolve_selected_decision()
+                self.window._resolve_next_decision()
+            choose.assert_not_called()
+            self.assertFalse(self.window.details_panel.resolve_button.isEnabled())
+            self.assertFalse(self.window.notification_banner._actions[0].isEnabled())
+        finally:
+            self.window.queue_manager.finish_preparation()
+
+    def test_mixed_directory_drop_does_not_parse_encoding_options(self) -> None:
+        panel = self.window.options_panel
+        panel.compression_mode_combo.setCurrentIndex(panel.compression_mode_combo.findData(CompressionMode.FIXED_BITRATE.value))
+        panel.ratio_edit.setText("abc")
+        panel.recursive_check.setChecked(True)
+        first = self.root / "first"
+        second = self.root / "second"
+        first.mkdir()
+        second.mkdir()
+        a = first / "a.mp4"
+        b = second / "b.mp4"
+        a.touch()
+        b.touch()
+        with patch.object(self.window, "_start_plan_for_files") as intake:
+            self.window._handle_dropped_paths([first, second])
+        intake.assert_called_once()
+        self.assertEqual({item.path for item in intake.call_args.args[0]}, {a.resolve(), b.resolve()})
+
+    def test_export_failure_is_visible_and_retains_log(self) -> None:
+        log = ActivityLogWindow(self.window.translator)
+        self.addCleanup(log.close)
+        log.append_message("test message")
+        with patch("gui.activity_log_window.QFileDialog.getSaveFileName", return_value=(str(self.root), "")), patch("gui.activity_log_window.QMessageBox.warning") as warning:
+            log._export_logs()
+        warning.assert_called_once()
+        self.assertIn(str(self.root), warning.call_args.args[2])
+        self.assertEqual(len(log.entries), 1)
+
+    def test_banner_preserves_button_identity_on_progress_and_retranslates(self) -> None:
+        self.window._on_smart_unavailable("VMAF missing")
+        button = self.window.notification_banner._actions[0]
+        self.window._update_queue_metrics(self.window.queue_model.metrics())
+        self.assertIs(self.window.notification_banner._actions[0], button)
+        self.window._language_changed("zh_cn")
+        self.assertEqual(self.window.notification_banner._actions[0].text(), self.window.translator.t("gui.button.settings"))
+        self.assertEqual(self.window.notification_banner.text_label.text(), self.window.translator.t("gui.banner.smart_unavailable", reason="VMAF missing"))
+        self.window._on_smart_unavailable(self.window.translator.t("gui.tooltip.smart_unavailable"))
+        self.window._language_changed("en")
+        self.assertEqual(self.window.notification_banner.text_label.text(), self.window.translator.t(
+            "gui.banner.smart_unavailable", reason=self.window.translator.t("gui.tooltip.smart_unavailable")
+        ))
+
+    def test_completion_banner_retranslates_without_losing_dismissal(self) -> None:
+        record = self._record("a", QueueItemStatus.DONE)
+        self.window._register_completion_banner([record])
+        original_button = self.window.notification_banner._actions[0]
+        self.window._update_queue_metrics(self.window.queue_model.metrics())
+        self.assertIs(self.window.notification_banner._actions[0], original_button)
+        self.window._language_changed("zh_cn")
+        self.assertIn(self.window.translator.t("gui.completion.title"), self.window.notification_banner.text_label.text())
+        self.assertEqual(self.window.notification_banner._actions[0].text(), self.window.translator.t("gui.completion.open_output"))
+        self.window.notification_banner._dismiss()
+        self.window._language_changed("en")
+        self.assertTrue(self.window.notification_banner.isHidden())
+
+    def test_basic_layout_reflows_without_changing_options(self) -> None:
+        from PySide6.QtWidgets import QGridLayout
+        panel = self.window.options_panel
+        before = panel.read_options()
+        panel.resize(760, 500)
+        panel._reflow_basic_tab()
+        layout = panel.basic_tab.layout()
+        self.assertIsInstance(layout, QGridLayout)
+        assert isinstance(layout, QGridLayout)
+        codec_position = layout.getItemPosition(layout.indexOf(panel.codec_combo))
+        backend_position = layout.getItemPosition(layout.indexOf(panel.backend_combo))
+        assert isinstance(codec_position, tuple) and isinstance(backend_position, tuple)
+        self.assertGreater(backend_position[0], codec_position[0])
+        panel.resize(1100, 500)
+        panel._reflow_basic_tab()
+        backend_position = layout.getItemPosition(layout.indexOf(panel.backend_combo))
+        assert isinstance(backend_position, tuple)
+        self.assertEqual(backend_position[0], codec_position[0])
+        self.assertEqual(panel.read_options(), before)
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QVBoxLayout,
@@ -235,4 +236,10 @@ class ActivityLogWindow(QMainWindow):
             for entry in self.entries
             if self._matches(entry, selected_filter, search)
         ]
-        Path(path).write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+        try:
+            Path(path).write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+        except OSError as exc:
+            QMessageBox.warning(
+                self, self.translator.t("gui.message.warning"),
+                self.translator.t("gui.log.export_failed", path=path, error=str(exc)),
+            )

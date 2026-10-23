@@ -1,4 +1,5 @@
 import sys
+import json
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -34,6 +35,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QStackedWidget,
     QStatusBar,
     QToolButton,
@@ -140,6 +142,26 @@ RUNTIME_CONFIG_KEYS = frozenset(
 )
 
 
+class _ElidedLabel(QLabel):
+    """Keep the full status text available while yielding width to live metrics."""
+
+    def setText(self, text: str) -> None:
+        self._full_text = text
+        self._render_text()
+
+    def _render_text(self) -> None:
+        text = getattr(self, "_full_text", "")
+        if self.isVisible():
+            text = self.fontMetrics().elidedText(
+                text, Qt.TextElideMode.ElideMiddle, max(0, self.contentsRect().width())
+            )
+        super().setText(text)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._render_text()
+
+
 class MainWindow(QMainWindow):
     # Lifecycle and geometry
 
@@ -174,7 +196,7 @@ class MainWindow(QMainWindow):
         self._asked_analysis_decisions: dict[tuple[str, str], EncodeResult] = {}
         self._header_sync_guard = False
         self._queue_state = "idle"
-        self._persisted_snapshot: tuple[object, ...] | None = None
+        self._persisted_snapshot: str | None = None
         self._action_state: tuple[object, ...] | None = None
         self._status_stage = "-"
         self._status_file = "-"
@@ -186,8 +208,8 @@ class MainWindow(QMainWindow):
         self.comparison_windows: list[ComparisonWindow] = []
         self._preset_dirty = False
         self._applying_preset = False
-        self._completion_banner: tuple[str, list[tuple[str, Callable[[], None]]]] | None = None
-        self._runtime_banner: tuple[str, str, list[tuple[str, Callable[[], None]]]] | None = None
+        self._completion_banner: Callable[[], tuple[str, list[tuple[str, Callable[[], None]]]]] | None = None
+        self._runtime_banner: Callable[[], tuple[str, str, list[tuple[str, Callable[[], None]]]]] | None = None
         self._banner_key: tuple[object, ...] | None = None
         self._dismissed_banner_key: tuple[object, ...] | None = None
 
@@ -233,8 +255,8 @@ class MainWindow(QMainWindow):
                 if result != QMessageBox.StandardButton.Yes:
                     event.ignore()
                     return
-            self._persist_runtime_state()
             self._save_window_geometry()
+            self._persist_runtime_state()
             for comparison in list(self.comparison_windows):
                 comparison.close()
             event.accept()
@@ -289,8 +311,6 @@ class MainWindow(QMainWindow):
         )
 
     def _has_unsaved_queue_work(self) -> bool:
-        if not self.queue_manager.has_pending_run():
-            return False
         return any(
             record.status in {
                 QueueItemStatus.NEEDS_DECISION,
@@ -697,6 +717,7 @@ class MainWindow(QMainWindow):
 
         self.table_view = create_queue_view(self)
         self.table_view.setModel(self.queue_model)
+        self.queue_window.table_view.setSelectionModel(self.table_view.selectionModel())
         self.table_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table_view.horizontalHeader().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
 
@@ -719,7 +740,9 @@ class MainWindow(QMainWindow):
         status_bar = QStatusBar(self)
         self.setStatusBar(status_bar)
         self.status_stage_label = QLabel()
-        self.status_file_label = QLabel()
+        self.status_file_label = _ElidedLabel()
+        self.status_file_label.setMinimumWidth(0)
+        self.status_file_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.status_speed_label = QLabel()
         self.status_elapsed_label = QLabel()
         self.status_current_progress_label = QLabel()
@@ -780,9 +803,8 @@ class MainWindow(QMainWindow):
         selection_model = maybe_none(self.table_view.selectionModel())
         if selection_model is not None:
             selection_model.selectionChanged.connect(self._on_queue_selection_changed)
-        queue_selection_model = maybe_none(self.queue_window.table_view.selectionModel())
-        if queue_selection_model is not None:
-            queue_selection_model.selectionChanged.connect(self._on_queue_selection_changed)
+        self.queue_model.dataChanged.connect(self._update_details_panel)
+        self.queue_model.modelReset.connect(self._clear_details_panel)
 
         self.queue_model.metricsChanged.connect(self._update_queue_metrics)
         self.queue_manager.log.connect(self._append_log)
@@ -1234,19 +1256,14 @@ class MainWindow(QMainWindow):
             self.app_config["recent_paths"] = recent_paths
             self._set_source_history(recent_paths)
 
-        snapshot = (
-            self.language,
-            source_text,
-            output_text,
-            analysis_profile,
-            post_action,
-            tuple(recent_paths),
-            bool(self.app_config.get("setup_collapsed", False)),
+        snapshot = json.dumps(
+            {key: value for key, value in self.app_config.items() if key in RUNTIME_CONFIG_KEYS},
+            sort_keys=True,
         )
         if snapshot == self._persisted_snapshot:
             return
-        self._persisted_snapshot = snapshot
         self._save_app_config_preserving_capabilities()
+        self._persisted_snapshot = snapshot
 
     def _encoder_capability_summary(self, capabilities: dict) -> str:
         codecs = capabilities.get("codecs", {})
@@ -1322,11 +1339,11 @@ class MainWindow(QMainWindow):
             visible=True,
         )
         self._append_log(self.translator.t("gui.log.encoder_detection_failed", error=message))
-        self._set_runtime_banner(
+        self._set_runtime_banner(lambda: (
             self.translator.t("gui.banner.detection_failed"),
             "error",
             [(self.translator.t("gui.completion.view_log"), self._show_activity_log)],
-        )
+        ))
 
     def _set_encoder_status(self, text: str, tooltip: str, *, visible: bool) -> None:
         self.encoder_status_label.setText(text)
@@ -1366,6 +1383,7 @@ class MainWindow(QMainWindow):
         self._status_percent = percent
         self.status_stage_label.setText(self.translator.t("gui.statusbar.stage", value=stage))
         self.status_file_label.setText(self.translator.t("gui.statusbar.file", value=file_name))
+        self.status_file_label.setToolTip(file_name)
         self.status_speed_label.setText(self.translator.t("gui.statusbar.speed", value=speed))
         self.status_elapsed_label.setText(self.translator.t("gui.statusbar.elapsed", value=elapsed))
         if percent is None:
@@ -1529,8 +1547,10 @@ class MainWindow(QMainWindow):
 
     def _refresh_action_state(self) -> None:
         plan_busy = self.active_worker is not None
-        queue_busy = self.queue_busy
+        queue_busy = self.queue_busy or self.queue_manager.is_busy()
         any_busy = plan_busy or queue_busy
+        self.details_panel.set_busy(any_busy)
+        self._update_decision_banner(self.queue_model.metrics())
         has_queued_items = bool(self.queue_model.draft_records() or self.queue_model.execution_records())
         has_pending_run = self.queue_manager.has_pending_run()
         has_completed = any(
@@ -1560,27 +1580,29 @@ class MainWindow(QMainWindow):
 
     def _set_runtime_banner(
         self,
-        text: str,
-        severity: str,
-        actions: list[tuple[str, Callable[[], None]]] | None = None,
+        render: Callable[[], tuple[str, str, list[tuple[str, Callable[[], None]]]]],
     ) -> None:
-        self._runtime_banner = (text, severity, actions or [])
+        self._runtime_banner = render
         self._dismissed_banner_key = None
         self._update_decision_banner(self.queue_model.metrics())
 
     def _on_smart_unavailable(self, reason: str) -> None:
-        self._set_runtime_banner(
-            self.translator.t("gui.banner.smart_unavailable", reason=reason),
+        default_reason = reason == self.translator.t("gui.tooltip.smart_unavailable")
+        self._set_runtime_banner(lambda: (
+            self.translator.t(
+                "gui.banner.smart_unavailable",
+                reason=self.translator.t("gui.tooltip.smart_unavailable") if default_reason else reason,
+            ),
             "warning",
             [(self.translator.t("gui.button.settings"), self._open_settings_dialog)],
-        )
+        ))
 
     def _refresh_path_validation(self) -> None:
         text = self.source_combo.currentText().strip()
         invalid_source = bool(text) and not Path(text).expanduser().exists()
         self.source_combo.setProperty("invalid", invalid_source)
         self.source_combo.setToolTip(
-            self.translator.t("gui.message.path_missing") if invalid_source else ""
+            self.translator.t("gui.message.path_missing") if invalid_source else text
         )
         self.source_combo.style().unpolish(self.source_combo)
         self.source_combo.style().polish(self.source_combo)
@@ -1589,7 +1611,7 @@ class MainWindow(QMainWindow):
         invalid_output = bool(output_text) and Path(output_text).expanduser().is_file()
         self.output_edit.setProperty("invalid", invalid_output)
         self.output_edit.setToolTip(
-            self.translator.t("gui.message.path_missing") if invalid_output else ""
+            self.translator.t("gui.message.path_missing") if invalid_output else output_text
         )
         self.output_edit.style().unpolish(self.output_edit)
         self.output_edit.style().polish(self.output_edit)
@@ -1689,7 +1711,7 @@ class MainWindow(QMainWindow):
             )
             return
         self._persist_runtime_state()
-        worker = QueueIntakeWorker(input_path, self.options_panel.read_options().recursive, self._selected_ffprobe(), ffmpeg_path=self._selected_ffmpeg())
+        worker = QueueIntakeWorker(input_path, self.options_panel.recursive_scan_enabled(), self._selected_ffprobe(), ffmpeg_path=self._selected_ffmpeg())
         self._start_worker(worker, self._on_sources_ready)
 
     def _start_plan_for_files(self, files: Sequence[Path | VideoFileItem]) -> None:
@@ -1724,7 +1746,11 @@ class MainWindow(QMainWindow):
         if not records:
             self._start_bound_queue(max_workers)
             return
-        options = self.options_panel.read_options()
+        try:
+            options = self.options_panel.read_options()
+        except ValueError as exc:
+            QMessageBox.warning(self, self.translator.t("gui.message.warning"), str(exc))
+            return
         output = self._selected_output()
         workdir = self._selected_workdir()
         self._persist_runtime_state()
@@ -1934,7 +1960,7 @@ class MainWindow(QMainWindow):
                     )
             elif p.is_dir():
                 try:
-                    discovered = collect_video_files(p, recursive=self.options_panel.read_options().recursive)
+                    discovered = collect_video_files(p, recursive=self.options_panel.recursive_scan_enabled())
                     all_video_files.extend(discovered)
                 except Exception:
                     pass
@@ -1962,8 +1988,6 @@ class MainWindow(QMainWindow):
             if selection_model is not None
             else []
         )
-        if not rows:
-            rows = self._selected_rows_from_view(self.queue_window.table_view)
         return self.queue_model.record_for_row(rows[0]) if rows else None
 
     def _selected_rows_from_view(self, view: ResponsiveQueueTableView) -> list[int]:
@@ -2086,8 +2110,8 @@ class MainWindow(QMainWindow):
         elif action == compare_action and selected_record is not None:
             self._show_comparison(selected_record)
         elif action == apply_options_action and can_reconfigure:
-            opts = self.options_panel.read_options()
             try:
+                opts = self.options_panel.read_options()
                 updated = self.queue_model.apply_options_to_rows(
                     rows,
                     opts,
@@ -2248,6 +2272,8 @@ class MainWindow(QMainWindow):
     # Constraint decisions
 
     def _resolve_selected_decision(self) -> None:
+        if self.active_worker is not None or self.queue_manager.is_busy():
+            return
         record = self._selected_record()
         if record is None:
             return
@@ -2256,6 +2282,8 @@ class MainWindow(QMainWindow):
             self._resolve_queue_decision(row, current)
 
     def _resolve_next_decision(self) -> None:
+        if self.active_worker is not None or self.queue_manager.is_busy():
+            return
         for row, record in enumerate(self.queue_model.records()):
             if record.status == QueueItemStatus.NEEDS_DECISION:
                 self._resolve_queue_decision(row, record)
@@ -2355,11 +2383,12 @@ class MainWindow(QMainWindow):
                 decision_text,
                 severity="warning",
                 actions=[(self.translator.t("gui.banner.resolve"), self._resolve_next_decision)],
+                actions_enabled=self.active_worker is None and not self.queue_manager.is_busy(),
             )
             return
         if self._completion_banner is not None:
-            text, actions = self._completion_banner
-            key = ("completion", text)
+            text, actions = self._completion_banner()
+            key = ("completion", id(self._completion_banner))
             self._banner_key = key
             if key == self._dismissed_banner_key:
                 self.notification_banner.hide_message()
@@ -2367,8 +2396,8 @@ class MainWindow(QMainWindow):
             self.notification_banner.show_message(text, severity="success", actions=actions)
             return
         if self._runtime_banner is not None:
-            text, severity, actions = self._runtime_banner
-            key = ("runtime", text)
+            text, severity, actions = self._runtime_banner()
+            key = ("runtime", id(self._runtime_banner))
             self._banner_key = key
             if key == self._dismissed_banner_key:
                 self.notification_banner.hide_message()
@@ -2400,7 +2429,6 @@ class MainWindow(QMainWindow):
             if (
                 record.result is not None
                 and record.result.rejected_output_path is not None
-                and not comparison_output.exists()
             ):
                 comparison_output = record.result.rejected_output_path
             window.load_paths(record.source_path, comparison_output)
@@ -2494,57 +2522,32 @@ class MainWindow(QMainWindow):
         cancelled = [record for record in records if record.status == QueueItemStatus.CANCELLED]
         if not done and not failed and not cancelled:
             return
-        actions: list[tuple[str, Callable[[], None]]] = []
-        output_record = next(
-            (record for record in done if record.plan_item is not None),
-            None,
-        )
-        if output_record is not None:
-            output_parent = output_record.output_path.parent
-            actions.append(
-                (
-                    self.translator.t("gui.completion.open_output"),
-                    self._open_folder_action(output_parent),
-                )
-            )
-        actions.append(
-            (
-                self.translator.t("gui.completion.view_log"),
-                self._show_activity_log,
-            )
-        )
-        if done:
-            measured = compute_metrics(records)
-            saved = measured.actual_saved_bytes or 0
-            source_bytes = measured.actual_source_bytes or 0
-            ratio = (saved / source_bytes * 100.0) if source_bytes > 0 else 0.0
-            text = self.translator.t(
-                "gui.completion.title",
-            ) + " · " + self.translator.t(
-                "gui.completion.summary",
-                count=len(done),
-                saved=format_size(saved),
-                ratio=f"{ratio:.1f}",
-            )
-            if failed or cancelled:
-                text += "\n" + self.translator.t(
-                    "gui.completion.incomplete",
-                    failed=len(failed),
-                    cancelled=len(cancelled),
-                )
-            self._show_completion_banner(text, actions)
-        else:
-            self._show_completion_banner(
-                self.translator.t(
-                    "gui.completion.incomplete",
-                    failed=len(failed),
-                    cancelled=len(cancelled),
-                ),
-                actions,
-            )
+        output_record = next((record for record in done if record.plan_item is not None), None)
+        output_action = self._open_folder_action(output_record.output_path.parent) if output_record else None
+        measured = compute_metrics(records)
+        saved = measured.actual_saved_bytes or 0
+        source_bytes = measured.actual_source_bytes or 0
+        ratio = saved / source_bytes * 100.0 if source_bytes > 0 else 0.0
+        done_count, failed_count, cancelled_count = len(done), len(failed), len(cancelled)
 
-    def _show_completion_banner(self, text: str, actions: list[tuple[str, Callable[[], None]]]) -> None:
-        self._completion_banner = (text, actions)
+        def render() -> tuple[str, list[tuple[str, Callable[[], None]]]]:
+            actions: list[tuple[str, Callable[[], None]]] = []
+            if output_action is not None:
+                actions.append((self.translator.t("gui.completion.open_output"), output_action))
+            actions.append((self.translator.t("gui.completion.view_log"), self._show_activity_log))
+            incomplete = self.translator.t(
+                "gui.completion.incomplete", failed=failed_count, cancelled=cancelled_count
+            )
+            if not done_count:
+                return incomplete, actions
+            text = self.translator.t("gui.completion.title") + " · " + self.translator.t(
+                "gui.completion.summary", count=done_count, saved=format_size(saved), ratio=f"{ratio:.1f}"
+            )
+            if failed_count or cancelled_count:
+                text += "\n" + incomplete
+            return text, actions
+
+        self._completion_banner = render
         self._dismissed_banner_key = None
         self._update_decision_banner(self.queue_model.metrics())
 

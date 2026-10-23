@@ -6,7 +6,7 @@ filtering from runtime capabilities, encoder-preset refresh, analysis-profile st
 and Smart/Fixed control syncing.
 
 - `MainWindow` interacts only through the public contract:
-  `read_options()`, `apply_options()`,
+  `read_options()`, `recursive_scan_enabled()`, `apply_options()`,
   `apply_analysis_profile_settings()`, `current_analysis_profile_name()`,
   `sync_dependent_controls()`,
   `set_runtime_capabilities()`, `notify_capability_detection_failed()`,
