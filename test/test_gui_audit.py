@@ -13,7 +13,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QCoreApplication, QEvent, QPoint, Qt, QTimer
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QDialog, QMenu, QMessageBox
+from PySide6.QtWidgets import QApplication, QDialog, QLineEdit, QMenu, QMessageBox
 
 from core.i18n import LANGUAGES, Translator
 from core.models import VideoFileItem
@@ -98,6 +98,11 @@ class ComparisonInteractionAuditTests(unittest.TestCase):
         self.assertEqual(self.window.phase, ComparisonPhase.PLAYING)
 
     def test_editing_and_popup_keep_their_keys(self) -> None:
+        # macOS may limit native Tab traversal to editors. Give it a second
+        # editor so preserving Tab is observable under either system setting.
+        extra_editor = QLineEdit(self.window)
+        self.window.root_layout.addWidget(extra_editor)
+        extra_editor.show()
         self.window.mode.setCurrentIndex(1)
         self.window.offset.setFocus()
         self.app.processEvents()
