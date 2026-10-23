@@ -70,7 +70,11 @@ class ComparisonInteractionAuditTests(unittest.TestCase):
         self.assertTrue(self.window.panes[0].isHidden())
         QTest.keyClick(self.window.play_button, Qt.Key.Key_T)
         self.assertTrue(self.window.panes[1].isHidden())
-        QTest.keyClick(self.window.play_button, Qt.Key.Key_Tab, Qt.KeyboardModifier.ShiftModifier)
+        try:
+            QTest.keyClick(self.window.play_button, Qt.Key.Key_Tab, Qt.KeyboardModifier.ShiftModifier)
+        finally:
+            # Focus changes during Tab can leave QTest's synthetic modifier set.
+            QTest.keyRelease(self.window, Qt.Key.Key_Shift)
         self.assertFalse(self.window.play_button.hasFocus())
         self.assertTrue(self.window.panes[1].isHidden())
 
@@ -175,12 +179,11 @@ class WindowLifetimeAuditTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self) -> None:
-        for target, kwargs in (
-            ('gui.gui_mainwindow.load_app_config', {'return_value': {}}),
-            ('gui.gui_mainwindow.MainWindow._persist_runtime_state', {}),
-            ('gui.gui_mainwindow.MainWindow._save_window_geometry', {}),
+        for mock in (
+            patch('gui.gui_mainwindow.load_app_config', return_value={}),
+            patch('gui.gui_mainwindow.MainWindow._persist_runtime_state'),
+            patch('gui.gui_mainwindow.MainWindow._save_window_geometry'),
         ):
-            mock = patch(target, **kwargs)
             mock.start()
             self.addCleanup(mock.stop)
         self.window = MainWindow(Path(__file__).resolve().parent.parent, language='en')
