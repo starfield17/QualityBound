@@ -31,7 +31,11 @@ def print_plan(plan: EncodePlan, tr: Translator) -> None:
         media = item.media_info
         encoder = item.encoder_info
         if media is None or encoder is None:
-            raise ValueError(f"Planned item is missing media or encoder information: {item.source_path}")
+            raise ValueError(tr.t(Text(
+                en='Planned item is missing media or encoder information: {path}',
+                zh_cn='计划项缺少媒体或编码器信息: {path}',
+                ja='計画項目にメディア情報またはエンコーダー情報がありません: {path}',
+            ), path=item.source_path))
         fps = f"{media.fps:.3f}" if media and media.fps else "n/a"
         wh = f"{media.width}x{media.height}" if media and media.width and media.height else "n/a"
         print(f"[{tr.t(Text(en='READY', zh_cn='可执行', ja='準備完了'))}] {item.source_path}")
@@ -46,7 +50,11 @@ def print_plan(plan: EncodePlan, tr: Translator) -> None:
         print(f"  {tr.t(Text(en='Target video bitrate', zh_cn='目标视频码率', ja='目標動画ビットレート'))}: {target}")
         print(f"  {tr.t(Text(en='Encoder', zh_cn='编码器', ja='エンコーダー'))}: {encoder.encoder_name} ({encoder.backend.value})")
         if item.options.compression_mode == CompressionMode.SMART and item.options.smart_algorithm == SmartAlgorithm.V2_EXPERIMENTAL:
-            print(f"  Smart v2 (experimental): whole-video mean VMAF target {item.options.min_vmaf:.1f}")
+            print('  ' + tr.t(Text(
+                en='Smart v2 (experimental): whole-video mean VMAF target {value:.1f}',
+                zh_cn='Smart v2（实验性）：整片平均 VMAF 目标 {value:.1f}',
+                ja='Smart v2 (実験的): 動画全体の平均VMAF目標 {value:.1f}',
+            ), value=item.options.min_vmaf))
         print(f"  {tr.t(OUTPUT)}: {item.output_path}")
         for warning in item.warnings:
             print(f"  {tr.t(Text(en='Note', zh_cn='说明', ja='注記'))}: {warning}")
@@ -80,8 +88,16 @@ def print_encode_results(results: list[EncodeResult], tr: Translator) -> None:
         segmented = result.segmented_analysis_result
         if segmented is not None:
             mean = segmented.final_mean_vmaf if segmented.final_mean_vmaf is not None else segmented.predicted_mean_vmaf
-            print(f"  Smart v2 (experimental): {len(segmented.shots)} shots; "
-                  f"{'measured' if segmented.final_mean_vmaf is not None else 'predicted'} mean VMAF={mean}")
+            text = Text(
+                en='Smart v2 (experimental): {count} shots; measured mean VMAF={mean}',
+                zh_cn='Smart v2（实验性）：{count} 个镜头；实测平均 VMAF={mean}',
+                ja='Smart v2 (実験的): {count} ショット; 測定平均VMAF={mean}',
+            ) if segmented.final_mean_vmaf is not None else Text(
+                en='Smart v2 (experimental): {count} shots; predicted mean VMAF={mean}',
+                zh_cn='Smart v2（实验性）：{count} 个镜头；预测平均 VMAF={mean}',
+                ja='Smart v2 (実験的): {count} ショット; 予測平均VMAF={mean}',
+            )
+            print('  ' + tr.t(text, count=len(segmented.shots), mean=mean))
         if quality is not None:
             if quality.min_vmaf is not None:
                 print(f"  {tr.t(Text(en='Minimum SMART quality score', zh_cn='最低 SMART 画质分数', ja='最小SMART品質スコア'))}: {quality.min_vmaf:.2f}")

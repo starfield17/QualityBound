@@ -5,7 +5,7 @@ import json
 import sys
 from dataclasses import replace
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, NoReturn, TypedDict
 
 from cli.cli_interactive import print_encode_results, print_plan
 from core.config import (
@@ -138,15 +138,18 @@ def _merge_options(base: EncodeOptions, args: argparse.Namespace) -> EncodeOptio
 def _normalize_auto_backend_preset(options: EncodeOptions, args: argparse.Namespace) -> EncodeOptions:
     if options.backend != BackendChoice.AUTO or options.encoder_preset is None:
         return options
+    tr = _translator_for_args(args)
     if getattr(args, "encoder_preset", None) is not None:
-        raise ValueError(
-            "--encoder-preset cannot be used with --backend auto. "
-            "Choose a concrete backend, or omit --encoder-preset."
-        )
-    print(
-        "Warning: inherited encoder preset ignored because backend is auto.",
-        file=sys.stderr,
-    )
+        raise ValueError(tr.t(Text(
+            en='--encoder-preset cannot be used with --backend auto. Choose a concrete backend, or omit --encoder-preset.',
+            zh_cn='--encoder-preset 不能与 --backend auto 并用。请选择具体后端，或省略 --encoder-preset。',
+            ja='--encoder-preset は --backend auto と併用できません。具体的なバックエンドを選択するか、--encoder-preset を省略してください。',
+        )))
+    print(tr.t(Text(
+        en='Warning: inherited encoder preset ignored because backend is auto.',
+        zh_cn='警告: 后端为 auto，已忽略继承的编码器预设。',
+        ja='警告: バックエンドがautoのため、継承されたエンコーダープリセットを無視しました。',
+    )), file=sys.stderr)
     return replace(options, encoder_preset=None)
 
 
@@ -167,106 +170,156 @@ def _options_from_args(args: argparse.Namespace, config_dir: Path) -> EncodeOpti
     return _apply_analysis_profile(options, args, config_dir)
 
 
+class _LocalizedArgumentParser(argparse.ArgumentParser):
+    def __init__(self, *args: Any, translator: Translator, **kwargs: Any) -> None:
+        self.translator = translator
+        super().__init__(*args, add_help=False, **kwargs)
+        self._positionals.title = translator.t(Text(en='positional arguments', zh_cn='位置参数', ja='位置引数'))
+        self._optionals.title = translator.t(Text(en='options', zh_cn='选项', ja='オプション'))
+        self.add_argument('-h', '--help', action='help', help=translator.t(Text(
+            en='show this help message and exit', zh_cn='显示帮助并退出', ja='ヘルプを表示して終了',
+        )))
+
+    def _localized_usage(self, rendered: str) -> str:
+        return rendered.replace('usage:', self.translator.t(Text(en='usage:', zh_cn='用法:', ja='使い方:')), 1)
+
+    def format_help(self) -> str:
+        return self._localized_usage(super().format_help())
+
+    def format_usage(self) -> str:
+        return self._localized_usage(super().format_usage())
+
+    def error(self, message: str) -> NoReturn:
+        self.print_usage(sys.stderr)
+        # argparse and external diagnostic payloads keep their original details.
+        detail = self.translator.t(Text(en='error: {message}', zh_cn='错误: {message}', ja='エラー: {message}'), message=message)
+        self.exit(2, f'{self.prog}: {detail}\n')
+
+
+def _add_language_flag(parser: argparse.ArgumentParser, translator: Translator, *, default: str | None = argparse.SUPPRESS) -> None:
+    parser.add_argument('--lang', choices=[info.code for info in LANGUAGES], default=default,
+                        help=translator.t(Text(en='Display language', zh_cn='显示语言', ja='表示言語')))
+
+
+def _language_from_argv(argv: list[str]) -> str | None:
+    # Select the display language before argparse processes an eager --help.
+    selected = None
+    for index, argument in enumerate(argv):
+        if argument == '--':
+            break
+        option, separator, value = argument.partition('=')
+        # --lang is the only option with this prefix in every parser scope.
+        if option.startswith('--') and '--lang'.startswith(option):
+            if separator:
+                selected = value
+            elif index + 1 < len(argv):
+                selected = argv[index + 1]
+    return selected
+
+
 def _add_runtime_flags(
     parser: argparse.ArgumentParser,
+    translator: Translator,
     include_input: bool = True,
 ) -> None:
     if include_input:
-        parser.add_argument("input", help="Input file or directory")
-    parser.add_argument("-o", "--output", help="Output directory")
-    parser.add_argument("--workdir", help="Working directory")
-    parser.add_argument("--ffmpeg", help="Path to ffmpeg")
-    parser.add_argument("--ffprobe", help="Path to ffprobe")
-    parser.add_argument("--preset", help="Saved preset name")
-    parser.add_argument("--lang", choices=[info.code for info in LANGUAGES], help="Display language")
-    parser.add_argument("--recursive", **_bool_action_kwargs(), help="Recursively scan subdirectories")
+        parser.add_argument("input", help=translator.t(Text(en='Input file or directory', zh_cn='输入文件或目录', ja='入力ファイルまたはフォルダー')))
+    parser.add_argument("-o", "--output", help=translator.t(Text(en='Output directory', zh_cn='输出目录', ja='出力フォルダー')))
+    parser.add_argument("--workdir", help=translator.t(Text(en='Working directory', zh_cn='工作目录', ja='作業フォルダー')))
+    parser.add_argument("--ffmpeg", help=translator.t(Text(en='Path to ffmpeg', zh_cn='ffmpeg 路径', ja='ffmpeg のパス')))
+    parser.add_argument("--ffprobe", help=translator.t(Text(en='Path to ffprobe', zh_cn='ffprobe 路径', ja='ffprobe のパス')))
+    parser.add_argument("--preset", help=translator.t(Text(en='Saved preset name', zh_cn='已保存的预设名称', ja='保存されたプリセット名')))
+    _add_language_flag(parser, translator)
+    parser.add_argument("--recursive", **_bool_action_kwargs(), help=translator.t(Text(en='Recursively scan subdirectories', zh_cn='递归扫描子目录', ja='サブフォルダーを再帰的にスキャン')))
 
 
-def _add_encode_flags(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--codec", choices=["hevc", "av1"], help="Target codec")
+def _add_encode_flags(parser: argparse.ArgumentParser, translator: Translator) -> None:
+    parser.add_argument("--codec", choices=["hevc", "av1"], help=translator.t(Text(en='Target codec', zh_cn='目标编码格式', ja='出力コーデック')))
     parser.add_argument(
         "--compression-mode",
         dest="compression_mode",
         choices=[mode.value for mode in CompressionMode],
-        help="Compression policy",
+        help=translator.t(Text(en='Compression policy', zh_cn='压缩策略', ja='圧縮ポリシー')),
     )
     parser.add_argument(
         "--backend",
         choices=[backend.value for backend in BackendChoice],
-        help="Encoder backend",
+        help=translator.t(Text(en='Encoder backend', zh_cn='编码器后端', ja='エンコーダーバックエンド')),
     )
     parser.add_argument("--smart-algorithm", choices=[algorithm.value for algorithm in SmartAlgorithm],
-                        help="Smart algorithm (default: v1; v2_experimental uses per-shot average quality)")
+                        help=translator.t(Text(en='Smart algorithm (default: v1; v2_experimental uses per-shot average quality)', zh_cn='Smart 算法（默认 v1；v2_experimental 使用逐镜头平均画质）', ja='Smartアルゴリズム（デフォルト: v1。v2_experimental はショットごとの平均品質を使用）')))
     parser.add_argument(
         "--decode-acceleration",
         dest="decode_acceleration",
         choices=[acceleration.value for acceleration in DecodeAcceleration],
-        help="Video decoding acceleration method",
+        help=translator.t(Text(en='Video decoding acceleration method', zh_cn='视频解码加速方式', ja='動画デコードのアクセラレーション方式')),
     )
-    parser.add_argument("--ratio", type=float, help="Target video bitrate ratio")
+    parser.add_argument("--ratio", type=float, help=translator.t(Text(en='Target video bitrate ratio', zh_cn='目标视频码率比例', ja='目標動画ビットレート比率')))
     parser.add_argument(
         "--min-vmaf",
         dest="min_vmaf",
         type=float,
-        help="VMAF target (default: 90): v1 sampled-window gate; experimental v2 whole-video mean",
+        help=translator.t(Text(en='VMAF target (default: 90): v1 sampled-window gate; experimental v2 whole-video mean', zh_cn='VMAF 目标（默认 90）：v1 采样窗口门槛；实验性 v2 整片平均值', ja='VMAF目標（デフォルト: 90）: v1 はサンプル区間の基準、実験的v2 は動画全体の平均値')),
     )
     parser.add_argument(
         "--analysis-profile",
         dest="analysis_profile",
         choices=[name.value for name in AnalysisProfileName],
-        help="Smart VMAF scan profile: fast, balance, or precise",
+        help=translator.t(Text(en='Smart VMAF scan profile: fast, balance, or precise', zh_cn='Smart VMAF 分析强度：fast、balance 或 precise', ja='Smart VMAF分析強度: fast、balance、precise')),
     )
     parser.add_argument(
         "--viewing-context",
         dest="viewing_context",
         choices=[context.value for context in VmafViewingContext],
-        help="Smart viewing scenario: high_fidelity (default) or standard_display",
+        help=translator.t(Text(en='Smart viewing scenario: high_fidelity (default) or standard_display', zh_cn='Smart 观看场景：high_fidelity（默认）或 standard_display', ja='Smart視聴環境: high_fidelity（デフォルト）または standard_display')),
     )
     parser.add_argument(
         "--max-output-ratio",
         dest="max_output_ratio",
         type=float,
-        help="Maximum final file size ratio for smart mode",
+        help=translator.t(Text(en='Maximum final file size ratio for smart mode', zh_cn='Smart 模式最终文件的最大体积比例', ja='Smartモードの最終ファイルサイズ比率の上限')),
     )
-    parser.add_argument("--min-video-kbps", dest="min_video_kbps", type=int, help="Minimum target bitrate")
-    parser.add_argument("--max-video-kbps", dest="max_video_kbps", type=int, help="Maximum target bitrate")
-    parser.add_argument("--container", choices=["mkv", "mp4"], help="Output container")
-    parser.add_argument("--audio-mode", dest="audio_mode", choices=["copy", "aac"], help="Audio handling mode")
-    parser.add_argument("--audio-bitrate", dest="audio_bitrate", help="Audio bitrate when re-encoding to AAC")
-    parser.add_argument("--copy-subtitles", **_bool_action_kwargs(), help="Copy subtitle streams")
+    parser.add_argument("--min-video-kbps", dest="min_video_kbps", type=int, help=translator.t(Text(en='Minimum target bitrate', zh_cn='最低目标码率', ja='目標ビットレートの下限')))
+    parser.add_argument("--max-video-kbps", dest="max_video_kbps", type=int, help=translator.t(Text(en='Maximum target bitrate', zh_cn='最高目标码率', ja='目標ビットレートの上限')))
+    parser.add_argument("--container", choices=["mkv", "mp4"], help=translator.t(Text(en='Output container', zh_cn='输出容器', ja='出力コンテナー')))
+    parser.add_argument("--audio-mode", dest="audio_mode", choices=["copy", "aac"], help=translator.t(Text(en='Audio handling mode', zh_cn='音频处理方式', ja='音声の処理方式')))
+    parser.add_argument("--audio-bitrate", dest="audio_bitrate", help=translator.t(Text(en='Audio bitrate when re-encoding to AAC', zh_cn='重新编码为 AAC 时的音频码率', ja='AACへ再エンコードする際の音声ビットレート')))
+    parser.add_argument("--copy-subtitles", **_bool_action_kwargs(), help=translator.t(Text(en='Copy subtitle streams', zh_cn='复制字幕流', ja='字幕ストリームをコピー')))
     parser.add_argument(
         "--copy-external-subtitles",
         dest="copy_external_subtitles",
         **_bool_action_kwargs(),
-        help="Copy matching external subtitle files next to the encoded output",
+        help=translator.t(Text(en='Copy matching external subtitle files next to the encoded output', zh_cn='将匹配的外挂字幕复制到编码输出旁', ja='一致する外部字幕をエンコード出力と同じ場所にコピー')),
     )
-    parser.add_argument("--two-pass", dest="two_pass", **_bool_action_kwargs(), help="Enable two-pass mode")
-    parser.add_argument("--overwrite", **_bool_action_kwargs(), help="Overwrite existing output")
-    parser.add_argument("--encoder-preset", dest="encoder_preset", help="Concrete ffmpeg encoder preset")
-    parser.add_argument("--pix-fmt", dest="pix_fmt", help="Output pixel format")
-    parser.add_argument("--maxrate-factor", dest="maxrate_factor", type=float, help="maxrate factor")
-    parser.add_argument("--bufsize-factor", dest="bufsize_factor", type=float, help="bufsize factor")
-    parser.add_argument("--dry-run", action="store_true", help="Build the plan and stop")
+    parser.add_argument("--two-pass", dest="two_pass", **_bool_action_kwargs(), help=translator.t(Text(en='Enable two-pass mode', zh_cn='启用双遍编码', ja='2パスモードを有効化')))
+    parser.add_argument("--overwrite", **_bool_action_kwargs(), help=translator.t(Text(en='Overwrite existing output', zh_cn='覆盖现有输出', ja='既存の出力を上書き')))
+    parser.add_argument("--encoder-preset", dest="encoder_preset", help=translator.t(Text(en='Concrete ffmpeg encoder preset', zh_cn='具体 FFmpeg 编码器预设', ja='使用するFFmpegエンコーダープリセット')))
+    parser.add_argument("--pix-fmt", dest="pix_fmt", help=translator.t(Text(en='Output pixel format', zh_cn='输出像素格式', ja='出力ピクセルフォーマット')))
+    parser.add_argument("--maxrate-factor", dest="maxrate_factor", type=float, help=translator.t(Text(en='maxrate factor', zh_cn='maxrate 系数', ja='maxrate係数')))
+    parser.add_argument("--bufsize-factor", dest="bufsize_factor", type=float, help=translator.t(Text(en='bufsize factor', zh_cn='bufsize 系数', ja='bufsize係数')))
+    parser.add_argument("--dry-run", action="store_true", help=translator.t(Text(en='Build the plan and stop', zh_cn='生成计划后停止', ja='計画を作成して終了')))
 
 
 def _validate_compression_options(options: EncodeOptions, args: argparse.Namespace) -> None:
+    tr = _translator_for_args(args)
     if options.compression_mode != CompressionMode.SMART and options.smart_algorithm != SmartAlgorithm.V1:
-        raise ValueError("--smart-algorithm v2_experimental requires --compression-mode smart")
+        raise ValueError(tr.t(Text(en='--smart-algorithm v2_experimental requires --compression-mode smart', zh_cn='--smart-algorithm v2_experimental 需要 --compression-mode smart', ja='--smart-algorithm v2_experimental には --compression-mode smart が必要です。')))
     if not 0 < float(options.min_vmaf) <= 100:
-        raise ValueError("--min-vmaf must be greater than 0 and at most 100")
+        raise ValueError(tr.t(Text(en='--min-vmaf must be greater than 0 and at most 100', zh_cn='--min-vmaf 必须大于 0 且不超过 100', ja='--min-vmaf は0より大きく100以下である必要があります。')))
     if options.max_output_ratio is not None and not 0 < float(options.max_output_ratio) <= 1:
-        raise ValueError("--max-output-ratio must be greater than 0 and at most 1")
+        raise ValueError(tr.t(Text(en='--max-output-ratio must be greater than 0 and at most 1', zh_cn='--max-output-ratio 必须大于 0 且不超过 1', ja='--max-output-ratio は0より大きく1以下である必要があります。')))
     if options.compression_mode == CompressionMode.SMART and getattr(args, "ratio", None) is not None:
-        raise ValueError("--ratio cannot be used with --compression-mode smart")
+        raise ValueError(tr.t(Text(en='--ratio cannot be used with --compression-mode smart', zh_cn='--ratio 不能与 --compression-mode smart 并用', ja='--ratio は --compression-mode smart と併用できません。')))
     if options.compression_mode == CompressionMode.FIXED_BITRATE and (
         getattr(args, "min_vmaf", None) is not None
         or getattr(args, "max_output_ratio", None) is not None
         or getattr(args, "viewing_context", None) is not None
     ):
-        raise ValueError(
-            "--min-vmaf, --max-output-ratio, and --viewing-context require "
-            "--compression-mode smart"
-        )
+        raise ValueError(tr.t(Text(
+            en='--min-vmaf, --max-output-ratio, and --viewing-context require --compression-mode smart',
+            zh_cn='--min-vmaf、--max-output-ratio 和 --viewing-context 需要 --compression-mode smart',
+            ja='--min-vmaf、--max-output-ratio、--viewing-context には --compression-mode smart が必要です。',
+        )))
 
 
 def _resolve_encoder_info(options: EncodeOptions, args: argparse.Namespace):
@@ -276,16 +329,20 @@ def _resolve_encoder_info(options: EncodeOptions, args: argparse.Namespace):
     return ffmpeg_path, encoder_info
 
 
-def _invalid_preset_message(preset: str, encoder_name: str, choices: list[str]) -> str:
-    choice_text = ", ".join(choices)
-    return f"Invalid encoder preset '{preset}' for {encoder_name}. Valid presets: {choice_text}"
+def _invalid_preset_message(preset: str, encoder_name: str, choices: list[str], translator: Translator) -> str:
+    return translator.t(Text(
+        en="Invalid encoder preset '{preset}' for {encoder}. Valid presets: {choices}",
+        zh_cn="'{preset}' 不是 {encoder} 的有效编码器预设。有效预设: {choices}",
+        ja="{encoder} に無効なエンコーダープリセット '{preset}' が指定されました。有効なプリセット: {choices}",
+    ), preset=preset, encoder=encoder_name, choices=', '.join(choices))
 
 
-def _unverifiable_preset_message(preset: str, encoder_name: str) -> str:
-    return (
-        f"Cannot reliably validate encoder preset '{preset}' for {encoder_name}. "
-        "Use the encoder default preset instead."
-    )
+def _unverifiable_preset_message(preset: str, encoder_name: str, translator: Translator) -> str:
+    return translator.t(Text(
+        en="Cannot reliably validate encoder preset '{preset}' for {encoder}. Use the encoder default preset instead.",
+        zh_cn="无法可靠验证 {encoder} 的编码器预设 '{preset}'。请改用编码器默认预设。",
+        ja="{encoder} のエンコーダープリセット '{preset}' を確実に検証できません。エンコーダーのデフォルトプリセットを使用してください。",
+    ), preset=preset, encoder=encoder_name)
 
 
 def _validate_encoder_preset(options: EncodeOptions, args: argparse.Namespace) -> None:
@@ -295,72 +352,80 @@ def _validate_encoder_preset(options: EncodeOptions, args: argparse.Namespace) -
     ffmpeg_path, encoder_info = _resolve_encoder_info(options, args)
     choices = preset_choices_for_encoder(ffmpeg_path, encoder_info.encoder_name)
     if not choices:
-        raise ValueError(_unverifiable_preset_message(preset, encoder_info.encoder_name))
+        raise ValueError(_unverifiable_preset_message(preset, encoder_info.encoder_name, _translator_for_args(args)))
     if preset not in choices:
-        raise ValueError(_invalid_preset_message(preset, encoder_info.encoder_name, choices))
+        raise ValueError(_invalid_preset_message(preset, encoder_info.encoder_name, choices, _translator_for_args(args)))
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="QualityBound CLI")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+def _build_parser(language: str = 'en') -> argparse.ArgumentParser:
+    translator = Translator(language)
 
-    plan_parser = subparsers.add_parser("plan", help="Inspect the encode plan")
-    _add_runtime_flags(plan_parser)
-    _add_encode_flags(plan_parser)
+    class LocalizedParser(_LocalizedArgumentParser):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, translator=translator, **kwargs)
 
-    encode_parser = subparsers.add_parser("encode", help="Execute the encode plan")
-    _add_runtime_flags(encode_parser)
-    _add_encode_flags(encode_parser)
+    parser = LocalizedParser(description="QualityBound CLI")
+    _add_language_flag(parser, translator, default=None)
+    subparsers = parser.add_subparsers(dest="command", required=True, parser_class=LocalizedParser)
+
+    plan_parser = subparsers.add_parser("plan", help=translator.t(Text(en='Inspect the encode plan', zh_cn='检查编码计划', ja='エンコード計画を確認')))
+    _add_runtime_flags(plan_parser, translator)
+    _add_encode_flags(plan_parser, translator)
+
+    encode_parser = subparsers.add_parser("encode", help=translator.t(Text(en='Execute the encode plan', zh_cn='执行编码计划', ja='エンコード計画を実行')))
+    _add_runtime_flags(encode_parser, translator)
+    _add_encode_flags(encode_parser, translator)
     encode_parser.add_argument(
         "--jobs",
         type=int,
         choices=range(1, 9),
         default=1,
-        help="Maximum concurrent full encodes (1-8, default: 1)",
+        help=translator.t(Text(en='Maximum concurrent full encodes (1-8, default: 1)', zh_cn='最大并发完整编码数（1–8，默认 1）', ja='最大同時エンコード数（1–8、デフォルト: 1）')),
     )
     encode_parser.add_argument(
         "--size-blocked-policy",
         dest="size_blocked_policy",
         choices=[policy.value for policy in SizeBlockedPolicy],
-        help="When VMAF is reachable only above the size limit (default: relax_size)",
+        help=translator.t(Text(en='When VMAF is reachable only above the size limit (default: relax_size)', zh_cn='仅超过体积上限才能达到 VMAF 时的操作（默认 relax_size）', ja='サイズ上限を超えた場合のみVMAFを達成できる時の動作（デフォルト: relax_size）')),
     )
     encode_parser.add_argument(
         "--quality-unreachable-policy",
         dest="quality_unreachable_policy",
         choices=[policy.value for policy in QualityUnreachablePolicy],
-        help="When the encoder cannot reach the VMAF target (default: skip)",
+        help=translator.t(Text(en='When the encoder cannot reach the VMAF target (default: skip)', zh_cn='编码器无法达到 VMAF 目标时的操作（默认 skip）', ja='エンコーダーがVMAF目標を達成できない時の動作（デフォルト: skip）')),
     )
     encode_parser.add_argument(
         "--constraint-policy",
         choices=[policy.value for policy in ConstraintPolicy],
-        help="Deprecated alias of --size-blocked-policy (fail means ask)",
+        help=translator.t(Text(en='Deprecated alias of --size-blocked-policy (fail means ask)', zh_cn='--size-blocked-policy 的旧别名（fail 表示 ask）', ja='--size-blocked-policy の非推奨エイリアス（fail は ask を意味）')),
     )
     encode_parser.add_argument(
         "--skipped-output-policy",
         dest="skipped_output_policy",
         choices=[policy.value for policy in SkippedOutputPolicy],
-        help="What to do with sources skipped by Smart analysis (default: copy)",
+        help=translator.t(Text(en='What to do with sources skipped by Smart analysis (default: copy)', zh_cn='Smart 分析跳过片源时的操作（默认 copy）', ja='Smart分析でスキップされたソースの処理（デフォルト: copy）')),
     )
 
-    preset_parser = subparsers.add_parser("preset", help="Manage presets")
-    preset_sub = preset_parser.add_subparsers(dest="preset_command", required=True)
+    preset_parser = subparsers.add_parser("preset", help=translator.t(Text(en='Manage presets', zh_cn='管理预设', ja='プリセットを管理')))
+    preset_sub = preset_parser.add_subparsers(dest="preset_command", required=True, parser_class=LocalizedParser)
+    _add_language_flag(preset_parser, translator)
 
-    preset_list = preset_sub.add_parser("list", help="List available presets")
-    preset_list.add_argument("--lang", choices=[info.code for info in LANGUAGES], help="Display language")
+    preset_list = preset_sub.add_parser("list", help=translator.t(Text(en='List available presets', zh_cn='列出可用预设', ja='利用可能なプリセットを一覧表示')))
+    _add_language_flag(preset_list, translator)
 
-    preset_load = preset_sub.add_parser("load", help="Print a preset")
+    preset_load = preset_sub.add_parser("load", help=translator.t(Text(en='Print a preset', zh_cn='打印预设', ja='プリセットを表示')))
     preset_load.add_argument("name")
-    preset_load.add_argument("--lang", choices=[info.code for info in LANGUAGES], help="Display language")
+    _add_language_flag(preset_load, translator)
 
-    preset_delete = preset_sub.add_parser("delete", help="Delete a preset")
+    preset_delete = preset_sub.add_parser("delete", help=translator.t(Text(en='Delete a preset', zh_cn='删除预设', ja='プリセットを削除')))
     preset_delete.add_argument("name")
-    preset_delete.add_argument("--lang", choices=[info.code for info in LANGUAGES], help="Display language")
+    _add_language_flag(preset_delete, translator)
 
-    preset_save = preset_sub.add_parser("save", help="Save a preset from current options")
+    preset_save = preset_sub.add_parser("save", help=translator.t(Text(en='Save a preset from current options', zh_cn='将当前选项保存为预设', ja='現在のオプションからプリセットを保存')))
     preset_save.add_argument("name")
-    preset_save.add_argument("--preset", help="Base preset name")
-    preset_save.add_argument("--lang", choices=[info.code for info in LANGUAGES], help="Display language")
-    _add_encode_flags(preset_save)
+    preset_save.add_argument("--preset", help=translator.t(Text(en='Base preset name', zh_cn='基础预设名称', ja='ベースプリセット名')))
+    _add_language_flag(preset_save, translator)
+    _add_encode_flags(preset_save, translator)
 
     return parser
 
@@ -427,11 +492,23 @@ def _run_encode(args: argparse.Namespace, config_dir: Path) -> int:
         )
         for item in published:
             if item.copied:
-                print(f"Copied Smart-skipped source {item.source_path.name} -> {item.output_path}")
+                print(tr.t(Text(
+                    en='Copied Smart-skipped source {file} -> {path}',
+                    zh_cn='已复制 Smart 跳过的片源 {file} -> {path}',
+                    ja='Smartでスキップされたソースをコピーしました {file} -> {path}',
+                ), file=item.source_path.name, path=item.output_path))
             elif item.reason:
-                print(f"Did not copy Smart-skipped source {item.source_path.name}: {item.reason}")
+                print(tr.t(Text(
+                    en='Did not copy Smart-skipped source {file}: {reason}',
+                    zh_cn='未复制 Smart 跳过的片源 {file}: {reason}',
+                    ja='Smartでスキップされたソースをコピーしませんでした {file}: {reason}',
+                ), file=item.source_path.name, reason=item.reason))
     elif options.skipped_output_policy == SkippedOutputPolicy.ASK:
-        print("Skipped-output policy is ask; CLI leaves Smart-skipped sources in place.")
+        print(tr.t(Text(
+            en='Skipped-output policy is ask; CLI leaves Smart-skipped sources in place.',
+            zh_cn='跳过文件策略为 ask；CLI 将 Smart 跳过的片源保留在原处。',
+            ja='スキップ出力ポリシーがaskのため、CLIはSmartでスキップされたソースを元の場所に保持します。',
+        )))
     print_encode_results(results, tr)
     if any(result.needs_decision for result in results):
         return 3
@@ -467,13 +544,17 @@ def _run_preset(args: argparse.Namespace, config_dir: Path) -> int:
         print(tr.t(Text(en="Preset '{name}' saved to {path}", zh_cn="预设 '{name}' 已保存到 {path}", ja="プリセット '{name}' を {path} に保存しました"), name=args.name, path=path))
         return 0
 
-    raise ValueError(f"Unsupported preset command: {args.preset_command}")
+    raise ValueError(tr.t(Text(
+        en='Unsupported preset command: {command}', zh_cn='不支持的预设命令: {command}', ja='未対応のプリセットコマンド: {command}',
+    ), command=args.preset_command))
 
 
 def run_cli(argv: list[str] | None = None) -> int:
     ensure_runtime_layout()
-    parser = _build_parser()
-    args = parser.parse_args(argv)
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    translator = _translator_for_args(argparse.Namespace(lang=_language_from_argv(arguments)))
+    parser = _build_parser(translator.language)
+    args = parser.parse_args(arguments)
     config_dir = _config_dir()
 
     try:
