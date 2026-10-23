@@ -395,7 +395,7 @@ class GuiPresetSelectionTestCase(unittest.TestCase):
         finally:
             window.close()
 
-    def test_gui_invalid_loaded_preset_falls_back_to_default(self) -> None:
+    def test_gui_invalid_loaded_preset_requires_explicit_replacement(self) -> None:
         window = MainWindow(self.repo_root, language="en")
         try:
             window._on_encoder_capability_detection_completed(
@@ -404,7 +404,12 @@ class GuiPresetSelectionTestCase(unittest.TestCase):
             window.options_panel.apply_options(
                 EncodeOptions(backend=BackendChoice.NVENC, encoder_preset="invalid")
             )
-            self.assertIsNone(window.options_panel.encoder_preset_combo.currentData())
+            panel = window.options_panel
+            self.assertEqual(panel.encoder_preset_combo.currentData(), "invalid")
+            with self.assertRaises(ValueError):
+                panel.read_options()
+            panel.encoder_preset_combo.setCurrentIndex(0)
+            self.assertIsNone(panel.read_options().encoder_preset)
         finally:
             window.close()
 

@@ -336,6 +336,7 @@ class GuiRegressionTests(unittest.TestCase):
         self.addCleanup(window.close)
         window.show()
         window.activateWindow()
+        window.offset.setEnabled(True)
         window.offset.setFocus()
         self.app.processEvents()
         window._update_shortcuts()

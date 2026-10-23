@@ -89,7 +89,8 @@ class RuntimeCapabilityResolveTestCase(unittest.TestCase):
 class EncoderCapabilityCacheTestCase(unittest.TestCase):
     def test_cache_fingerprint_can_be_cancelled(self) -> None:
         ffmpeg_path = Path("ffmpeg")
-        cancelled = lambda: True
+        def cancelled() -> bool:
+            return True
         with patch("core.ffmpeg.capabilities._ffmpeg_mtime_ns", return_value=123):
             with self.assertRaises(OperationCancelledError):
                 is_encoder_capability_cache_valid(_cache_payload(ffmpeg_path), ffmpeg_path, cancel_check=cancelled)

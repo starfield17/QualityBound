@@ -242,7 +242,7 @@ class AnalysisProfileGuiTestCase(unittest.TestCase):
             values = dialog.values()
             self.assertEqual(values["analysis_profile"], "precise")
             self.assertNotIn("analysis_profiles", values)
-            settings = {"analysis_profiles": {"precise": {"sample_duration_sec": 9.0}}}
+            settings: dict[str, object] = {"analysis_profiles": {"precise": {"sample_duration_sec": 9.0}}}
             settings.update(values)
             self.assertEqual(settings["analysis_profiles"], {"precise": {"sample_duration_sec": 9.0}})
         finally:
