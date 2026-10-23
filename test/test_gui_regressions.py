@@ -346,9 +346,57 @@ class GuiRegressionTests(unittest.TestCase):
             layout = window.source_box.layout()
             self.assertIsInstance(layout, QGridLayout)
             assert isinstance(layout, QGridLayout)
-            preset_row = layout.getItemPosition(layout.indexOf(window.preset_combo))[0]
-            action_row = layout.getItemPosition(layout.indexOf(window.source_add_button))[0]
-            self.assertEqual(action_row == preset_row, same_row)
+            preset_position = layout.getItemPosition(layout.indexOf(window.preset_combo))
+            action_position = layout.getItemPosition(layout.indexOf(window.source_add_button))
+            assert isinstance(preset_position, tuple) and isinstance(action_position, tuple)
+            self.assertEqual(action_position[0] == preset_position[0], same_row)
+
+    def test_setup_refits_after_mode_and_theme_changes(self) -> None:
+        from core.models import CompressionMode
+        from gui.theme import theme_manager
+        window = self.window()
+        window.show()
+        window.resize(1520, 960)
+        window._set_setup_collapsed(False)
+        manager = theme_manager()
+        assert manager is not None
+        for dark, mode in ((True, CompressionMode.FIXED_BITRATE), (False, CompressionMode.SMART)):
+            with self.subTest(dark=dark, mode=mode):
+                with patch("gui.theme._scheme_is_dark", return_value=dark):
+                    manager.refresh()
+                options = window.options_panel.read_options()
+                options.compression_mode = mode
+                window.options_panel.apply_options(options)
+                for _ in range(8):
+                    self.app.processEvents()
+                self.assertEqual(window.options_panel.read_options().compression_mode, mode)
+                self.assertEqual(window.main_scroll_area.verticalScrollBar().maximum(), 0)
+                self.assertGreaterEqual(window.queue_stack.height(), 150)
+
+    def test_empty_queue_controls_do_not_overlap_at_small_sizes(self) -> None:
+        from PySide6.QtCore import QPoint, QRect
+        window = self.window()
+        window.show()
+        window._set_setup_collapsed(False)
+        for width, height in ((1280, 800), (760, 520)):
+            with self.subTest(size=(width, height)):
+                window.resize(width, height)
+                for _ in range(8):
+                    self.app.processEvents()
+                self.assertGreaterEqual(
+                    window.empty_state.height(), window.empty_state.minimumSizeHint().height()
+                )
+                buttons = (window.empty_add_files_button, window.empty_add_folder_button)
+                for button in buttons:
+                    rect = QRect(button.mapTo(window.empty_state, QPoint()), button.size())
+                    self.assertTrue(window.empty_state.rect().contains(rect))
+                    for label in (
+                        window.empty_icon_label, window.empty_title_label,
+                        window.empty_body_label, window.empty_drop_label,
+                    ):
+                        if label.isVisible():
+                            label_rect = QRect(label.mapTo(window.empty_state, QPoint()), label.size())
+                            self.assertFalse(rect.intersects(label_rect))
 
     def test_native_window_gc_keeps_parent_before_child_ownership(self) -> None:
         import gc
