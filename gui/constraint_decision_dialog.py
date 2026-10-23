@@ -180,7 +180,7 @@ def _quality_metrics(dialog: _DecisionDialog, record: QueueItemRecord) -> None:
         measured = segmented.final_mean_vmaf if segmented.final_mean_vmaf is not None else segmented.predicted_mean_vmaf
     if measured is not None:
         final = segmented is not None and segmented.final_mean_vmaf is not None
-        dialog.add_metric(row, tr.t("gui.decision.measured_quality" if final else "gui.decision.estimated_quality"),
+        dialog.add_metric(row, tr.t("gui.decision.measured_quality") if final else tr.t("gui.decision.estimated_quality"),
                           ("" if final else "~") + f"{measured:.1f}")
         row += 1
     if quality is not None and quality.predicted_output_ratio is not None:

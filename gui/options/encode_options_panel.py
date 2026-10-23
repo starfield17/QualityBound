@@ -100,6 +100,7 @@ class EncodeOptionsPanel(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        self.setFocusProxy(self.options_tabs)
         layout.addWidget(self.options_tabs)
 
         self._connect_signals()
@@ -133,7 +134,7 @@ class EncodeOptionsPanel(QWidget):
                       self.copy_external_subtitles_check, self.two_pass_check):
             check.toggled.connect(self._emit_options_changed)
         self.decode_acceleration_combo.currentIndexChanged.connect(self._emit_options_changed)
-        self.encoder_preset_combo.currentIndexChanged.connect(self._emit_options_changed)
+        self.encoder_preset_combo.currentIndexChanged.connect(self._on_encoder_preset_changed)
 
     def _on_compression_mode_changed(self, *_args: object) -> None:
         self.sync_dependent_controls()
@@ -448,7 +449,7 @@ class EncodeOptionsPanel(QWidget):
     def _validate_audio_bitrate(self) -> bool:
         text = self.audio_bitrate_edit.text().strip()
         match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)([kKmM]?)", text or "128k")
-        valid = self.audio_mode_combo.currentData() != AudioMode.AAC.value or bool(match and float(match.group(1)) > 0)
+        valid = self.audio_mode_combo.currentData() != AudioMode.AAC.value or bool(match and math.isfinite(float(match.group(1))) and float(match.group(1)) > 0)
         self.audio_bitrate_edit.setProperty("invalid", not valid)
         self.audio_bitrate_edit.setToolTip("" if valid else self.translator.t("gui.message.invalid_audio_bitrate"))
         self.audio_bitrate_edit.style().unpolish(self.audio_bitrate_edit)
@@ -585,8 +586,7 @@ class EncodeOptionsPanel(QWidget):
             self._refresh_decode_acceleration_choices(log_reset=True)
             self._refresh_smart_mode_availability()
             self.refresh_encoder_preset_choices(preset=pending_preset)
-        vmaf = capabilities.get("vmaf")
-        if isinstance(vmaf, dict) and not vmaf.get("runnable"):
+        if self.compression_mode_combo.toolTip():
             self.smart_unavailable.emit(self.compression_mode_combo.toolTip())
 
     def notify_capability_detection_failed(self) -> None:
@@ -761,9 +761,15 @@ class EncodeOptionsPanel(QWidget):
 
     # ---------------------------------------------------- backend/preset logic
 
+    def _on_encoder_preset_changed(self, *_args: object) -> None:
+        self._pending_encoder_preset = None
+        self.options_changed.emit()
+
     def _on_backend_changed(self, *_args: object) -> None:
         self._pending_backend = None
         self._pending_encoder_preset = None
+        with QSignalBlocker(self.encoder_preset_combo):
+            self.encoder_preset_combo.setCurrentIndex(0)
         self.refresh_encoder_preset_choices()
 
     def _on_codec_changed(self, *_args: object) -> None:
@@ -885,8 +891,14 @@ class EncodeOptionsPanel(QWidget):
         if selected_index >= 0:
             self.backend_combo.setCurrentIndex(selected_index)
         self.backend_combo.blockSignals(False)
+        if self._pending_backend is not None:
+            model = self.backend_combo.model()
+            if isinstance(model, QStandardItemModel):
+                item = maybe_none(model.item(selected_index))
+                if item is not None:
+                    item.setEnabled(False)
         tooltip_key = "gui.tooltip.backend_filtered" if self._runtime_capabilities() is not None else "gui.tooltip.backend_detecting"
-        self.backend_combo.setToolTip(self.translator.t(tooltip_key))
+        self.backend_combo.setToolTip(self.translator.t("gui.message.encoder_selection_pending") if self._pending_backend is not None else self.translator.t(tooltip_key))
 
         self.sync_dependent_controls()
 
@@ -1003,16 +1015,24 @@ class EncodeOptionsPanel(QWidget):
         self.encoder_preset_combo.blockSignals(False)
 
     def _select_encoder_preset(self, preset: str | None, *, log_invalid: bool) -> None:
-        if preset is None:
-            self.encoder_preset_combo.setCurrentIndex(0)
-            return
-        index = self.encoder_preset_combo.findData(preset)
-        if index >= 0:
+        with QSignalBlocker(self.encoder_preset_combo):
+            if preset is None:
+                self.encoder_preset_combo.setCurrentIndex(0)
+                return
+            index = self.encoder_preset_combo.findData(preset)
+            if index < 0:
+                self._pending_encoder_preset = preset
+                self.encoder_preset_combo.setEnabled(True)
+                self.encoder_preset_combo.addItem(self.translator.t("gui.value.unavailable_choice", value=preset), preset)
+                index = self.encoder_preset_combo.count() - 1
+                model = self.encoder_preset_combo.model()
+                if isinstance(model, QStandardItemModel):
+                    item = maybe_none(model.item(index))
+                    if item is not None:
+                        item.setEnabled(False)
+                if log_invalid:
+                    self._append_log(self.translator.t("gui.message.encoder_selection_pending"))
             self.encoder_preset_combo.setCurrentIndex(index)
-            return
-        self.encoder_preset_combo.setCurrentIndex(0)
-        if log_invalid:
-            self._append_log(self.translator.t("gui.log.encoder_preset_reset"))
 
     def refresh_encoder_preset_choices(
         self,

@@ -41,6 +41,7 @@ from gui.comparison.decode import (ComparisonMedia, DecodeCancelled, FramePair,
 from gui.comparison.state import ComparisonPhase, ComparisonTimeline
 from gui.comparison.playback import PlaybackSession
 from gui.window_geometry import clamped_window_size
+from gui.icons import set_button_icon
 
 
 class ComparisonWorker(QThread):
@@ -221,7 +222,7 @@ class ComparisonWindow(QWidget):
         self.switch_button = QPushButton(self)
         self.switch_button.clicked.connect(self.toggle_side)
         self.help_button = QToolButton(self)
-        self.help_button.setText("?")
+        set_button_icon(self.help_button, "help")
         self.help_button.setCheckable(True)
         self.help_button.toggled.connect(self._toggle_help)
         for widget in (self.mode, self.precision, self.audio, self.switch_button):
@@ -305,6 +306,9 @@ class ComparisonWindow(QWidget):
         self.offset.setToolTip(t("gui.compare.offset_hint"))
         self.help_label.setText(t("gui.compare.help"))
         self.help_button.setToolTip(t("gui.compare.help_toggle"))
+        self.help_button.setAccessibleName(t("gui.compare.help_toggle"))
+        for control, label in ((self.mode, t("gui.compare.mode_hint")), (self.precision, t("gui.compare.precision_hint")), (self.audio, t("gui.compare.audio_hint")), (self.slider, t("gui.compare.timeline")), (self.offset, t("gui.compare.offset"))):
+            control.setAccessibleName(label)
         self.mode.setToolTip(t("gui.compare.mode_hint"))
         self.precision.setToolTip(t("gui.compare.precision_hint"))
         self.audio.setToolTip(t("gui.compare.audio_hint"))
@@ -425,6 +429,30 @@ class ComparisonWindow(QWidget):
         self.seek(0)
 
     def _decode_error(self, error: str) -> None:
+        error_keys = {
+            'FFmpeg video decoding cannot keep up with playback': self.translator.t("gui.compare.error_decode_slow"),
+            'Cannot open PCM audio output': self.translator.t("gui.compare.error_audio_open"),
+            'Cannot write PCM audio output': self.translator.t("gui.compare.error_audio_write"),
+            'Invalid decoded frame image': self.translator.t("gui.compare.error_invalid_image"),
+            'No FFmpeg frame timestamp within 60 seconds': self.translator.t("gui.compare.error_timestamp_timeout"),
+            'Video inspection exceeded 60 seconds': self.translator.t("gui.compare.error_inspection_timeout"),
+            'No decoded video frames': self.translator.t("gui.compare.error_no_frames"),
+            'Invalid FFmpeg video pipe header': self.translator.t("gui.compare.error_invalid_pipe"),
+            'Unsupported FFmpeg video pipe dimensions': self.translator.t("gui.compare.error_invalid_dimensions"),
+            'Incomplete FFmpeg video frame': self.translator.t("gui.compare.error_incomplete_frame"),
+            'Invalid FFmpeg video frame': self.translator.t("gui.compare.error_invalid_frame"),
+            'No decoded video frame': self.translator.t("gui.compare.error_no_frame"),
+            'No timestamped preview frame': self.translator.t("gui.compare.error_no_preview"),
+            'No video frames at the requested position': self.translator.t("gui.compare.error_no_position_frame"),
+            'Invalid video timing metadata': self.translator.t("gui.compare.error_invalid_timing"),
+            'Video duration and frame rate must be positive': self.translator.t("gui.compare.error_invalid_duration"),
+        }
+        if error in error_keys:
+            error = error_keys[error]
+        elif error.startswith("No video stream: "):
+            error = self.translator.t("gui.compare.no_video", file=error.removeprefix("No video stream: "))
+        elif error.startswith("No timestamped video frames: "):
+            error = self.translator.t("gui.compare.no_timestamps", file=error.removeprefix("No timestamped video frames: "))
         self._invalidate()
         self.preview_timer.stop()
         self.playback.stop()

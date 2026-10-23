@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+from functools import lru_cache
+from weakref import WeakKeyDictionary
+
 from PySide6.QtCore import QByteArray, QRectF, Qt
 from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
+from PySide6.QtWidgets import QAbstractButton
+
+from gui.theme import current_tokens
 
 
 _ICONS: dict[str, str] = {
@@ -73,7 +79,7 @@ _ICONS: dict[str, str] = {
 }
 
 
-def _render_pixmap(name: str, color: str, size: int) -> QPixmap:
+def _render_pixmap(name: str, color: str, size: int, dpr: int = 1) -> QPixmap:
     body = _ICONS[name].replace("{color}", color)
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
@@ -81,7 +87,8 @@ def _render_pixmap(name: str, color: str, size: int) -> QPixmap:
         f'stroke-linecap="round" stroke-linejoin="round">{body}</svg>'
     )
     renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
-    pixmap = QPixmap(size, size)
+    pixmap = QPixmap(size * dpr, size * dpr)
+    pixmap.setDevicePixelRatio(dpr)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
     try:
@@ -91,11 +98,33 @@ def _render_pixmap(name: str, color: str, size: int) -> QPixmap:
     return pixmap
 
 
+@lru_cache(maxsize=128)
 def action_icon(name: str, color: str, disabled_color: str) -> QIcon:
     """Build a small multi-size icon from the internal line-icon set."""
 
     icon = QIcon()
-    for size in (16, 20, 24, 32):
-        icon.addPixmap(_render_pixmap(name, color, size), QIcon.Mode.Normal, QIcon.State.Off)
-        icon.addPixmap(_render_pixmap(name, disabled_color, size), QIcon.Mode.Disabled, QIcon.State.Off)
+    for size in (16, 18, 20, 24, 32, 44):
+        for dpr in (1, 2, 3):
+            icon.addPixmap(_render_pixmap(name, color, size, dpr), QIcon.Mode.Normal, QIcon.State.Off)
+            icon.addPixmap(_render_pixmap(name, disabled_color, size, dpr), QIcon.Mode.Disabled, QIcon.State.Off)
     return icon
+
+
+_button_icons: WeakKeyDictionary[QAbstractButton, str] = WeakKeyDictionary()
+
+
+def set_button_icon(button: QAbstractButton, name: str) -> None:
+    """Record only a weak widget reference; Qt retains ownership of its widgets."""
+    _button_icons[button] = name
+    tokens = current_tokens()
+    button.setIcon(action_icon(name, tokens.icon, tokens.icon_disabled))
+
+
+def refresh_button_icons() -> None:
+    tokens = current_tokens()
+    for button, name in list(_button_icons.items()):
+        try:
+            button.setIcon(action_icon(name, tokens.icon, tokens.icon_disabled))
+        except RuntimeError:
+            # Qt can delete a child before its Python wrapper is collected.
+            _button_icons.pop(button, None)

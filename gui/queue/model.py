@@ -643,12 +643,12 @@ class QueueTableModel(QAbstractTableModel):
     def apply_prepared_plan(self, item_ids: list[str], plan: EncodePlan, workdir: Path) -> None:
         """Atomically replace only the drafts included in this preparation."""
         if len(item_ids) != len(plan.items) or len(set(item_ids)) != len(item_ids):
-            raise RuntimeError("Prepared queue item identity mismatch.")
+            raise RuntimeError(self.translator.t("gui.message.identity_mismatch"))
         replacements: dict[int, QueueItemRecord] = {}
         for item_id, item in zip(item_ids, plan.items, strict=True):
             row, original = self.record_for_id(item_id)
             if row is None or original is None or original.status != QueueItemStatus.AWAITING_START or original.source_path != item.source_path:
-                raise RuntimeError("Queue changed during preparation.")
+                raise RuntimeError(self.translator.t("gui.message.changed_during_preparation"))
             candidate = copy.deepcopy(original)
             candidate.plan_item = copy.deepcopy(item)
             candidate.job_snapshot = build_queue_job_snapshot(plan, workdir)
@@ -760,17 +760,17 @@ class QueueTableModel(QAbstractTableModel):
         edit: Callable[[QueueItemRecord], bool],
     ) -> int:
         if self._preparing or self._execution_locked:
-            raise RuntimeError("Queue preparation owns these settings until it finishes.")
+            raise RuntimeError(self.translator.t("gui.message.settings_locked"))
         targets = sorted(set(rows))
         if not targets or not self.can_edit_rows(targets):
-            raise RuntimeError("Every selected queue item must be editable.")
+            raise RuntimeError(self.translator.t("gui.message.items_not_editable"))
         replacements: dict[int, QueueItemRecord] = {}
         for row in targets:
             record = self.record_for_row(row)
             assert record is not None
             candidate = copy.deepcopy(record)
             if not edit(candidate):
-                raise RuntimeError(f"Queue item {record.source_path.name} is not editable.")
+                raise RuntimeError(self.translator.t("gui.message.item_not_editable", file=record.source_path.name))
             replacements[row] = candidate
         combined = [replacements.get(row, record) for row, record in enumerate(self._records)]
         validate_unique_output_paths(

@@ -20,7 +20,6 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QApplication,
     QAbstractItemView,
-    QAbstractScrollArea,
     QComboBox,
     QDialog,
     QFileDialog,
@@ -38,6 +37,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QStackedWidget,
+    QSplitter,
     QStatusBar,
     QToolButton,
     QSystemTrayIcon,
@@ -98,7 +98,7 @@ from gui.queue.model import QueueTableModel, format_duration, format_size
 from gui.queue.view import ResponsiveQueueTableView, create_queue_view
 from gui.queue.window import QueueWindow
 from gui.options.settings_dialog import SettingsDialog
-from gui.icons import action_icon
+from gui.icons import action_icon, refresh_button_icons
 from gui.queue.item_details_panel import ItemDetailsPanel
 from gui.notification_banner import NotificationBanner
 from gui.theme import apply_theme, current_tokens, theme_manager
@@ -216,6 +216,7 @@ class MainWindow(QMainWindow):
         self.queue_model = QueueTableModel(self.translator, self)
         self.queue_manager = QueueManager(self.queue_model, self)
         self.activity_log_window = ActivityLogWindow(self.translator, self)
+        self.activity_log_window.set_log_level(str(self.app_config.get("log_level", "info")))
         self.queue_window = QueueWindow(self.translator, self.queue_model, self)
         self.queue_completion_handler = QueueCompletionHandler(
             parent=self,
@@ -277,6 +278,8 @@ class MainWindow(QMainWindow):
             return
 
         self._close_after_running_task_stops = True
+        if self.encoder_detection_worker is not None:
+            self.encoder_detection_worker.cancel()
         self._append_log(self.translator.t("gui.log.close_after_stop_requested"))
         self._stop_active_task()
         self._maybe_close_after_running_task()
@@ -287,7 +290,7 @@ class MainWindow(QMainWindow):
         if self._startup_encoder_detection_started:
             return
         self._startup_encoder_detection_started = True
-        QTimer.singleShot(0, lambda: self._start_encoder_capability_detection(force_refresh=False))
+        QTimer.singleShot(0, self, lambda: self._start_encoder_capability_detection(force_refresh=False))
 
     def _only_encoder_detection_running(self) -> bool:
         return (
@@ -327,7 +330,7 @@ class MainWindow(QMainWindow):
         if self._has_running_task():
             return
         self._close_after_running_task_stops = False
-        QTimer.singleShot(0, self.close)
+        QTimer.singleShot(0, self, self.close)
 
     def _restore_window_geometry(self) -> None:
         for widget, key in (
@@ -397,9 +400,21 @@ class MainWindow(QMainWindow):
         self.jobs_box = self._build_jobs_box()
         self.setup_bar = self._build_setup_bar()
         root_layout.addWidget(self.setup_bar)
-        root_layout.addWidget(self.source_box)
-        root_layout.addWidget(self.options_panel)
-        root_layout.addWidget(self.jobs_box, 1)
+        setup_content = QWidget()
+        setup_layout = QVBoxLayout(setup_content)
+        setup_layout.setContentsMargins(0, 0, 0, 0)
+        setup_layout.addWidget(self.source_box)
+        setup_layout.addWidget(self.options_panel)
+        setup_content.setParent(self.main_scroll_area.viewport())
+        self.main_scroll_area.setWidget(setup_content)
+        self.main_scroll_area.setParent(self.workspace_splitter)
+        self.jobs_box.setParent(self.workspace_splitter)
+        self.workspace_splitter.addWidget(self.main_scroll_area)
+        self.workspace_splitter.addWidget(self.jobs_box)
+        self.workspace_splitter.setStretchFactor(0, 0)
+        self.workspace_splitter.setStretchFactor(1, 1)
+        self.workspace_splitter.setSizes([280, 600])
+        root_layout.addWidget(self.workspace_splitter, 1)
         self._build_status_bar()
         self._apply_initial_window_geometry()
         self._restore_window_geometry()
@@ -514,23 +529,19 @@ class MainWindow(QMainWindow):
         self.about_action.triggered.connect(self._show_about)
 
     def _build_central_content(self) -> QVBoxLayout:
-        central = QScrollArea(self)
-        central.setWidgetResizable(True)
-        central.setFrameShape(QFrame.Shape.NoFrame)
-        central.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustIgnored)
-        central.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        central.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        central.setMinimumSize(0, 0)
-        self.setCentralWidget(central)
-
         content = QWidget(self)
         content.setObjectName("centralContent")
-        content.setMinimumSize(0, 0)
-        central.setWidget(content)
+        self.setCentralWidget(content)
         root_layout = QVBoxLayout(content)
-        root_layout.setContentsMargins(12, 12, 12, 12)
-        root_layout.setSpacing(10)
-        self.main_scroll_area = central
+        root_layout.setContentsMargins(12, 8, 12, 8)
+        root_layout.setSpacing(6)
+        # Construct native parents before children: PySide cyclic GC otherwise
+        # may destroy an earlier-created scroll wrapper before its splitter.
+        self.workspace_splitter = QSplitter(Qt.Orientation.Vertical, content)
+        self.main_scroll_area = QScrollArea(self.workspace_splitter)
+        self.main_scroll_area.setWidgetResizable(True)
+        self.main_scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        self.main_scroll_area.setMinimumHeight(64)
         self.main_content_widget = content
         self.drop_overlay = QLabel(self)
         self.drop_overlay.setObjectName("dropOverlay")
@@ -570,6 +581,7 @@ class MainWindow(QMainWindow):
         self.output_edit = QLineEdit()
         self.source_add_button = QPushButton()
         self.source_add_button.setProperty("role", "primary")
+        self.source_add_button.setMaximumWidth(180)
         self.source_add_button.clicked.connect(self.plan_action.trigger)
         self.output_button = QPushButton()
         self.output_button.setMaximumWidth(110)
@@ -605,6 +617,7 @@ class MainWindow(QMainWindow):
         self.setup_toggle.toggled.connect(self._on_setup_toggled)
         self.setup_summary_label = QLabel()
         self.setup_summary_label.setObjectName("setupSummary")
+        self.setup_summary_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.setup_summary_label.setVisible(False)
         layout.addWidget(self.setup_toggle)
         layout.addWidget(self.setup_summary_label, 1)
@@ -703,7 +716,13 @@ class MainWindow(QMainWindow):
         summary_layout.addWidget(self._stat_card(self.total_duration_title, self.total_duration_value), 1)
         summary_layout.addWidget(self._stat_card(self.states_title, self.states_value), 2)
         summary_layout.addWidget(self._stat_card(self.saved_space_title, self.saved_space_value), 1)
-        jobs_layout.addLayout(summary_layout)
+        self.summary_widget = QWidget()
+        self.summary_widget.setLayout(summary_layout)
+        jobs_layout.addWidget(self.summary_widget)
+        self.compact_summary_label = QLabel()
+        self.compact_summary_label.setObjectName("setupSummary")
+        jobs_layout.addWidget(self.compact_summary_label)
+        self.compact_summary_label.hide()
 
         self.queue_state_label = QLabel()
         self.queue_state_label.setObjectName("statusPill")
@@ -726,13 +745,29 @@ class MainWindow(QMainWindow):
         self.table_view.horizontalHeader().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
 
         self.empty_state = self._build_empty_state()
-        self.queue_stack = QStackedWidget()
+        self.details_splitter = QSplitter(Qt.Orientation.Vertical, jobs_box)
+        self.queue_stack = QStackedWidget(self.details_splitter)
         self.queue_stack.addWidget(self.table_view)
         self.queue_stack.addWidget(self.empty_state)
-        jobs_layout.addWidget(self.queue_stack, 1)
+        self.queue_stack.setMinimumHeight(90)
+        self.queue_stack.setParent(self.details_splitter)
+        self.details_splitter.addWidget(self.queue_stack)
+        jobs_layout.addWidget(self.details_splitter, 1)
 
-        self.details_panel = ItemDetailsPanel(self.translator, self)
-        jobs_layout.addWidget(self.details_panel)
+        self.details_scroll_area = QScrollArea(self.details_splitter)
+        self.details_panel = ItemDetailsPanel(self.translator, self.details_scroll_area.viewport())
+        self.details_scroll_area.setWidgetResizable(True)
+        self.details_scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        self.details_scroll_area.setMinimumHeight(70)
+        self.details_scroll_area.setParent(self.details_splitter)
+        self.details_panel.setParent(self.details_scroll_area.viewport())
+        self.details_scroll_area.setWidget(self.details_panel)
+        self.details_splitter.addWidget(self.details_scroll_area)
+        self.details_splitter.setChildrenCollapsible(False)
+        self.details_splitter.setStretchFactor(0, 1)
+        self.details_splitter.setStretchFactor(1, 0)
+        self.details_splitter.setSizes([400, 160])
+        self.details_scroll_area.hide()
         self.details_panel.openSource.connect(self._open_selected_source_folder)
         self.details_panel.openOutput.connect(self._open_selected_output_folder)
         self.details_panel.compare.connect(self._compare_selected_record)
@@ -797,9 +832,10 @@ class MainWindow(QMainWindow):
 
         self.table_view.filesDropped.connect(self._handle_dropped_paths)
         self.queue_window.table_view.filesDropped.connect(self._handle_dropped_paths)
+        self.table_view.dragActivityChanged.connect(self._set_drop_overlay_visible)
+        self.queue_window.table_view.dragActivityChanged.connect(self.queue_window.set_drop_overlay_visible)
         for view in [self.table_view, self.queue_window.table_view]:
             view.removeRequested.connect(self._remove_selected_queue_rows)
-            view.dragActivityChanged.connect(self._set_drop_overlay_visible)
         self.table_view.doubleClicked.connect(self._on_main_row_activated)
         self.table_view.activateRequested.connect(self._on_main_row_activated)
         self.queue_window.table_view.doubleClicked.connect(self._on_queue_window_row_activated)
@@ -945,7 +981,11 @@ class MainWindow(QMainWindow):
         self.setTabOrder(self.source_combo, self.output_edit)
         self.setTabOrder(self.output_edit, self.preset_combo)
         self.setTabOrder(self.preset_combo, self.post_encode_combo)
-        self.setTabOrder(self.post_encode_combo, self.table_view)
+        self.setTabOrder(self.post_encode_combo, self.source_add_button)
+        self.setTabOrder(self.source_add_button, self.source_file_button)
+        self.setTabOrder(self.source_file_button, self.source_dir_button)
+        self.setTabOrder(self.source_dir_button, self.output_button)
+        self.setTabOrder(self.output_button, self.options_panel)
 
     def _language_changed(self, language: str) -> None:
         self.language = language
@@ -968,6 +1008,7 @@ class MainWindow(QMainWindow):
             self.compare_action: "compare",
             self.presets_action: "presets",
             self.settings_action: "settings",
+            self.about_action: "about",
         }
         for action, icon_name in icon_names.items():
             action.setIcon(action_icon(icon_name, tokens.icon, tokens.icon_disabled))
@@ -1003,6 +1044,7 @@ class MainWindow(QMainWindow):
 
     def _on_theme_changed(self) -> None:
         self._apply_action_icons()
+        refresh_button_icons()
         self.queue_model.refresh_theme()
         self._render_queue_state()
         tokens = current_tokens()
@@ -1010,6 +1052,7 @@ class MainWindow(QMainWindow):
             action_icon("queue", tokens.accent, tokens.icon_disabled).pixmap(44, 44)
         )
         self.activity_log_window.highlighter.rehighlight()
+        self.activity_log_window.refresh_icons()
 
     def _show_about(self) -> None:
         QMessageBox.about(
@@ -1150,6 +1193,7 @@ class MainWindow(QMainWindow):
         old_language = self.language
         old_ffmpeg_path = str(self.app_config.get("ffmpeg_path", "")).strip()
         self.app_config.update(values)
+        self.activity_log_window.set_log_level(str(values.get("log_level", "info")))
         post_action = str(
             values.get("post_encode_action", PostEncodeAction.DO_NOTHING.value)
         )
@@ -1352,7 +1396,7 @@ class MainWindow(QMainWindow):
             message,
             visible=True,
         )
-        self._append_log(self.translator.t("gui.log.encoder_detection_failed", error=message))
+        self._append_error_log(self.translator.t("gui.log.encoder_detection_failed", error=message))
         self._set_runtime_banner(lambda: (
             self.translator.t("gui.banner.detection_failed"),
             "error",
@@ -1372,7 +1416,7 @@ class MainWindow(QMainWindow):
             return
         if self._pending_encoder_detection_force_refresh:
             self._pending_encoder_detection_force_refresh = False
-            QTimer.singleShot(0, lambda: self._start_encoder_capability_detection(force_refresh=True))
+            QTimer.singleShot(0, self, lambda: self._start_encoder_capability_detection(force_refresh=True))
 
     def _runtime_encoder_capabilities(self) -> dict:
         capabilities = self.app_config.get("encoder_capabilities")
@@ -1456,6 +1500,8 @@ class MainWindow(QMainWindow):
             )
         )
         self.queue_progress_bar.setValue(int(round(metrics.queue_percent * 10)))
+        self.compact_summary_label.setText(self.translator.t("gui.summary.compact", count=metrics.total_items, duration=format_duration(metrics.total_duration_sec), saved=("~" if metrics.actual_saved_bytes is None else "") + self.saved_space_value.text()))
+        self.compact_summary_label.setToolTip(self.states_value.text())
         self.queue_window.update_metrics(metrics)
         self._update_queue_empty_state(metrics)
         self._update_decision_banner(metrics)
@@ -1542,7 +1588,7 @@ class MainWindow(QMainWindow):
             self._refresh_action_state()
 
     def _on_queue_error(self, message: str) -> None:
-        self._append_log(f"{self.translator.t('gui.message.error')}: {message}")
+        self._append_log(f"{self.translator.t('gui.message.error')}: {message}", category="error")
         QMessageBox.critical(self, self.translator.t("gui.message.error"), message)
 
     def _set_controls_enabled(self, enabled: bool) -> None:
@@ -1636,6 +1682,7 @@ class MainWindow(QMainWindow):
         if metrics.total_items == 0:
             self.queue_stack.setCurrentWidget(self.empty_state)
             self.details_panel.set_record(None, self.translator)
+            self.details_scroll_area.hide()
         else:
             self.queue_stack.setCurrentWidget(self.table_view)
 
@@ -1649,6 +1696,7 @@ class MainWindow(QMainWindow):
         self.setup_toggle.setArrowType(
             Qt.ArrowType.RightArrow if collapsed else Qt.ArrowType.DownArrow
         )
+        self.main_scroll_area.setVisible(not collapsed)
         self.source_box.setVisible(not collapsed)
         self.options_panel.set_visible(not collapsed)
         self.setup_summary_label.setVisible(collapsed)
@@ -1659,6 +1707,7 @@ class MainWindow(QMainWindow):
 
     def _update_setup_summary(self) -> None:
         self.setup_summary_label.setText(self.options_panel.summary_text())
+        self.setup_summary_label.setToolTip(self.options_panel.summary_text())
 
     # Source intake and queue execution
 
@@ -1844,6 +1893,8 @@ class MainWindow(QMainWindow):
         self.active_worker = worker
         self._refresh_action_state()
         worker.log.connect(self._append_log)
+        if isinstance(worker, QueueIntakeWorker):
+            worker.problem.connect(self._append_error_log)
         worker.progress.connect(self._update_progress)
         if finished_slot is not None:
             worker.finished.connect(finished_slot)
@@ -1863,7 +1914,7 @@ class MainWindow(QMainWindow):
         self._set_worker_busy(False)
 
     def _on_worker_failed(self, message: str) -> None:
-        self._append_log(f"{self.translator.t('gui.message.error')}: {message}")
+        self._append_log(f"{self.translator.t('gui.message.error')}: {message}", category="error")
         self._set_status_snapshot(self.translator.t("gui.status.failed"), "-", "-", "-", None)
         QMessageBox.critical(self, self.translator.t("gui.message.error"), message)
 
@@ -1902,12 +1953,20 @@ class MainWindow(QMainWindow):
     def _position_drop_overlay(self) -> None:
         if not hasattr(self, "drop_overlay"):
             return
-        rect = self.main_scroll_area.geometry()
+        rect = self.main_content_widget.geometry()
         self.drop_overlay.setGeometry(rect.adjusted(12, 12, -12, -12))
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         self._position_drop_overlay()
+        if hasattr(self, "workspace_splitter"):
+            QTimer.singleShot(0, self, self._fit_workspace)
+
+    def _fit_workspace(self) -> None:
+        compact = self.height() < 900
+        self.summary_widget.setVisible(not compact)
+        self.compact_summary_label.setVisible(compact)
+        self.main_scroll_area.setMaximumHeight(max(64, int(self.main_content_widget.height() * (0.20 if compact else 0.30))))
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if self.active_worker is not None or self.queue_busy or self.queue_manager.is_busy():
@@ -1996,12 +2055,15 @@ class MainWindow(QMainWindow):
         self._update_details_panel()
 
     def _update_details_panel(self) -> None:
-        self.details_panel.set_record(self._selected_record(), self.translator)
+        record = self._selected_record()
+        self.details_panel.set_record(record, self.translator)
+        self.details_scroll_area.setVisible(record is not None)
 
     def _clear_details_panel(self) -> None:
         self.table_view.clearSelection()
         self.queue_window.table_view.clearSelection()
         self.details_panel.set_record(None, self.translator)
+        self.details_scroll_area.hide()
 
     def _on_main_row_activated(self, index: QModelIndex) -> None:
         self._on_queue_row_activated(self.table_view, index)
@@ -2516,7 +2578,7 @@ class MainWindow(QMainWindow):
         self.queue_manager.finish_postprocessing()
         if not cancelled and not self._close_after_running_task_stops:
             # The old worker's finished signal must return before another run starts.
-            QTimer.singleShot(0, self._resume_after_postprocessing)
+            QTimer.singleShot(0, self, self._resume_after_postprocessing)
         self._refresh_action_state()
         self._maybe_close_after_running_task()
 
@@ -2572,8 +2634,11 @@ class MainWindow(QMainWindow):
         self.activity_log_window.raise_()
         self.activity_log_window.activateWindow()
 
-    def _append_log(self, message: str) -> None:
-        self.activity_log_window.append_message(message)
+    def _append_log(self, message: str, category: str | None = None) -> None:
+        self.activity_log_window.append_message(message, category=category)
+
+    def _append_error_log(self, message: str) -> None:
+        self._append_log(message, category="error")
 
     def _log_catalog_diagnostics(self) -> None:
         for diagnostic in self.catalog.diagnostics():

@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.i18n import Translator
+from gui.icons import set_button_icon
 from gui.queue.model import format_size
 from gui.queue.state import QueueItemRecord, QueueItemStatus, build_tags, status_key
 
@@ -43,7 +44,7 @@ class ItemDetailsPanel(QFrame):
         header.addWidget(self.title_label)
         header.addStretch(1)
         self.close_button = QToolButton()
-        self.close_button.setText("×")
+        set_button_icon(self.close_button, "close")
         self.close_button.setAutoRaise(True)
         self.close_button.clicked.connect(self.closeRequested.emit)
         header.addWidget(self.close_button)
@@ -76,12 +77,15 @@ class ItemDetailsPanel(QFrame):
         self.compare_button.clicked.connect(self.compare.emit)
         self.resolve_button.clicked.connect(self.resolve.emit)
         self.copy_button.clicked.connect(self._copy_details)
+        set_button_icon(self.open_source_button, "open_folder")
+        set_button_icon(self.open_output_button, "open_folder")
         self.apply_translations(translator)
 
     def apply_translations(self, translator: Translator) -> None:
         self.translator = translator
         self.title_label.setText(translator.t("gui.details.title"))
         self.close_button.setToolTip(translator.t("gui.details.close"))
+        self.close_button.setAccessibleName(translator.t("gui.details.close"))
         self.open_source_button.setText(translator.t("gui.details.open_source"))
         self.open_output_button.setText(translator.t("gui.details.open_output"))
         self.compare_button.setText(translator.t("gui.details.compare"))

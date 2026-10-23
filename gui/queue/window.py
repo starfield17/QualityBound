@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QPoint, QRect, QSize, Qt, Slot
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QProgressBar,
     QToolBar,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -50,6 +51,11 @@ class QueueWindow(QMainWindow):
 
         self.table_view = create_queue_view(self)
         self.table_view.setModel(self.model)
+        self.drop_overlay = QLabel(self)
+        self.drop_overlay.setObjectName("dropOverlay")
+        self.drop_overlay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.drop_overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.drop_overlay.hide()
 
         layout.addWidget(self.summary_label)
         layout.addWidget(self.queue_progress_label)
@@ -58,8 +64,21 @@ class QueueWindow(QMainWindow):
         layout.addWidget(self.hint_label)
 
     def attach_actions(self, actions: list[QAction]) -> None:
-        for action in actions:
-            self.action_toolbar.addAction(action)
+        for index, action in enumerate(actions):
+            button = QToolButton(self.action_toolbar)
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            button.setDefaultAction(action)
+            if index in (0, 2):
+                button.setObjectName("primaryAction" if index == 0 else "dangerAction")
+            self.action_toolbar.addWidget(button)
+
+    @Slot(bool)
+    def set_drop_overlay_visible(self, visible: bool) -> None:
+        self.drop_overlay.setText(self.translator.t("gui.drop.overlay"))
+        viewport = self.table_view.viewport()
+        self.drop_overlay.setGeometry(QRect(viewport.mapTo(self, QPoint()), viewport.size()))
+        self.drop_overlay.setVisible(visible and self.table_view.acceptDrops())
+        self.drop_overlay.raise_()
 
     def apply_translations(self, tr: Translator) -> None:
         self.translator = tr

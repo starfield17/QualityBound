@@ -6,6 +6,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QToolButton, QWidget
 
 from core.i18n import Translator
+from gui.icons import set_button_icon
 
 
 class NotificationBanner(QFrame):
@@ -33,7 +34,7 @@ class NotificationBanner(QFrame):
         self.actions_layout.setSpacing(6)
         layout.addLayout(self.actions_layout)
         self.dismiss_button = QToolButton()
-        self.dismiss_button.setText("×")
+        set_button_icon(self.dismiss_button, "close")
         self.dismiss_button.setAutoRaise(True)
         self.dismiss_button.setToolTip("")
         self.dismiss_button.clicked.connect(self._dismiss)
@@ -42,6 +43,7 @@ class NotificationBanner(QFrame):
     def apply_translations(self, translator: Translator) -> None:
         self.translator = translator
         self.dismiss_button.setToolTip(translator.t("gui.banner.dismiss"))
+        self.dismiss_button.setAccessibleName(translator.t("gui.banner.dismiss"))
 
     def show_message(
         self,

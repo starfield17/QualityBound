@@ -25,6 +25,7 @@ class QueueIntakeWorker(QThread):
     failed = Signal(str)
     cancelled = Signal(str)
     log = Signal(str)
+    problem = Signal(str)
     progress = Signal(object)
 
     def __init__(self, input_path: Path | None, recursive: bool, ffprobe_path: str | None,
@@ -50,13 +51,17 @@ class QueueIntakeWorker(QThread):
                 for path in self.paths if self.paths is not None else [self.input_path or Path()]:
                     self.progress.emit({"stage": "planning", "state": "scanning", "file_path": str(path)})
                     try:
-                        items = collect_video_files(path, self.recursive, self.log.emit, cancel_check=self._cancel_event.is_set)
+                        items = collect_video_files(path, self.recursive, self.problem.emit, cancel_check=self._cancel_event.is_set)
+                    except OperationCancelledError:
+                        raise
                     except (OSError, ValueError, RuntimeError) as exc:
                         if self.paths is None:
                             raise
-                        self.log.emit(self.translator.t("gui.log.intake_failed", file=str(path), error=str(exc)))
+                        self.problem.emit(self.translator.t("gui.log.intake_failed", file=str(path), error=str(exc)))
                         continue
                     sources.extend((item, path if path.is_dir() else None) for item in items)
+            if self._cancel_event.is_set():
+                raise OperationCancelledError(self.translator.t("gui.log.intake_cancelled"))
             if self.ffmpeg_path is not None:
                 _ffmpeg, probe = discover_ffmpeg_tools(self.ffmpeg_path, self.ffprobe_path)
             else:
@@ -75,13 +80,13 @@ class QueueIntakeWorker(QThread):
                     raise
                 except Exception as exc:
                     error = str(exc)
-                    self.log.emit(self.translator.t("gui.log.intake_failed", file=item.path.name, error=error))
+                    self.problem.emit(self.translator.t("gui.log.intake_failed", file=item.path.name, error=error))
                 records.append(create_draft_record(draft, error))
             if self._cancel_event.is_set():
                 raise OperationCancelledError(self.translator.t("gui.log.intake_cancelled"))
             self.completed.emit(records)
-        except OperationCancelledError as exc:
-            self.cancelled.emit(str(exc))
+        except OperationCancelledError:
+            self.cancelled.emit(self.translator.t("gui.log.intake_cancelled"))
         except Exception as exc:
             self.failed.emit(str(exc))
 

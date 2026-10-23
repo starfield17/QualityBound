@@ -34,6 +34,7 @@ from core.media import (
     post_encode_action_key,
 )
 from gui.qt_optionals import maybe_none
+from gui.icons import set_button_icon
 from gui.window_geometry import clamped_window_size
 
 class SettingsDialog(QDialog):
@@ -134,6 +135,7 @@ class SettingsDialog(QDialog):
         self.path_status_label.setObjectName("setupSummary")
         self.path_status_label.setWordWrap(True)
         self.redetect_button = QPushButton()
+        set_button_icon(self.redetect_button, "refresh")
         self.detection_hint_label = QLabel()
         self.detection_hint_label.setObjectName("setupSummary")
         self.detection_hint_label.setWordWrap(True)

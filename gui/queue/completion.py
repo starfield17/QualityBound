@@ -32,9 +32,10 @@ from gui.queue.state import QueueItemRecord, QueueItemStatus
 class SkippedSourceCopyWorker(QThread):
     copied = Signal(str, object)
 
-    def __init__(self, pairs: list[tuple[str, EncodePlanItem, EncodeResult]], parent: QObject) -> None:
+    def __init__(self, pairs: list[tuple[str, EncodePlanItem, EncodeResult]], parent: QObject, translator: Translator) -> None:
         super().__init__(parent)
         self.pairs = pairs
+        self.translator = translator
         self.cancelled = threading.Event()
 
     def cancel(self) -> None:
@@ -52,7 +53,7 @@ class SkippedSourceCopyWorker(QThread):
             except (OSError, ValueError, RuntimeError) as exc:
                 result.skipped_output_outcome = SkippedOutputOutcome.FAILED
                 result.success = result.skipped = result.needs_decision = False
-                result.error_message = f"Source copy failed: {exc}"
+                result.error_message = self.translator.t("gui.log.copy_failed", error=str(exc))
             self.copied.emit(item_id, result)
 
 
@@ -120,7 +121,7 @@ class QueueCompletionHandler(QObject):
         self._copy_translator, self._copy_done, self._apply_copy_result = tr, finished, apply_result
         snapshots = [(by_result[id(result)].item_id, copy.deepcopy(item), copy.deepcopy(result))
                      for item, result in selected]
-        worker = SkippedSourceCopyWorker(snapshots, self)
+        worker = SkippedSourceCopyWorker(snapshots, self, tr)
         self._copy_worker = worker
         worker.copied.connect(self._on_source_copied)
         worker.finished.connect(self._on_copy_finished)

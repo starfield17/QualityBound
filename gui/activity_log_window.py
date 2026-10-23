@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from core.i18n import Translator
 from gui.theme import current_tokens
+from gui.icons import action_icon
 from gui.window_geometry import clamped_window_size
 
 
@@ -33,12 +35,12 @@ class LogEntry:
     message: str
 
     def display_text(self) -> str:
-        label = {"command": "CMD", "error": "ERROR", "process": "INFO"}.get(self.category, "INFO")
+        label = {"command": "CMD", "error": "ERROR", "process": "INFO", "debug": "DEBUG"}.get(self.category, "INFO")
         return f"{self.timestamp}  {label:<5}  {self.message}"
 
 
 class LogHighlighter(QSyntaxHighlighter):
-    _LINE = QRegularExpression(r"^\d{2}:\d{2}:\d{2}\s+(ERROR|CMD|INFO)")
+    _LINE = QRegularExpression(r"^\d{2}:\d{2}:\d{2}\s+(ERROR|CMD|INFO|DEBUG)")
 
     def highlightBlock(self, text: str) -> None:
         match = self._LINE.match(text)
@@ -64,6 +66,7 @@ class ActivityLogWindow(QMainWindow):
         self.entries: list[LogEntry] = []
         self._pending_entries: list[LogEntry] = []
         self._flush_interval_ms = 75
+        self._log_level = "debug"
 
         self._build_ui()
         self.apply_translations(tr)
@@ -85,6 +88,8 @@ class ActivityLogWindow(QMainWindow):
         self.filter_combo.addItem("", "error")
         self.search_edit = QLineEdit()
         self.search_edit.setClearButtonEnabled(True)
+        tokens = current_tokens()
+        self.search_icon_action = self.search_edit.addAction(action_icon("search", tokens.icon, tokens.icon_disabled), QLineEdit.ActionPosition.LeadingPosition)
         self.follow_check = QCheckBox()
         self.follow_check.setChecked(True)
         self.export_button = QPushButton()
@@ -118,6 +123,7 @@ class ActivityLogWindow(QMainWindow):
         self.filter_combo.currentIndexChanged.connect(self._refresh_log_view)
         self.search_edit.textChanged.connect(self._on_search_changed)
         self.clear_button.clicked.connect(self.clear_messages)
+        self.follow_check.toggled.connect(self._follow_changed)
         self.export_button.clicked.connect(self._export_logs)
 
     def apply_translations(self, tr: Translator) -> None:
@@ -135,33 +141,35 @@ class ActivityLogWindow(QMainWindow):
         self.log_output.setPlaceholderText(self.translator.t("gui.log.empty"))
         self._refresh_log_view()
 
+    def refresh_icons(self) -> None:
+        tokens = current_tokens()
+        self.search_icon_action.setIcon(action_icon("search", tokens.icon, tokens.icon_disabled))
+
+    def _follow_changed(self, enabled: bool) -> None:
+        if enabled:
+            self.log_output.verticalScrollBar().setValue(self.log_output.verticalScrollBar().maximum())
+
     def _on_search_changed(self, _text: str) -> None:
         self.search_timer.start()
 
     def _classify_message(self, message: str) -> str:
         if message.startswith("$ "):
             return "command"
-        lowered = message.lower()
-        if any(
-            token in lowered
-            for token in (
-                "error",
-                "failed",
-                "traceback",
-                "cancelled",
-                "错误",
-                "失败",
-                "异常",
-                "取消",
-            )
-        ):
+        # Only controlled severity prefixes count; filenames and counters do not.
+        if re.match(r"^\s*(?:\[debug\]|debug:)", message, re.IGNORECASE):
+            return "debug"
+        if re.match(r"^\s*(?:\[?(?:error|fatal|failed|traceback)\]?(?:[:：\s]|$)|(?:错误|失败|异常)[:：\s])", message, re.IGNORECASE):
             return "error"
         return "process"
 
-    def append_message(self, message: str) -> None:
+    def set_log_level(self, level: str) -> None:
+        self._log_level = "debug" if level == "debug" else "info"
+        self._refresh_log_view()
+
+    def append_message(self, message: str, *, category: str | None = None) -> None:
         entry = LogEntry(
             timestamp=time.strftime("%H:%M:%S"),
-            category=self._classify_message(message),
+            category=category or self._classify_message(message),
             message=message,
         )
         self.entries.append(entry)
@@ -178,6 +186,8 @@ class ActivityLogWindow(QMainWindow):
         self.log_output.clear()
 
     def _matches(self, entry: LogEntry, selected_filter: str, search: str) -> bool:
+        if self._log_level == "info" and entry.category in {"command", "debug"}:
+            return False
         if selected_filter != "all" and entry.category != selected_filter:
             return False
         return not search or search in entry.message.casefold()
@@ -198,15 +208,19 @@ class ActivityLogWindow(QMainWindow):
         ]
         if lines:
             scrollbar = self.log_output.verticalScrollBar()
-            was_at_bottom = scrollbar.value() >= scrollbar.maximum() - 4
+            position = scrollbar.value()
+            horizontal = self.log_output.horizontalScrollBar().value()
             self.log_output.appendPlainText("\n".join(lines))
-            if self.follow_check.isChecked() or was_at_bottom:
-                scrollbar.setValue(scrollbar.maximum())
+            scrollbar.setValue(scrollbar.maximum() if self.follow_check.isChecked() else position)
+            self.log_output.horizontalScrollBar().setValue(horizontal)
 
         if not self._pending_entries:
             self.flush_timer.stop()
 
     def _refresh_log_view(self) -> None:
+        scrollbar = self.log_output.verticalScrollBar()
+        position = scrollbar.value()
+        horizontal = self.log_output.horizontalScrollBar().value()
         self._pending_entries = []
         self.flush_timer.stop()
         selected_filter = str(self.filter_combo.currentData() or "all")
@@ -218,14 +232,15 @@ class ActivityLogWindow(QMainWindow):
         ]
         self.log_output.setPlainText("\n".join(lines))
         scrollbar = self.log_output.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        scrollbar.setValue(scrollbar.maximum() if self.follow_check.isChecked() else position)
+        self.log_output.horizontalScrollBar().setValue(horizontal)
 
     def _export_logs(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self,
             self.translator.t("gui.dialog.export_log"),
             str(Path.home() / "qualitybound.log"),
-            "Log Files (*.log *.txt);;All Files (*)",
+            self.translator.t("gui.log.file_filter"),
         )
         if not path:
             return
