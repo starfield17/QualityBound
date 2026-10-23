@@ -131,6 +131,7 @@ class ItemDetailsPanel(QFrame):
             segmented = record.bound_plan_item.segmented_analysis_result
             planned_quality: float | None = None
             planned_ratio: float | None = None
+            measured_quality = segmented is not None and segmented.final_mean_vmaf is not None
             if segmented is not None:
                 planned_quality = (
                     segmented.final_mean_vmaf
@@ -141,9 +142,12 @@ class ItemDetailsPanel(QFrame):
                 planned_quality = quality.min_vmaf
                 planned_ratio = quality.predicted_output_ratio or quality.required_output_ratio
             if planned_quality is not None:
-                lines.append(f"{tr('gui.details.planned_quality')}: {planned_quality:.1f}")
+                lines.append(f"{tr('gui.details.measured_quality') if measured_quality else tr('gui.details.planned_quality')}: {'' if measured_quality else '~'}{planned_quality:.1f}")
             if planned_ratio is not None:
-                lines.append(f"{tr('gui.details.planned_size')}: {planned_ratio * 100:.1f}%")
+                lines.append(f"{tr('gui.details.planned_size')}: ~{planned_ratio * 100:.1f}%")
+            if record.result is not None and record.result.rejected_output_path is not None:
+                lines.append(f"{tr('gui.decision.preserved_path')}: {record.result.rejected_output_path}")
+                lines.append(f"{tr('gui.details.preserved_size')}: {format_size(record.result.actual_output_bytes)}")
             actual_bytes = self._actual_output_bytes(record)
             if actual_bytes is not None:
                 lines.append(f"{tr('gui.details.actual_size')}: {format_size(actual_bytes)}")
@@ -168,6 +172,8 @@ class ItemDetailsPanel(QFrame):
 
     @staticmethod
     def _actual_output_bytes(record: QueueItemRecord) -> int | None:
+        if record.status != QueueItemStatus.DONE:
+            return None
         if record.result is not None and record.result.actual_output_bytes is not None:
             return record.result.actual_output_bytes
         try:

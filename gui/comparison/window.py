@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, QTimer, Signal
+from PySide6.QtCore import QRectF, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import (
     QCloseEvent,
     QDragEnterEvent,
@@ -17,6 +17,9 @@ from PySide6.QtGui import (
     QShortcut,
 )
 from PySide6.QtWidgets import (
+    QApplication,
+    QAbstractSpinBox,
+    QLineEdit,
     QComboBox,
     QDoubleSpinBox,
     QFileDialog,
@@ -111,8 +114,7 @@ class FrameCanvas(QWidget):
             size = self.image.size().scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatio)
             x, y = (self.width() - size.width()) // 2, (self.height() - size.height()) // 2
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-            painter.drawImage(x, y, self.image.scaled(
-                size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            painter.drawImage(QRectF(x, y, size.width(), size.height()), self.image)
 
 
 class VideoPane(QWidget):
@@ -150,6 +152,8 @@ def display_time(seconds: float) -> str:
 
 class ComparisonWindow(QWidget):
     """Owns one comparison session; callers supply paths and tools, never queue state."""
+    closed = Signal(object)
+
     def __init__(self, translator: Translator, parent: QWidget | None = None,
                  *, ffmpeg: str | None = None, ffprobe: str | None = None) -> None:
         super().__init__(parent, Qt.WindowType.Window)
@@ -182,12 +186,18 @@ class ComparisonWindow(QWidget):
         self.preview_timer.setInterval(100)
         self.preview_timer.timeout.connect(self._preview_seek)
         self._shortcuts: list[QShortcut] = []
-        for key, callback in [("Space", self.toggle_play), ("Tab", self.toggle_side),
+        for key, callback in [("Space", self.toggle_play), ("T", self.toggle_side),
                               ("Left", lambda: self.seek(self.position - 5)),
-                              ("Right", lambda: self.seek(self.position + 5))]:
+                              ("Right", lambda: self.seek(self.position + 5)),
+                              (",", lambda: self.step_frame(-1)), (".", lambda: self.step_frame(1)),
+                              ("Shift+,", lambda: self.step_frame(-1, side=1)),
+                              ("Shift+.", lambda: self.step_frame(1, side=1))]:
             shortcut = QShortcut(QKeySequence(key), self)
             shortcut.activated.connect(callback)
             self._shortcuts.append(shortcut)
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            app.focusChanged.connect(self._update_shortcuts)
         self.apply_translations(translator)
         self._set_audio()
         self._update_controls()
@@ -225,6 +235,8 @@ class ComparisonWindow(QWidget):
             self.picture_layout.addWidget(pane, 1)
         root.addLayout(self.picture_layout, 1)
         self.slider = SeekSlider(self)
+        self.slider.setSingleStep(1000)
+        self.slider.setPageStep(5000)
         self.slider.sliderPressed.connect(self._scrub_started)
         self.slider.valueChanged.connect(self._scrub_moved)
         self.slider.sliderReleased.connect(self._scrub_finished)
@@ -296,8 +308,8 @@ class ComparisonWindow(QWidget):
         self.mode.setToolTip(t("gui.compare.mode_hint"))
         self.precision.setToolTip(t("gui.compare.precision_hint"))
         self.audio.setToolTip(t("gui.compare.audio_hint"))
-        for pane in self.panes:
-            pane.placeholder.setText(t("gui.compare.placeholder"))
+        for side, pane in enumerate(self.panes):
+            pane.placeholder.setText(t("gui.compare.waiting_other", side="AB"[1 - side]) if self.paths[side] is not None and self.media is None else t("gui.compare.placeholder"))
         self._update_labels()
         self._update_controls()
 
@@ -420,14 +432,18 @@ class ComparisonWindow(QWidget):
         self.status.setText(self.translator.t("gui.compare.error", error=error))
         self._update_controls()
 
+    def _update_shortcuts(self, *_args: object) -> None:
+        focus = QApplication.focusWidget()
+        editing = isinstance(focus, (QLineEdit, QAbstractSpinBox, QComboBox, QSlider))
+        for shortcut in self._shortcuts:
+            shortcut.setEnabled(not editing and (shortcut.key().toString() != "T" or self.mode.currentIndex() == 1))
+
     def _update_layout(self) -> None:
         single = self.mode.currentIndex() == 1
         for side, pane in enumerate(self.panes):
             pane.setVisible(not single or side == self._selected_side)
         self.switch_button.setEnabled(single)
-        for shortcut in self._shortcuts:
-            if shortcut.key().toString() == "Tab":
-                shortcut.setEnabled(single)
+        self._update_shortcuts()
 
     def toggle_side(self) -> None:
         if self.mode.currentIndex() == 1:
@@ -460,6 +476,8 @@ class ComparisonWindow(QWidget):
 
     def _update_labels(self) -> None:
         for side, pane in enumerate(self.panes):
+            if self.media is None:
+                pane.placeholder.setText(self.translator.t("gui.compare.waiting_other", side="AB"[1 - side]) if self.paths[side] is not None else self.translator.t("gui.compare.placeholder"))
             path = self.paths[side]
             stamp = self.timestamps[side]
             parts = ["AB"[side], path.name if path else "—"]
@@ -623,6 +641,8 @@ class ComparisonWindow(QWidget):
 
     def _scrub_moved(self, value: int) -> None:
         if self.phase != ComparisonPhase.SCRUBBING:
+            if self.phase in {ComparisonPhase.PAUSED, ComparisonPhase.PLAYING, ComparisonPhase.ERROR, ComparisonPhase.SEEKING}:
+                self.seek(value / 1000)
             return
         self.position = value / 1000
         self._update_labels()
@@ -662,6 +682,7 @@ class ComparisonWindow(QWidget):
         self.seek(self.slider.value() / 1000, resume=self._resume_after_scrub)
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        self.closed.emit(self.saveGeometry())
         self.phase = ComparisonPhase.CLOSED
         self._invalidate()
         self.timer.stop()

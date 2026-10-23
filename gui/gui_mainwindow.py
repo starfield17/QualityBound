@@ -134,6 +134,7 @@ RUNTIME_CONFIG_KEYS = frozenset(
         "main_window_geometry",
         "queue_window_geometry",
         "activity_log_geometry",
+        "comparison_window_geometry",
         "size_blocked_policy",
         "skipped_output_policy",
         "workdir_path",
@@ -2422,6 +2423,10 @@ class MainWindow(QMainWindow):
             ffprobe = str(record.job_snapshot.ffprobe_path)
         window = ComparisonWindow(self.translator, self, ffmpeg=ffmpeg, ffprobe=ffprobe)
         window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        encoded = str(self.app_config.get("comparison_window_geometry", ""))
+        if encoded:
+            window.restoreGeometry(QByteArray.fromBase64(encoded.encode("ascii", errors="ignore")))
+        window.closed.connect(self._remember_comparison_geometry)
         self.comparison_windows.append(window)
         window.destroyed.connect(lambda: self.comparison_windows.remove(window))
         if record is not None:
@@ -2436,13 +2441,24 @@ class MainWindow(QMainWindow):
         window.raise_()
         window.activateWindow()
 
+    def _remember_comparison_geometry(self, geometry: QByteArray) -> None:
+        self.app_config["comparison_window_geometry"] = bytes(geometry.toBase64().data()).decode("ascii")
+        self._persist_runtime_state()
+
     def _compare_preserved(self, record: QueueItemRecord, preserved_path: Path) -> None:
         ffmpeg, ffprobe = self._selected_ffmpeg(), self._selected_ffprobe()
         if record.job_snapshot is not None:
             ffmpeg = str(record.job_snapshot.ffmpeg_path)
             ffprobe = str(record.job_snapshot.ffprobe_path)
-        window = ComparisonWindow(self.translator, self, ffmpeg=ffmpeg, ffprobe=ffprobe)
+        owner = QApplication.activeModalWidget() or self
+        window = ComparisonWindow(self.translator, owner, ffmpeg=ffmpeg, ffprobe=ffprobe)
+        if isinstance(owner, QDialog):
+            owner.finished.connect(window.close)
         window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        encoded = str(self.app_config.get("comparison_window_geometry", ""))
+        if encoded:
+            window.restoreGeometry(QByteArray.fromBase64(encoded.encode("ascii", errors="ignore")))
+        window.closed.connect(self._remember_comparison_geometry)
         self.comparison_windows.append(window)
         window.destroyed.connect(lambda: self.comparison_windows.remove(window))
         window.load_paths(record.source_path, preserved_path)

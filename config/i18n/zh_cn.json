@@ -378,7 +378,7 @@
   "gui.compare.offset_next": "B +1 帧",
   "gui.compare.offset": "B 偏移：",
   "gui.compare.offset_hint": "B 时间 = A 时间 + 偏移。正值跳过 B 的片头。帧微调按钮使用 B 的实际帧时间戳。",
-  "gui.compare.help": "Space：播放/暂停 · Tab：单画面切换 A/B · ←/→：跳转 5 秒。点击或拖动进度条同步定位两个视频。精确检查按时间戳定位暂停画面；播放共用一个时钟。全部解码使用所选外部 FFmpeg。",
+  "gui.compare.help": "Space：播放/暂停 · T：单画面切换 A/B · ←/→：跳转 5 秒。点击或拖动进度条同步定位两个视频。精确检查按时间戳定位暂停画面；播放共用一个时钟。全部解码使用所选外部 FFmpeg。\nA 逐帧：, / .；B 逐帧：Shift+, / Shift+.。编辑控件保留自身按键。",
   "gui.compare.loading": "正在读取视频信息…",
   "gui.compare.playing": "同步播放中",
   "gui.compare.normal_paused": "已暂停 · 普通同步",
@@ -561,5 +561,10 @@
   "gui.state.receipt_loaded": "正在复用测量结果",
   "gui.state.receipt_write_failed": "无法保存测量结果",
   "gui.state.running": "运行中",
-  "gui.state.failed": "失败"
+  "gui.state.failed": "失败",
+  "gui.decision.estimated_quality": "预估画质",
+  "gui.details.measured_quality": "实测 VMAF",
+  "gui.details.preserved_size": "保留文件体积（尚未发布）",
+  "gui.decision.size_ratio": "超出限额 {value}%；竖线表示限额。",
+  "gui.compare.waiting_other": "已就绪。请打开视频 {side} 以开始对比。"
 }

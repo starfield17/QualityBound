@@ -5,7 +5,7 @@ from enum import Enum
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QPainter, QPaintEvent
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QProgressBar,
+    QScrollArea,
+    QSizePolicy,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -22,6 +24,7 @@ from core.i18n import Translator
 from core.models import ConstraintFailureKind, DecisionActionCode, DecisionOption
 from gui.queue.state import QueueItemRecord
 from gui.window_geometry import clamped_window_size
+from gui.queue.model import format_size
 
 
 class SizeMissDecision(str, Enum):
@@ -30,13 +33,17 @@ class SizeMissDecision(str, Enum):
     DISCARD = "discard"
 
 
-def _format_bytes(value: int) -> str:
-    amount = float(max(0, value))
-    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
-        if amount < 1024.0 or unit == "TiB":
-            return f"{amount:.2f} {unit}"
-        amount /= 1024.0
-    return f"{value} B"
+class _LimitBar(QProgressBar):
+    def __init__(self, limit_fraction: float) -> None:
+        super().__init__()
+        self.limit_fraction = limit_fraction
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setPen(self.palette().text().color())
+        x = round(self.contentsRect().width() * self.limit_fraction)
+        painter.drawLine(x, 0, x, self.height())
 
 
 def _quality_action_text(tr: Translator, option: DecisionOption) -> str:
@@ -71,7 +78,14 @@ class _DecisionDialog(QDialog):
         self.choice: object | None = None
         self.setModal(True)
         self.resize(clamped_window_size(600, 470, minimum_width=520, minimum_height=380))
-        self.body_layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        body = QWidget()
+        scroll.setWidget(body)
+        outer.addWidget(scroll)
+        self.body_layout = QVBoxLayout(body)
         self.body_layout.setContentsMargins(18, 16, 18, 16)
         self.body_layout.setSpacing(10)
         self.title_label = QLabel()
@@ -112,6 +126,9 @@ class _DecisionDialog(QDialog):
         name.setObjectName("summaryTitle")
         text = QLabel(value)
         text.setObjectName("summaryValue")
+        text.setWordWrap(True)
+        text.setMinimumWidth(0)
+        text.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.metrics_layout.addWidget(name, row, 0)
         self.metrics_layout.addWidget(text, row, 1)
@@ -127,11 +144,16 @@ class _DecisionDialog(QDialog):
     ) -> QPushButton:
         button = QPushButton(text)
         button.setToolTip(description)
+        button.setAccessibleDescription(description)
         button.setAutoDefault(False)
         if role:
             button.setProperty("role", role)
         button.clicked.connect(lambda _checked=False, value=choice: self._choose(value))
         self.actions_layout.addWidget(button)
+        detail = QLabel(description)
+        detail.setObjectName("decisionDetail")
+        detail.setWordWrap(True)
+        self.actions_layout.addWidget(detail)
         return button
 
     def _choose(self, choice: object) -> None:
@@ -157,20 +179,22 @@ def _quality_metrics(dialog: _DecisionDialog, record: QueueItemRecord) -> None:
     elif segmented is not None:
         measured = segmented.final_mean_vmaf if segmented.final_mean_vmaf is not None else segmented.predicted_mean_vmaf
     if measured is not None:
-        dialog.add_metric(row, tr.t("gui.decision.measured_quality"), f"{measured:.1f}")
+        final = segmented is not None and segmented.final_mean_vmaf is not None
+        dialog.add_metric(row, tr.t("gui.decision.measured_quality" if final else "gui.decision.estimated_quality"),
+                          ("" if final else "~") + f"{measured:.1f}")
         row += 1
     if quality is not None and quality.predicted_output_ratio is not None:
         dialog.add_metric(
             row,
             tr.t("gui.decision.output_ratio"),
-            f"{quality.predicted_output_ratio * 100:.1f}%",
+            f"~{quality.predicted_output_ratio * 100:.1f}%",
         )
         row += 1
     if quality is not None and quality.required_output_ratio is not None:
         dialog.add_metric(
             row,
             tr.t("gui.decision.required_ratio"),
-            f"{quality.required_output_ratio * 100:.1f}%",
+            f"~{quality.required_output_ratio * 100:.1f}%",
         )
         row += 1
     reason = quality.reason if quality is not None else None
@@ -188,13 +212,16 @@ def _size_metrics(dialog: _DecisionDialog, record: QueueItemRecord) -> None:
     actual = int(result.actual_output_bytes or 0)
     allowed = int(result.allowed_output_bytes or 0)
     tr = dialog.translator
-    dialog.add_metric(0, tr.t("gui.decision.actual_size"), _format_bytes(actual))
-    dialog.add_metric(1, tr.t("gui.decision.size_limit"), _format_bytes(allowed))
-    bar = QProgressBar()
-    bar.setRange(0, max(actual, allowed, 1))
-    bar.setValue(min(actual, max(actual, allowed, 1)))
+    dialog.add_metric(0, tr.t("gui.decision.actual_size"), format_size(actual))
+    dialog.add_metric(1, tr.t("gui.decision.size_limit"), format_size(allowed))
+    scale = max(actual, allowed, 1) * 1.1
+    bar = _LimitBar(allowed / scale)
+    bar.setRange(0, 1000)
+    bar.setValue(round(actual / scale * 1000))
     bar.setTextVisible(True)
-    bar.setFormat(f"{_format_bytes(actual)} / {_format_bytes(allowed)}")
+    ratio = actual / allowed * 100 if allowed > 0 else 0
+    bar.setFormat(f"{format_size(actual)} / {format_size(allowed)} · {ratio:.1f}%")
+    bar.setToolTip(tr.t("gui.decision.size_ratio", value=f"{max(0.0, ratio - 100):.1f}"))
     bar.setProperty("over", actual > allowed)
     dialog.metrics_layout.addWidget(bar, 2, 0, 1, 2)
     if result.rejected_output_path is not None:

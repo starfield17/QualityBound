@@ -378,7 +378,7 @@
   "gui.compare.offset_next": "B +1 frame",
   "gui.compare.offset": "B offset:",
   "gui.compare.offset_hint": "B time = A time + offset. Positive values skip the beginning of B. Frame buttons use actual B frame timestamps.",
-  "gui.compare.help": "Space: play/pause · Tab: switch A/B in single view · ←/→: seek 5 seconds. Click or drag the timeline to seek both videos. Precise inspection aligns paused frames by timestamp; playback shares one presentation clock. All decoding uses the selected external FFmpeg.",
+  "gui.compare.help": "Space: play/pause · T: switch A/B in single view · ←/→: seek 5 seconds. Click or drag the timeline to seek both videos. Precise inspection aligns paused frames by timestamp; playback shares one presentation clock. All decoding uses the selected external FFmpeg.\nA frame: , / .   B frame: Shift+, / Shift+.   Editing controls keep their own keys.",
   "gui.compare.loading": "Inspecting videos…",
   "gui.compare.playing": "Synchronized playback",
   "gui.compare.normal_paused": "Paused · normal synchronization",
@@ -561,5 +561,10 @@
   "gui.state.receipt_loaded": "Reusing measurements",
   "gui.state.receipt_write_failed": "Could not save measurements",
   "gui.state.running": "Running",
-  "gui.state.failed": "Failed"
+  "gui.state.failed": "Failed",
+  "gui.decision.estimated_quality": "Estimated quality",
+  "gui.details.measured_quality": "Measured VMAF",
+  "gui.details.preserved_size": "Preserved file size (not published)",
+  "gui.decision.size_ratio": "{value}% over the limit; the marker shows the limit.",
+  "gui.compare.waiting_other": "Ready. Open video {side} to compare."
 }
