@@ -125,4 +125,10 @@ validate on a disjoint holdout.
 
 ## Found · Not doing
 
+- With macOS 27.0.1 and PySide6 6.11.2, a toolbar overflow button can crash
+  inside AppKit's symbol-image rendering. Reproduced with a standalone
+  `QMainWindow` / `QToolBar` and the existing application stylesheet, independent
+  of workspace sizing. Track the native icon issue separately; narrow-window
+  visual checks can use Qt's Fusion style.
+
 ## Amendments

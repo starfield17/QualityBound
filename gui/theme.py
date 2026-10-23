@@ -576,6 +576,14 @@ _STYLESHEET = Template(
     QSplitter::handle {
         background: $border;
     }
+    QSplitter#workspaceSplitter::handle:vertical {
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+            stop:0 $window, stop:0.4 $window, stop:0.5 $border,
+            stop:0.6 $window, stop:1 $window);
+    }
+    QSplitter#workspaceSplitter::handle:vertical:hover {
+        background: $accent_soft;
+    }
     QDialogButtonBox QPushButton {
         min-width: 72px;
     }

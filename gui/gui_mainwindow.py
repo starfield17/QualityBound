@@ -4,7 +4,7 @@ import json
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QModelIndex, QPoint, QSignalBlocker, QSize, Qt, QTimer, QUrl
+from PySide6.QtCore import QByteArray, QEvent, QModelIndex, QObject, QPoint, QSignalBlocker, QSize, Qt, QTimer, QUrl
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -346,6 +346,11 @@ class MainWindow(QMainWindow):
         self.encoder_detection_worker = None
         self._encoder_capabilities_ready = False
         self._startup_encoder_detection_started = False
+        self._setup_preferred_height: int | None = None
+        self._source_actions_inline: bool | None = None
+        self._workspace_fit_timer = QTimer(self)
+        self._workspace_fit_timer.setSingleShot(True)
+        self._workspace_fit_timer.timeout.connect(self._fit_workspace)
         self._pending_encoder_detection_force_refresh = False
         self.queue_busy = False
         self._postprocessing = False
@@ -443,6 +448,7 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
+        self._schedule_workspace_fit()
         if self._startup_encoder_detection_started:
             return
         self._startup_encoder_detection_started = True
@@ -569,7 +575,10 @@ class MainWindow(QMainWindow):
         self.workspace_splitter.addWidget(self.jobs_box)
         self.workspace_splitter.setStretchFactor(0, 0)
         self.workspace_splitter.setStretchFactor(1, 1)
-        self.workspace_splitter.setSizes([280, 600])
+        self.workspace_splitter.setChildrenCollapsible(False)
+        self.workspace_splitter.splitterMoved.connect(self._on_workspace_splitter_moved)
+        setup_content.installEventFilter(self)
+        self.jobs_box.installEventFilter(self)
         root_layout.addWidget(self.workspace_splitter, 1)
         self._build_status_bar()
         self._apply_initial_window_geometry()
@@ -694,6 +703,8 @@ class MainWindow(QMainWindow):
         # Construct native parents before children: PySide cyclic GC otherwise
         # may destroy an earlier-created scroll wrapper before its splitter.
         self.workspace_splitter = QSplitter(Qt.Orientation.Vertical, content)
+        self.workspace_splitter.setObjectName("workspaceSplitter")
+        self.workspace_splitter.setHandleWidth(6)
         self.main_scroll_area = QScrollArea(self.workspace_splitter)
         self.main_scroll_area.setWidgetResizable(True)
         self.main_scroll_area.setFrameShape(QFrame.Shape.NoFrame)
@@ -756,8 +767,6 @@ class MainWindow(QMainWindow):
         source_layout.addWidget(self.post_encode_combo, 2, 4, 1, 2)
         source_layout.addWidget(self.source_add_button, 3, 1, 1, 2)
         source_layout.setColumnStretch(1, 1)
-        source_layout.setColumnStretch(2, 1)
-        source_layout.setColumnStretch(3, 1)
         return source_box
 
     def _build_setup_bar(self) -> QWidget:
@@ -1856,6 +1865,7 @@ class MainWindow(QMainWindow):
         self.source_box.setVisible(not collapsed)
         self.options_panel.set_visible(not collapsed)
         self.setup_summary_label.setVisible(collapsed)
+        self._schedule_workspace_fit()
         self._update_setup_summary()
         self.app_config["setup_collapsed"] = collapsed
         if persist:
@@ -2116,19 +2126,72 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
         self._position_drop_overlay()
         if hasattr(self, "workspace_splitter"):
-            QTimer.singleShot(0, self, self._fit_workspace)
+            self._schedule_workspace_fit()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if event.type() == QEvent.Type.LayoutRequest:
+            self._schedule_workspace_fit()
+        return super().eventFilter(watched, event)
+
+    def _schedule_workspace_fit(self) -> None:
+        if not self._workspace_fit_timer.isActive():
+            self._workspace_fit_timer.start(0)
+
+    def _on_workspace_splitter_moved(self, _position: int, _index: int) -> None:
+        if self.main_scroll_area.isVisible():
+            self._setup_preferred_height = self.workspace_splitter.sizes()[0]
+
+    def _reflow_source_actions(self) -> None:
+        inline = self.source_box.width() >= 1100
+        if inline == self._source_actions_inline:
+            return
+        self._source_actions_inline = inline
+        layout = self.source_box.layout()
+        if not isinstance(layout, QGridLayout):
+            return
+        layout.removeWidget(self.source_add_button)
+        layout.removeWidget(self.post_encode_combo)
+        if inline:
+            layout.addWidget(self.post_encode_combo, 2, 4)
+            layout.addWidget(self.source_add_button, 2, 5)
+        else:
+            layout.addWidget(self.post_encode_combo, 2, 4, 1, 2)
+            layout.addWidget(self.source_add_button, 3, 1, 1, 2)
 
     def _fit_workspace(self) -> None:
         compact = self.height() < 900
         self.summary_widget.setVisible(not compact)
         self.compact_summary_label.setVisible(compact)
-        maximum = max(64, int(self.main_content_widget.height() * (0.20 if compact else 0.30)))
-        self.main_scroll_area.setMaximumHeight(maximum)
-        sizes = self.workspace_splitter.sizes()
-        # Changing a child's maximum size does not resize its splitter slot.
-        # Return the unused part of that slot to the queue immediately.
-        if sizes[0] > maximum:
-            self.workspace_splitter.setSizes([maximum, sum(sizes) - maximum])
+        # The empty card's illustration and instructions are optional in short
+        # windows; its title and intake buttons must never overlap.
+        for label in (self.empty_icon_label, self.empty_body_label, self.empty_drop_label):
+            label.setVisible(not compact)
+        total = self.workspace_splitter.height() - self.workspace_splitter.handleWidth()
+        minimum_list_height = 150 if total >= 600 else 90
+        if self.queue_stack.currentWidget() is self.empty_state:
+            minimum_list_height = max(minimum_list_height, self.empty_state.minimumSizeHint().height())
+        self.queue_stack.setMinimumHeight(minimum_list_height)
+        if not self.main_scroll_area.isVisible():
+            return
+        self._reflow_source_actions()
+        content = self.main_scroll_area.widget()
+        if content is None:
+            return
+        # Keep a useful queue below the setup, including its visible details.
+        # Small windows retain the existing 90 px list and scroll the setup.
+        jobs_layout = self.jobs_box.layout()
+        if jobs_layout is not None:
+            jobs_layout.activate()
+        layout = content.layout()
+        if layout is not None:
+            layout.activate()
+        available = max(64, total - self.jobs_box.minimumSizeHint().height())
+        desired = self._setup_preferred_height
+        if desired is None:
+            desired = max(content.sizeHint().height(), content.minimumSizeHint().height())
+        height = max(64, min(desired, available))
+        if self.workspace_splitter.sizes()[0] != height:
+            self.workspace_splitter.setSizes([height, max(0, total - height)])
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if self.active_worker is not None or self.queue_busy or self.queue_manager.is_busy():
