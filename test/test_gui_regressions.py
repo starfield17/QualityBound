@@ -387,21 +387,45 @@ class GuiRegressionTests(unittest.TestCase):
         self.assertEqual(window.workspace_splitter.sizes()[0], preferred)
 
     def test_source_actions_share_a_row_only_when_there_is_room(self) -> None:
-        from PySide6.QtWidgets import QGridLayout
-        window = self.window()
-        window.show()
-        window._set_setup_collapsed(False)
-        for width, height, same_row in ((1520, 960, True), (760, 520, False)):
-            window.resize(width, height)
-            for _ in range(8):
-                self.app.processEvents()
-            layout = window.source_box.layout()
-            self.assertIsInstance(layout, QGridLayout)
-            assert isinstance(layout, QGridLayout)
-            preset_position = layout.getItemPosition(layout.indexOf(window.preset_combo))
-            action_position = layout.getItemPosition(layout.indexOf(window.source_add_button))
-            assert isinstance(preset_position, tuple) and isinstance(action_position, tuple)
-            self.assertEqual(action_position[0] == preset_position[0], same_row)
+        from PySide6.QtGui import QFont
+        from PySide6.QtWidgets import QGridLayout, QWidget
+        wrapped = False
+        for language in ("en", "zh_cn", "ja"):
+            window = self.window(language)
+            window.show()
+            window._set_setup_collapsed(False)
+            for point_size in (10, 16, 20):
+                font = QFont("Arial", point_size)
+                window.source_box.setFont(font)
+                for control in window.source_box.findChildren(QWidget):
+                    control.setFont(font)
+                self.assertEqual(window.post_encode_label.font().pointSize(), point_size)
+                for width, height in ((1520, 960), (760, 520), (820, 960), (1520, 960)):
+                    with self.subTest(language=language, font=point_size, width=width):
+                        window.resize(width, height)
+                        for _ in range(12):
+                            self.app.processEvents()
+                        layout = window.source_box.layout()
+                        self.assertIsInstance(layout, QGridLayout)
+                        assert isinstance(layout, QGridLayout)
+                        preset_position = layout.getItemPosition(layout.indexOf(window.preset_combo))
+                        action_position = layout.getItemPosition(layout.indexOf(window.source_add_button))
+                        assert isinstance(preset_position, tuple) and isinstance(action_position, tuple)
+                        same_row = action_position[0] == preset_position[0]
+                        wrapped |= not same_row
+                        diagnostic = (
+                            f"language={language} font={point_size} width={width} inline={same_row} "
+                            f"source_minimum={window.source_box.minimumSizeHint()} "
+                            f"viewport={window.main_scroll_area.viewport().size()}"
+                        )
+                        self.assertEqual(window.main_scroll_area.horizontalScrollBar().maximum(), 0, diagnostic)
+                        self.assertLessEqual(
+                            window.source_box.minimumSizeHint().width(),
+                            window.main_scroll_area.viewport().width(), diagnostic,
+                        )
+                        if width == 1520:
+                            self.assertTrue(same_row, diagnostic)
+        self.assertTrue(wrapped, "Source actions must move to another row when their complete grid cannot fit")
 
     def test_source_setup_fits_narrow_windows_with_larger_fonts_in_every_language(self) -> None:
         from PySide6.QtCore import QPoint, QRect
