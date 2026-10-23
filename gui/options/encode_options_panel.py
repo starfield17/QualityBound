@@ -6,7 +6,7 @@ import math
 import re
 from typing import Final
 
-from PySide6.QtCore import QSignalBlocker, Signal
+from PySide6.QtCore import QEvent, QSignalBlocker, Signal
 from PySide6.QtGui import QResizeEvent, QStandardItemModel
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -16,9 +16,13 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QSpinBox,
+    QScrollArea,
+    QStyle,
+    QStyleOptionTabWidgetFrame,
     QTabWidget,
     QVBoxLayout,
     QWidget,
+    QWidgetItem,
 )
 
 from core.config import smart_policies_from_config
@@ -203,6 +207,7 @@ class EncodeOptionsPanel(QWidget):
         self._pending_encoder_preset: str | None = None
         self._last_codec_for_ratio = CodecChoice.HEVC
 
+        self._tab_layout_signatures: dict[QWidget, tuple[object, ...]] = {}
         self.options_tabs = QTabWidget()
         self._build_basic_tab()
         self._build_video_tab()
@@ -213,6 +218,7 @@ class EncodeOptionsPanel(QWidget):
         self.setFocusProxy(self.options_tabs)
         layout.addWidget(self.options_tabs)
 
+        self.options_tabs.currentChanged.connect(self._reflow_tabs)
         self._connect_signals()
         self.ratio_edit.textChanged.connect(self._validate_ratio)
         self.audio_bitrate_edit.textChanged.connect(self._validate_audio_bitrate)
@@ -1054,46 +1060,115 @@ class EncodeOptionsPanel(QWidget):
         self.analysis_profile_combo.setEnabled(smart_mode)
         self.viewing_context_combo.setEnabled(smart_mode)
         self.audio_bitrate_edit.setEnabled(self.audio_mode_combo.currentData() == AudioMode.AAC.value)
-        self._reflow_basic_tab()
+        self._reflow_tabs()
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
-        self._reflow_basic_tab()
+        self._reflow_tabs()
 
-    def _reflow_basic_tab(self) -> None:
-        layout = self.basic_tab.layout()
-        if not isinstance(layout, QGridLayout):
+    def changeEvent(self, event: QEvent) -> None:
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange):
+            self._reflow_tabs()
+
+    def _reflow_tabs(self, *_args: object) -> None:
+        if not hasattr(self, "audio_tab"):
             return
+        available = self.contentsRect().width()
+        ancestor = self.parentWidget()
+        while ancestor is not None:
+            if isinstance(ancestor, QScrollArea) and ancestor.isVisible():
+                available = min(available, ancestor.viewport().contentsRect().width())
+                break
+            ancestor = ancestor.parentWidget()
+        option = QStyleOptionTabWidgetFrame()
+        self.options_tabs.initStyleOption(option)
+        contents = self.options_tabs.style().subElementRect(
+            QStyle.SubElement.SE_TabWidgetTabContents, option, self.options_tabs
+        )
+        available = max(0, available - (self.options_tabs.width() - contents.width()))
         smart = self.compression_mode_combo.currentData() == CompressionMode.SMART.value
-        columns = 2 if self.width() < 900 else 3
-        signature = (smart, columns)
-        if getattr(self, "_basic_layout_signature", None) == signature:
-            return
-        self._basic_layout_signature = signature
-        while layout.count():
-            layout.takeAt(0)
-        pairs = [
+        basic_pairs: list[tuple[QLabel, QWidget]] = [
             (self.codec_label, self.codec_combo),
             (self.compression_mode_label, self.compression_mode_combo),
             (self.backend_label, self.backend_combo),
             (self.container_label, self.container_combo),
         ]
-        pairs += [
+        basic_pairs += [
             (self.min_vmaf_label, self.min_vmaf_spin),
             (self.max_output_ratio_label, self.max_output_ratio_spin),
             (self.analysis_profile_label, self.analysis_profile_combo),
             (self.viewing_context_label, self.viewing_context_combo),
             (self.smart_algorithm_label, self.smart_algorithm_combo),
         ] if smart else [(self.ratio_label, self.ratio_edit)]
+        self._reflow_tab(
+            self.basic_tab, basic_pairs, [self.overwrite_check, self.recursive_check], 3, available
+        )
+        self._reflow_tab(self.video_tab, [
+            (self.encoder_preset_label, self.encoder_preset_combo),
+            (self.decode_acceleration_label, self.decode_acceleration_combo),
+            (self.pix_fmt_label, self.pix_fmt_edit),
+            (self.min_bitrate_label, self.min_bitrate_spin),
+            (self.max_bitrate_label, self.max_bitrate_spin),
+            (self.maxrate_factor_label, self.maxrate_factor_spin),
+            (self.bufsize_factor_label, self.bufsize_factor_spin),
+        ], [self.two_pass_check], 2, available)
+        self._reflow_tab(self.audio_tab, [
+            (self.audio_mode_label, self.audio_mode_combo),
+            (self.audio_bitrate_label, self.audio_bitrate_edit),
+        ], [self.copy_subtitles_check, self.copy_external_subtitles_check], 2, available)
+
+    @staticmethod
+    def _control_minimum_width(widget: QWidget) -> int:
+        # Qt also applies size policies here: spin boxes can require their
+        # full value width even when minimumSizeHint() reports less.
+        return QWidgetItem(widget).minimumSize().width()
+
+    def _reflow_tab(
+        self,
+        page: QWidget,
+        pairs: list[tuple[QLabel, QWidget]],
+        checks: list[QCheckBox],
+        maximum_columns: int,
+        available: int,
+    ) -> None:
+        layout = page.layout()
+        if not isinstance(layout, QGridLayout):
+            return
+        for label, _control in pairs:
+            label.setWordWrap(True)
+        margins = layout.contentsMargins()
+        spacing = layout.horizontalSpacing()
+        columns = 1
+        for candidate in range(maximum_columns, 0, -1):
+            widths = [0] * (candidate * 2)
+            for index, (label, control) in enumerate(pairs):
+                column = index % candidate * 2
+                widths[column] = max(widths[column], label.minimumSizeHint().width())
+                widths[column + 1] = max(widths[column + 1], self._control_minimum_width(control))
+            for index, check in enumerate(checks):
+                column = index % candidate * 2
+                pair_width = widths[column] + spacing + widths[column + 1]
+                widths[column + 1] += max(0, check.minimumSizeHint().width() - pair_width)
+            required = sum(widths) + spacing * (candidate * 2 - 1) + margins.left() + margins.right()
+            if required <= available:
+                columns = candidate
+                break
+        signature = (columns, tuple(label for label, _control in pairs))
+        if self._tab_layout_signatures.get(page) == signature:
+            return
+        self._tab_layout_signatures[page] = signature
+        while layout.count():
+            layout.takeAt(0)
         for index, (label, control) in enumerate(pairs):
             row, column = divmod(index, columns)
-            label.setWordWrap(True)
             layout.addWidget(label, row, column * 2)
             layout.addWidget(control, row, column * 2 + 1)
-        row = (len(pairs) + columns - 1) // columns
-        layout.addWidget(self.overwrite_check, row, 0, 1, 2)
-        layout.addWidget(self.recursive_check, row, 2, 1, 2)
-        for column in range(7):
+        first_check_row = (len(pairs) + columns - 1) // columns
+        for index, check in enumerate(checks):
+            row, column = divmod(index, columns)
+            layout.addWidget(check, first_check_row + row, column * 2, 1, 2)
+        for column in range(maximum_columns * 2 + 1):
             layout.setColumnStretch(column, 1 if column < columns * 2 and column % 2 else 0)
 
     def _refresh_smart_mode_availability(self, *, force_unavailable: bool = False) -> None:

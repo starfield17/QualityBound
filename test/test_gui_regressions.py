@@ -290,10 +290,12 @@ class GuiRegressionTests(unittest.TestCase):
                             window.options_panel.options_tabs.setCurrentIndex(index)
                             for _ in range(8):
                                 self.app.processEvents()
+                            content = window.main_scroll_area.widget()
+                            assert content is not None
                             diagnostic = (
                                 f"language={language} size={width}x{height} tab={index} "
                                 f"viewport={window.main_scroll_area.viewport().size()} "
-                                f"content_minimum={window.main_scroll_area.widget().minimumSizeHint()}"
+                                f"content_minimum={content.minimumSizeHint()}"
                             )
                             self.assertEqual(window.main_scroll_area.horizontalScrollBar().maximum(), 0, diagnostic)
                             if height == 960:
