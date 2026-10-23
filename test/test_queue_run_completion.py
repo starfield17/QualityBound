@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
 
-from core.i18n import get_translator
+from core.i18n import Translator
 from core.models import (
     BackendChoice,
     CodecChoice,
@@ -89,7 +89,7 @@ class QueueRunCompletionTestCase(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp_dir.cleanup)
         self.root = Path(self.temp_dir.name)
-        self.model = QueueTableModel(get_translator("en", self.repo_root / "config"))
+        self.model = QueueTableModel(Translator('en'))
         self.manager = QueueManager(self.model)
 
     def test_historical_decision_does_not_block_current_run_completion(self) -> None:

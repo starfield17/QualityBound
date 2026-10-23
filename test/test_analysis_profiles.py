@@ -19,7 +19,7 @@ from core.smart.v1.profiles import (
     resolve_analysis_settings,
     validate_analysis_settings,
 )
-from core.i18n import get_translator
+from core.i18n import Translator
 from core.models import (
     AnalysisProfileName,
     AnalysisProfileSettings,
@@ -227,7 +227,7 @@ class AnalysisProfileGuiTestCase(unittest.TestCase):
             window.close()
 
     def test_settings_dialog_uses_profile_combo_without_overwriting_custom_values(self) -> None:
-        tr = get_translator("en", self.repo_root / "config")
+        tr = Translator('en')
         dialog = SettingsDialog(
             tr,
             {
@@ -249,7 +249,7 @@ class AnalysisProfileGuiTestCase(unittest.TestCase):
             dialog.close()
 
     def test_settings_dialog_distinguishes_analysis_policies_from_terminal_validation(self) -> None:
-        tr = get_translator("en", self.repo_root / "config")
+        tr = Translator('en')
         dialog = SettingsDialog(tr, {"language": "en"})
         try:
             self.assertEqual(

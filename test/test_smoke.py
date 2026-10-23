@@ -16,7 +16,7 @@ from PySide6.QtWidgets import QAbstractButton, QApplication, QMessageBox, QScrol
 from PySide6.QtWidgets import QComboBox, QGroupBox, QHeaderView, QLabel, QLineEdit
 
 from core.config.paths import app_root
-from core.i18n import get_translator
+from core.i18n import Translator
 from core.models import (
     BackendChoice,
     CodecChoice,
@@ -106,7 +106,7 @@ class SmokeTestCase(unittest.TestCase):
 
     def test_queue_metrics_after_plan_add(self) -> None:
         plan = self._sample_plan()
-        model = QueueTableModel(get_translator("en", self.repo_root / "config"))
+        model = QueueTableModel(Translator('en'))
         manager = QueueManager(model)
         added = manager.add_plan(plan, self.repo_root / "workdir")
         metrics = model.metrics()
@@ -306,7 +306,7 @@ class SmokeTestCase(unittest.TestCase):
             window.close()
 
     def test_responsive_queue_view_fills_viewport_when_space_is_available(self) -> None:
-        model = QueueTableModel(get_translator("en", self.repo_root / "config"))
+        model = QueueTableModel(Translator('en'))
         view = create_queue_view()
         view.setModel(model)
         view.resize(1700, 420)
@@ -327,7 +327,7 @@ class SmokeTestCase(unittest.TestCase):
 
     def test_flex_columns_are_user_resizable(self) -> None:
         view = create_queue_view()
-        model = QueueTableModel(get_translator("en", self.repo_root / "config"))
+        model = QueueTableModel(Translator('en'))
         view.setModel(model)
         try:
             header = view.horizontalHeader()
@@ -338,7 +338,7 @@ class SmokeTestCase(unittest.TestCase):
             view.close()
 
     def test_manual_resize_survives_reflow(self) -> None:
-        model = QueueTableModel(get_translator("en", self.repo_root / "config"))
+        model = QueueTableModel(Translator('en'))
         view = create_queue_view()
         view.setModel(model)
         view.resize(1700, 420)

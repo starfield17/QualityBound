@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
 
-from core.i18n import TranslationCatalog
+from core.i18n import Translator
 from core.models import (
     BackendChoice,
     CodecChoice,
@@ -98,8 +98,7 @@ class QueueFeedbackTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = _get_qapp()
-        repo_root = Path(__file__).resolve().parent.parent
-        cls.catalog = TranslationCatalog(bundle_dir=repo_root / "config" / "i18n")
+
 
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -128,7 +127,7 @@ class QueueFeedbackTestCase(unittest.TestCase):
             segmented=segmented,
             result=result,
         )
-        model = QueueTableModel(self.catalog.translator("en"))
+        model = QueueTableModel(Translator('en'))
         model.add_records([record])
 
         options = model.decision_options_for_row(0)
@@ -142,7 +141,7 @@ class QueueFeedbackTestCase(unittest.TestCase):
         self.assertTrue(record.result.skipped)
 
     def test_can_resolve_row_requires_a_result_payload(self) -> None:
-        model = QueueTableModel(self.catalog.translator("en"))
+        model = QueueTableModel(Translator('en'))
         without_result = _record(self.root, "no-result", QueueItemStatus.NEEDS_DECISION)
         with_result = _record(
             self.root,
@@ -182,27 +181,27 @@ class QueueFeedbackTestCase(unittest.TestCase):
             QueueItemStatus.NEEDS_DECISION,
             segmented=segmented,
         )
-        zh = self.catalog.translator("zh_cn")
+        zh = Translator('zh_cn')
 
         tags = build_tags(record, zh)
         self.assertEqual(
             tags,
             [
-                zh.t("gui.tag.two_pass"),
-                zh.t("gui.tag.overwrite"),
-                zh.t("gui.tag.external_subtitles"),
+                '双遍',
+                '覆盖',
+                '外挂字幕',
             ],
         )
-        english_tags = build_tags(record, self.catalog.translator("en"))
+        english_tags = build_tags(record, Translator('en'))
         self.assertEqual(english_tags, ["2-pass", "Overwrite", "ExtSub"])
 
         tooltip = build_tooltip(record, zh)
-        self.assertIn(zh.t("gui.tooltip.source", path=record.source_path), tooltip)
-        self.assertIn(zh.t("gui.tooltip.smart_analysis", reason="needs a wider size budget"), tooltip)
+        self.assertIn('源文件：{path}'.format(path=record.source_path), tooltip)
+        self.assertIn('Smart 分析：{reason}'.format(reason='needs a wider size budget'), tooltip)
         self.assertNotIn("Source:", tooltip)
 
     def test_clear_completed_removes_failed_but_keeps_decisions(self) -> None:
-        model = QueueTableModel(self.catalog.translator("en"))
+        model = QueueTableModel(Translator('en'))
         failed = _record(self.root, "failed", QueueItemStatus.FAILED)
         decision = _record(self.root, "decision", QueueItemStatus.NEEDS_DECISION)
         model.add_records([failed, decision])

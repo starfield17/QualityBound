@@ -11,7 +11,7 @@ from PySide6.QtCore import Qt, QEventLoop, QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from core.encoding import prepare_encode_requests
-from core.i18n import get_translator
+from core.i18n import Translator
 from core.models import (
     BackendChoice, CodecChoice, CompressionMode, ContainerChoice, EncodeOptions,
     EncodePlanItem, EncodeRequest, MediaInfo, VideoFileItem,
@@ -74,7 +74,7 @@ class DeferredQueueTestCase(unittest.TestCase):
         self.source = self.root / "source.mov"
         self.source.write_bytes(b"video")
         self.record = create_draft_record(QueueSourceDraft(VideoFileItem(self.source, Path("source.mov")), None, media(self.source)))
-        self.model = QueueTableModel(get_translator("en", Path(__file__).resolve().parent.parent / "config"))
+        self.model = QueueTableModel(Translator('en'))
         self.model.add_records([self.record])
 
     def prepare(self, requests: list[EncodeRequest]):

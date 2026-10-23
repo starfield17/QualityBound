@@ -8,7 +8,7 @@ from PySide6.QtCore import QEventLoop, QTimer
 
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
-from core.i18n import get_translator
+from core.i18n import Translator
 from core.media import PostEncodeAction, SystemPowerResult, publish_skipped_source
 from core.models import EncodeOptions, EncodePlanItem, EncodeResult, SkipOrigin, SkippedOutputPolicy, SkippedOutputOutcome
 from gui.queue.completion import QueueCompletionHandler
@@ -36,7 +36,7 @@ class QueueCompletionTestCase(unittest.TestCase):
         self.notify = Mock()
         self.close = Mock()
         self.handler = QueueCompletionHandler(None, self.logs.append, self.notify, self.close)
-        self.tr = get_translator("en", self.config_dir)
+        self.tr = Translator('en')
 
     def _record(
         self,
@@ -100,13 +100,13 @@ class QueueCompletionTestCase(unittest.TestCase):
         record = self._record("done", QueueItemStatus.DONE)
         self.handler.handle([record], self.tr, {"desktop_notifications": False})
         self.notify.assert_not_called()
-        chinese = get_translator("zh_cn", self.config_dir)
+        chinese = Translator('zh_cn')
         self.logs.clear()
         self.handler.handle([record], chinese, {"desktop_notifications": True, "language": "en"})
-        self.assertEqual(self.logs[0], chinese.t("gui.log.encode_done"))
-        self.assertIn(chinese.t("gui.report.batch_complete"), self.logs[1])
+        self.assertEqual(self.logs[0], '编码任务已完成。')
+        self.assertIn('批处理转码完成', self.logs[1])
         self.notify.assert_called_once()
-        self.assertEqual(self.notify.call_args.args[0], chinese.t("app.title"))
+        self.assertEqual(self.notify.call_args.args[0], 'QualityBound')
 
     def test_skipped_publication_is_not_repeated_when_run_resumes(self) -> None:
         record = self._record("copy-once", QueueItemStatus.SKIPPED, SkippedOutputPolicy.COPY)
@@ -132,13 +132,13 @@ class QueueCompletionTestCase(unittest.TestCase):
         ):
             self.handler.handle(records, self.tr, {"post_encode_action": "shutdown"})
         self.notify.assert_called_once()
-        self.assertEqual(self.notify.call_args.args[0], self.tr.t("app.title"))
+        self.assertEqual(self.notify.call_args.args[0], 'QualityBound')
         self.assertEqual(
             self.notify.call_args.args[1],
-            self.tr.t("gui.notification.batch_incomplete", failed=1, cancelled=1),
+            'Batch finished with {failed} failed and {cancelled} cancelled items.'.format(failed=1, cancelled=1),
         )
-        self.assertIn(self.tr.t("gui.report.batch_incomplete"), "\n".join(self.logs))
-        self.assertNotIn(self.tr.t("gui.report.batch_complete"), "\n".join(self.logs))
+        self.assertIn('Batch incomplete', "\n".join(self.logs))
+        self.assertNotIn('Batch Encoding Complete', "\n".join(self.logs))
         self.close.assert_not_called()
         countdown.assert_not_called()
         power.assert_not_called()

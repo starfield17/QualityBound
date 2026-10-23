@@ -12,7 +12,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from core.i18n import TranslationCatalog
+from core.i18n import Translator
 from core.models import BackendChoice, EncodeOptions
 from gui.gui_mainwindow import MainWindow
 from gui.options.encode_options_panel import EncodeOptionsPanel
@@ -31,7 +31,7 @@ class GuiRegressionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
-        cls.tr = TranslationCatalog(ROOT / "config/i18n").translator("en")
+        cls.tr = Translator('en')
 
     def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory()

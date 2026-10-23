@@ -47,7 +47,7 @@ from core.smart.v1.cache import measurement_configuration_fingerprint, quality_c
 from core.smart.v1.bitrate import reselect_from_candidates
 from core.smart.v1.sampling.planner import PlannedWindow, SamplePlan
 from core.smart.v1.sampling.scout import SamplingResult
-from core.i18n import get_translator
+from core.i18n import Translator
 from core.progress_events import ProgressEvent
 from gui.queue.model import QueueTableModel
 from gui.queue.manager import QueueManager
@@ -401,7 +401,7 @@ class ConstraintDecisionTestCase(unittest.TestCase):
                     skipped=True,
                 ),
             )
-            model = QueueTableModel(get_translator("en", Path(__file__).resolve().parent.parent / "config"))
+            model = QueueTableModel(Translator('en'))
             model.add_records([record])
             manager = QueueManager(model)
             states: list[str] = []
@@ -441,7 +441,7 @@ class ConstraintDecisionTestCase(unittest.TestCase):
                     quality_search_result=quality,
                 ),
             )
-            model = QueueTableModel(get_translator("en", Path(__file__).resolve().parent.parent / "config"))
+            model = QueueTableModel(Translator('en'))
             model.add_records([record])
             relax_size = next(
                 option
@@ -475,7 +475,7 @@ class ConstraintDecisionTestCase(unittest.TestCase):
                     quality_search_result=quality,
                 ),
             )
-            model = QueueTableModel(get_translator("en", Path(__file__).resolve().parent.parent / "config"))
+            model = QueueTableModel(Translator('en'))
             model.add_records([record])
             skip = next(
                 option
@@ -512,7 +512,7 @@ class ConstraintDecisionTestCase(unittest.TestCase):
                 total_passes=1,
                 result=result,
             )
-            model = QueueTableModel(get_translator("en", Path(__file__).resolve().parent.parent / "config"))
+            model = QueueTableModel(Translator('en'))
             model.add_records([record])
 
             self.assertTrue(model.accept_size_miss(0))
@@ -542,7 +542,7 @@ class ConstraintDecisionTestCase(unittest.TestCase):
                 total_passes=1,
                 result=result,
             )
-            model = QueueTableModel(get_translator("en", Path(__file__).resolve().parent.parent / "config"))
+            model = QueueTableModel(Translator('en'))
             model.add_records([record])
 
             self.assertTrue(model.discard_size_miss(0))

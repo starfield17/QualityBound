@@ -13,7 +13,6 @@ from core.media import (
     execute_system_shutdown,
     execute_system_sleep,
     parse_post_encode_action,
-    post_encode_action_key,
 )
 
 
@@ -47,11 +46,6 @@ class SystemPowerTestCase(unittest.TestCase):
         self.assertEqual(parse_post_encode_action(None), PostEncodeAction.DO_NOTHING)
         self.assertEqual(parse_post_encode_action(PostEncodeAction.SHUTDOWN), PostEncodeAction.SHUTDOWN)
 
-    def test_post_encode_action_key(self) -> None:
-        self.assertEqual(post_encode_action_key(PostEncodeAction.DO_NOTHING), "gui.power.action.none")
-        self.assertEqual(post_encode_action_key(PostEncodeAction.SLEEP), "gui.power.action.sleep")
-        self.assertEqual(post_encode_action_key(PostEncodeAction.SHUTDOWN), "gui.power.action.shutdown")
-        self.assertEqual(post_encode_action_key(PostEncodeAction.QUIT), "gui.power.action.quit")
 
     def test_noninteractive_kwargs_are_platform_appropriate(self) -> None:
         from core.media.system_power import _noninteractive_kwargs

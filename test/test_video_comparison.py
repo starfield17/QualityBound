@@ -15,7 +15,7 @@ from PySide6.QtGui import QImage
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
-from core.i18n import TranslationCatalog
+from core.i18n import Translator
 from gui.comparison.decode import (
     ComparisonMedia, DecodeCancelled, DecodedFrame, FramePair, ToolRunner,
     frame_time, inspect_pair, inspect_video,
@@ -218,7 +218,7 @@ class ComparisonWindowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
-        cls.translator = TranslationCatalog(ROOT / "config" / "i18n").translator("en")
+        cls.translator = Translator('en')
 
     def setUp(self) -> None:
         self.window = ComparisonWindow(self.translator)

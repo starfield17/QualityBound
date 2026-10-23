@@ -8,7 +8,7 @@ from unittest.mock import patch
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from core.i18n import TranslationCatalog
+from core.i18n import Translator
 from core.models import (
     AudioMode,
     BackendChoice,
@@ -113,9 +113,8 @@ def _create_test_record(
 class QueueBatchOperationsTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.app = _get_qapp()
-        repo_root = Path(__file__).resolve().parent.parent
-        self.catalog = TranslationCatalog(bundle_dir=repo_root / "config" / "i18n")
-        self.tr = self.catalog.translator("en")
+
+        self.tr = Translator('en')
         self.temp_dir = tempfile.TemporaryDirectory()
         self.root = Path(self.temp_dir.name)
         self.capabilities = {

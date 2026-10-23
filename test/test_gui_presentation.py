@@ -11,7 +11,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from core.i18n import TranslationCatalog
+from core.i18n import Translator
 from core.models import (
     BackendChoice,
     CodecChoice,
@@ -74,7 +74,7 @@ class GuiPresentationTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = _qapp()
-        cls.catalog = TranslationCatalog(bundle_dir=ROOT / "config" / "i18n")
+
         apply_theme()
 
     def setUp(self) -> None:
@@ -82,13 +82,26 @@ class GuiPresentationTestCase(unittest.TestCase):
         self.addCleanup(self.temp_dir.cleanup)
         self.root = Path(self.temp_dir.name)
 
+    def test_post_encode_action_text_covers_every_action_in_both_languages(self) -> None:
+        from core.media import PostEncodeAction
+        from gui.power_action_dialog import POST_ENCODE_ACTION_TEXT, post_encode_action_text
+        self.assertEqual(set(POST_ENCODE_ACTION_TEXT), set(PostEncodeAction))
+        for action, en, zh in (
+            (PostEncodeAction.DO_NOTHING, "Do nothing", "无操作"),
+            (PostEncodeAction.SLEEP, "Sleep system", "系统睡眠"),
+            (PostEncodeAction.SHUTDOWN, "Shut down system", "系统关机"),
+            (PostEncodeAction.QUIT, "Quit app", "退出程序"),
+        ):
+            self.assertEqual(Translator("en").t(post_encode_action_text(action)), en)
+            self.assertEqual(Translator("zh_cn").t(post_encode_action_text(action)), zh)
+
     def test_light_and_dark_stylesheets_use_distinct_surfaces(self) -> None:
         self.assertIn("#F6F8FB", build_stylesheet(LIGHT))
         self.assertIn("#16181D", build_stylesheet(DARK))
         self.assertIn("QualityBound theme", self.app.styleSheet())
 
     def test_status_bar_keeps_live_state_when_logging(self) -> None:
-        window = MainWindow(ROOT, language="en", catalog=self.catalog)
+        window = MainWindow(ROOT, language="en")
         try:
             window._set_status_snapshot("Encoding", "source.mkv", "1.2x", "0:10", 40.0)
             window._append_log("a log line")
@@ -99,7 +112,7 @@ class GuiPresentationTestCase(unittest.TestCase):
             window.close()
 
     def test_empty_state_and_details_panel_follow_the_queue(self) -> None:
-        window = MainWindow(ROOT, language="en", catalog=self.catalog)
+        window = MainWindow(ROOT, language="en")
         try:
             self.assertIs(window.queue_stack.currentWidget(), window.empty_state)
             record = _record(self.root)
@@ -115,7 +128,7 @@ class GuiPresentationTestCase(unittest.TestCase):
             window.close()
 
     def test_table_marks_estimated_quality_and_keeps_status_legible(self) -> None:
-        model = QueueTableModel(self.catalog.translator("en"))
+        model = QueueTableModel(Translator('en'))
         record = _record(self.root)
         model.add_records([record])
         quality = model.data(model.index(0, int(QueueColumn.QUALITY)))
@@ -123,7 +136,7 @@ class GuiPresentationTestCase(unittest.TestCase):
         self.assertTrue(str(quality).startswith("~"))
         self.assertEqual(status, "Done")
         self.assertEqual(format_duration(None), "—")
-        self.assertNotIn("Decision", build_tags(record, self.catalog.translator("en")))
+        self.assertNotIn("Decision", build_tags(record, Translator('en')))
         self.assertEqual(
             model.headerData(
                 int(QueueColumn.STATUS),
@@ -134,7 +147,7 @@ class GuiPresentationTestCase(unittest.TestCase):
         )
 
     def test_activity_log_timestamps_and_classifies_localized_errors(self) -> None:
-        log = ActivityLogWindow(self.catalog.translator("zh_cn"))
+        log = ActivityLogWindow(Translator('zh_cn'))
         try:
             log.append_message("错误：编码失败")
             entry = log.entries[-1]
@@ -147,7 +160,7 @@ class GuiPresentationTestCase(unittest.TestCase):
 
     def test_preset_manager_uses_item_data_and_confirms_delete(self) -> None:
         dialog = PresetManagerDialog(
-            self.catalog.translator("en"),
+            Translator('en'),
             ["default_hevc", "anime"],
             "default_hevc",
         )
@@ -165,7 +178,7 @@ class GuiPresentationTestCase(unittest.TestCase):
             dialog.close()
 
     def test_settings_redetect_stays_open_and_validation_marks_missing_paths(self) -> None:
-        dialog = SettingsDialog(self.catalog.translator("en"), {"language": "en"})
+        dialog = SettingsDialog(Translator('en'), {"language": "en"})
         try:
             dialog._request_redetect()
             self.assertTrue(dialog.redetect_requested)
@@ -178,7 +191,7 @@ class GuiPresentationTestCase(unittest.TestCase):
             dialog.close()
 
     def test_comparison_starts_with_placeholders_and_collapsed_help(self) -> None:
-        window = ComparisonWindow(self.catalog.translator("en"))
+        window = ComparisonWindow(Translator('en'))
         try:
             self.assertIs(window.panes[0].stack.currentWidget(), window.panes[0].placeholder)
             self.assertTrue(window.help_label.isHidden())

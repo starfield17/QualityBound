@@ -314,8 +314,8 @@ class NuitkaStagingTestCase(unittest.TestCase):
     def _make_root(self) -> tuple[tempfile.TemporaryDirectory[str], Path, Path]:
         temp_dir = tempfile.TemporaryDirectory()
         root = Path(temp_dir.name)
-        (root / "config" / "i18n").mkdir(parents=True)
-        (root / "config" / "i18n" / "en.json").write_text("{}", encoding="utf-8")
+        (root / "config" / "presets").mkdir(parents=True)
+        (root / "config" / "presets" / "default.json").write_text("{}", encoding="utf-8")
         (root / "README.md").write_text("README", encoding="utf-8")
         (root / "LICENSE").write_text("MIT License\n", encoding="utf-8")
         assets = root / "packaging" / "assets"
@@ -332,7 +332,7 @@ class NuitkaStagingTestCase(unittest.TestCase):
         with temp_dir:
             stage_release_resources(package_dir, root=root, platform_name="linux")
 
-            self.assertEqual((package_dir / "config" / "i18n" / "en.json").read_text(encoding="utf-8"), "{}")
+            self.assertEqual((package_dir / "config" / "presets" / "default.json").read_text(encoding="utf-8"), "{}")
             self.assertEqual((package_dir / "README.md").read_text(encoding="utf-8"), "README")
             self.assertEqual((package_dir / "LICENSE").read_text(encoding="utf-8"), "MIT License\n")
             self.assertTrue((package_dir / "assets" / "app.svg").is_file())
@@ -448,7 +448,7 @@ class NuitkaStagingTestCase(unittest.TestCase):
             )
 
             self.assertTrue(
-                (app_dir / "Contents" / "Resources" / "config" / "i18n" / "en.json").is_file()
+                (app_dir / "Contents" / "Resources" / "config" / "presets" / "default.json").is_file()
             )
             self.assertTrue((app_dir / "Contents" / "Resources" / "README.md").is_file())
             self.assertTrue((app_dir / "Contents" / "Resources" / "LICENSE").is_file())

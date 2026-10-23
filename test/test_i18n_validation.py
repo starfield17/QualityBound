@@ -15,7 +15,7 @@ def _fields(template: str) -> frozenset[str]:
             if not field or field.isdecimal():
                 raise ValueError('use named format fields')
             fields.add(field)
-            fields.update(_fields(spec))
+            fields.update(_fields(spec or ""))
     return frozenset(fields)
 
 

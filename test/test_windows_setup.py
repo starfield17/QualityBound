@@ -96,13 +96,9 @@ class WindowsSetupTestCase(unittest.TestCase):
             ffmpeg_bin.mkdir(parents=True)
             (ffmpeg_bin / "ffmpeg.exe").write_bytes(b"exe")
             (ffmpeg_bin / "ffprobe.exe").write_bytes(b"exe")
-            with self.assertRaisesRegex(FileNotFoundError, "config.*i18n.*en.json"):
+            with self.assertRaisesRegex(FileNotFoundError, "README.md"):
                 validate_source(source, icon)
 
-            i18n = source / "config" / "i18n"
-            i18n.mkdir(parents=True)
-            (i18n / "en.json").write_text("{}", encoding="utf-8")
-            (i18n / "zh_cn.json").write_text("{}", encoding="utf-8")
             (source / "README.md").write_text("readme", encoding="utf-8")
             (source / "LICENSE").write_text("license", encoding="utf-8")
             validate_source(source, icon)

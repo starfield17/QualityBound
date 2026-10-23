@@ -420,10 +420,10 @@ class V2AdapterTests(unittest.TestCase):
     def test_gui_algorithm_and_quality_semantics_roundtrip(self) -> None:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         from PySide6.QtWidgets import QApplication
-        from core.i18n import get_translator
+        from core.i18n import Translator
         from gui.options.encode_options_panel import EncodeOptionsPanel
         app = QApplication.instance() or QApplication([])
-        panel = EncodeOptionsPanel(get_translator("en"), {})
+        panel = EncodeOptionsPanel(Translator('en'), {})
         panel.apply_options(EncodeOptions(smart_algorithm=SmartAlgorithm.V2_EXPERIMENTAL))
         self.assertEqual(panel.read_options().smart_algorithm, SmartAlgorithm.V2_EXPERIMENTAL)
         self.assertIn("mean", panel.min_vmaf_label.text().lower())

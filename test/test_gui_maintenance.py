@@ -250,7 +250,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                           patch.object(menu, "exec", return_value=None)):
                         window._show_queue_context_menu(window.table_view, QPoint())
                     action = next(action for action in menu.actions()
-                                  if action.text() == window.translator.t("gui.compare.queue_action"))
+                                  if action.text() == 'Compare source and output')
                     self.assertEqual(action.isEnabled(), status == QueueItemStatus.DONE)
         finally:
             with patch("gui.gui_mainwindow.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
@@ -430,14 +430,14 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
             window._on_queue_state_changed("awaiting_decision")
             self.assertEqual(
                 window.queue_state_label.text(),
-                window.translator.t("gui.queue_state.awaiting_decision"),
+                'Awaiting decision',
             )
             with patch("gui.gui_mainwindow.update_app_config"):
                 window._language_changed("zh_cn")
             self.assertEqual(window.translator.language, "zh_cn")
             self.assertEqual(
                 window.queue_state_label.text(),
-                window.translator.t("gui.queue_state.awaiting_decision"),
+                '等待决定',
             )
         finally:
             window.close()
@@ -654,13 +654,11 @@ class GuiRegressionTestCase(unittest.TestCase):
         self.window._update_queue_metrics(self.window.queue_model.metrics())
         self.assertIs(self.window.notification_banner._actions[0], button)
         self.window._language_changed("zh_cn")
-        self.assertEqual(self.window.notification_banner._actions[0].text(), self.window.translator.t("gui.button.settings"))
-        self.assertEqual(self.window.notification_banner.text_label.text(), self.window.translator.t("gui.banner.smart_unavailable", reason="VMAF missing"))
-        self.window._on_smart_unavailable(self.window.translator.t("gui.tooltip.smart_unavailable"))
+        self.assertEqual(self.window.notification_banner._actions[0].text(), "设置")
+        self.assertEqual(self.window.notification_banner.text_label.text(), "智能模式不可用：VMAF missing")
+        self.window._on_smart_unavailable("所选 FFmpeg 无法运行 libvmaf，智能模式不可用。")
         self.window._language_changed("en")
-        self.assertEqual(self.window.notification_banner.text_label.text(), self.window.translator.t(
-            "gui.banner.smart_unavailable", reason=self.window.translator.t("gui.tooltip.smart_unavailable")
-        ))
+        self.assertEqual(self.window.notification_banner.text_label.text(), "Smart mode is unavailable: Smart mode is unavailable because the selected FFmpeg cannot run libvmaf.")
 
     def test_completion_banner_retranslates_without_losing_dismissal(self) -> None:
         record = self._record("a", QueueItemStatus.DONE)
@@ -669,8 +667,8 @@ class GuiRegressionTestCase(unittest.TestCase):
         self.window._update_queue_metrics(self.window.queue_model.metrics())
         self.assertIs(self.window.notification_banner._actions[0], original_button)
         self.window._language_changed("zh_cn")
-        self.assertIn(self.window.translator.t("gui.completion.title"), self.window.notification_banner.text_label.text())
-        self.assertEqual(self.window.notification_banner._actions[0].text(), self.window.translator.t("gui.completion.open_output"))
+        self.assertIn("批处理完成", self.window.notification_banner.text_label.text())
+        self.assertEqual(self.window.notification_banner._actions[0].text(), "打开输出目录")
         self.window.notification_banner._dismiss()
         self.window._language_changed("en")
         self.assertTrue(self.window.notification_banner.isHidden())

@@ -22,7 +22,7 @@ from core.config.store import (
     preset_data_to_encode_options,
 )
 from core.encoding import execute_plan_concurrent
-from core.i18n import get_translator
+from core.i18n import Translator
 from core.media.validation import validate_workdir
 from core.models import (
     BackendChoice,
@@ -330,7 +330,7 @@ class ConcurrentCliAndGuiTestCase(unittest.TestCase):
 
     def test_settings_owns_concurrency_and_encode_panel_has_no_parallel_controls(self) -> None:
         dialog = SettingsDialog(
-            get_translator("en", self.repo_root / "config"),
+            Translator('en'),
             {"language": "en", "encode_workers": 6},
         )
         try:
@@ -340,7 +340,7 @@ class ConcurrentCliAndGuiTestCase(unittest.TestCase):
             dialog.close()
 
         default_dialog = SettingsDialog(
-            get_translator("en", self.repo_root / "config"),
+            Translator('en'),
             {"language": "en"},
         )
         try:
