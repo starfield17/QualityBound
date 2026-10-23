@@ -4,7 +4,7 @@ import subprocess
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from typing import Callable, cast
 
 from core.ffmpeg.encoders import (
     ENCODER_CANDIDATES,
@@ -106,10 +106,12 @@ def _valid_capability_shape(capabilities: dict) -> bool:
     return True
 
 
-def load_cached_encoder_capabilities() -> dict | None:
+def load_cached_encoder_capabilities() -> dict[str, object] | None:
     data = load_app_config()
     capabilities = data.get("encoder_capabilities")
-    return capabilities if isinstance(capabilities, dict) else None
+    # Configuration is JSON: object keys are strings; values are validated by
+    # the capability schema before this snapshot is reused.
+    return cast(dict[str, object], capabilities) if isinstance(capabilities, dict) else None
 
 
 def save_encoder_capabilities(capabilities: dict) -> Path:
@@ -199,7 +201,7 @@ def detect_encoder_capabilities(
     *,
     available_hwaccels: set[str] | None = None,
     cancel_check: Callable[[], bool] | None = None,
-) -> dict:
+) -> dict[str, object]:
     resolved = _resolved_ffmpeg_path(ffmpeg_path)
     if available_encoders is None:
         _emit(progress_callback, "Scanning FFmpeg encoder list...")
@@ -263,7 +265,7 @@ def ensure_encoder_capabilities(
     force_refresh: bool = False,
     progress_callback: Callable[[str], None] | None = None,
     cancel_check: Callable[[], bool] | None = None,
-) -> dict:
+) -> dict[str, object]:
     resolved = _resolved_ffmpeg_path(ffmpeg_path)
     while not _CACHE_LOCK.acquire(timeout=0.1):
         if cancel_check is not None and cancel_check():
