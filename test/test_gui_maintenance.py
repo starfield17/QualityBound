@@ -192,7 +192,8 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
     def test_ui_builders_create_the_documented_composition_points(self) -> None:
         window = MainWindow(self.repo_root, language="en")
         try:
-            self.assertIs(window.centralWidget(), window.main_scroll_area)
+            self.assertIs(window.centralWidget(), window.main_content_widget)
+            self.assertIsNot(window.main_scroll_area.widget(), window.main_content_widget)
             self.assertIsNotNone(window.source_box)
             self.assertIsNotNone(window.options_panel)
             self.assertIsNotNone(window.jobs_box)

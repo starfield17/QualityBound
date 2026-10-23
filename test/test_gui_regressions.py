@@ -260,3 +260,29 @@ class GuiRegressionTests(unittest.TestCase):
         top = window.table_view.mapTo(window, QPoint(0, 0)).y()
         self.assertLess(top + 80, window.height())
         self.assertGreaterEqual(window.table_view.height(), 80)
+
+    def test_native_window_gc_keeps_parent_before_child_ownership(self) -> None:
+        import gc
+        for _ in range(5):
+            window = MainWindow(ROOT, language="en")
+            window.close()
+            del window
+            gc.collect()
+            self.app.processEvents()
+        self.assertIsNotNone(QApplication.instance())
+
+    def test_info_level_filters_debug_without_losing_records(self) -> None:
+        from gui.activity_log_window import ActivityLogWindow
+        log = ActivityLogWindow(self.tr)
+        self.addCleanup(log.close)
+        log.set_log_level("info")
+        log.append_message("$ ffmpeg input")
+        log.append_message("DEBUG: candidate details")
+        log.append_message("Error: real failure", category="error")
+        log._flush_pending_logs()
+        self.assertNotIn("ffmpeg input", log.log_output.toPlainText())
+        self.assertIn("real failure", log.log_output.toPlainText())
+        self.assertEqual(len(log.entries), 3)
+        log.set_log_level("debug")
+        self.assertIn("ffmpeg input", log.log_output.toPlainText())
+        self.assertIn("candidate details", log.log_output.toPlainText())

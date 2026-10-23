@@ -228,10 +228,12 @@ class SmokeTestCase(unittest.TestCase):
         finally:
             window.close()
 
-    def test_main_window_central_content_is_scrollable_for_small_screens(self) -> None:
+    def test_main_window_setup_scrolls_independently_of_queue(self) -> None:
         window = MainWindow(self.repo_root, language="en")
         try:
-            self.assertIsInstance(window.centralWidget(), QScrollArea)
+            self.assertIs(window.centralWidget(), window.main_content_widget)
+            self.assertIsInstance(window.main_scroll_area, QScrollArea)
+            self.assertFalse(window.main_scroll_area.isAncestorOf(window.queue_stack))
         finally:
             window.close()
 
