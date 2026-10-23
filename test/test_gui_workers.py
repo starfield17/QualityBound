@@ -21,7 +21,7 @@ class EncoderCapabilityDetectWorkerTestCase(unittest.TestCase):
         failed: list[str] = []
 
         def probe(
-            _ffmpeg: Path, model: object, backend: VmafBackend
+            _ffmpeg: Path, model: object, backend: VmafBackend, **_kwargs: object
         ) -> VmafRuntimeSupport:
             name = str(getattr(model, "name"))
             runnable = name != VMAF_PRODUCTION_MODELS[-1].name

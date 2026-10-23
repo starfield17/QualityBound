@@ -112,7 +112,6 @@ class GuiRegressionTests(unittest.TestCase):
 
     def test_busy_queue_rejects_keyboard_remove_and_reorder(self) -> None:
         from unittest.mock import MagicMock
-        from PySide6.QtCore import Qt
         from test_gui_presentation import _record
         window = self.window()
         record = _record(self.root)
@@ -183,3 +182,46 @@ class GuiRegressionTests(unittest.TestCase):
         finally:
             timer.join()
         self.assertLess(time.monotonic() - started, 3)
+
+    def test_large_size_miss_and_predictions_are_honest(self) -> None:
+        from PySide6.QtWidgets import QLabel, QProgressBar
+        from core.models import EncodeResult
+        from gui.constraint_decision_dialog import _DecisionDialog, _quality_metrics, _size_metrics
+        from gui.queue.state import QueueItemStatus
+        from test_gui_presentation import _record
+        record = _record(self.root, QueueItemStatus.NEEDS_DECISION)
+        record.result = EncodeResult(record.source_path, record.output_path, False, needs_decision=True,
+                                     actual_output_bytes=3 * 1024**3, allowed_output_bytes=2 * 1024**3,
+                                     rejected_output_path=self.root / "preserved.mp4")
+        dialog = _DecisionDialog(self.tr, None)
+        self.addCleanup(dialog.close)
+        _size_metrics(dialog, record)
+        self.assertTrue(dialog.findChildren(QProgressBar))
+        quality = _DecisionDialog(self.tr, None)
+        self.addCleanup(quality.close)
+        _quality_metrics(quality, record)
+        text = " ".join(label.text() for label in quality.findChildren(QLabel))
+        self.assertNotIn("Measured quality", text)
+        self.assertIn("~91.2", text)
+        from gui.queue.item_details_panel import ItemDetailsPanel
+        panel = ItemDetailsPanel(self.tr)
+        self.addCleanup(panel.close)
+        panel.set_record(record, self.tr)
+        details = panel.details_view.toPlainText()
+        self.assertIn("~91.2", details)
+        self.assertNotIn("Saved space", details)
+        self.assertIn("Preserved", details)
+
+    def test_keyboard_slider_requests_a_seek(self) -> None:
+        from gui.comparison.window import ComparisonWindow
+        from gui.comparison.decode import ComparisonMedia
+        from gui.comparison.state import VideoDetails, ComparisonPhase
+        window = ComparisonWindow(self.tr)
+        self.addCleanup(window.close)
+        window.media = ComparisonMedia((Path("a"), Path("b")), (VideoDetails(10, 0, 25), VideoDetails(10, 0, 25)), Path("ffmpeg"), Path("ffprobe"))
+        window.phase = ComparisonPhase.PAUSED
+        window._update_controls()
+        with patch.object(window, "_launch") as decode:
+            window.slider.setValue(5000)
+            self.assertEqual(window.position, 5)
+            decode.assert_called_once()
