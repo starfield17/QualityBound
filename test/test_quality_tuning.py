@@ -350,7 +350,7 @@ class GuiPresetSelectionTestCase(unittest.TestCase):
         finally:
             window.close()
 
-    def test_loaded_preset_falls_back_when_backend_is_not_available(self) -> None:
+    def test_loaded_preset_refuses_to_hide_an_unavailable_backend(self) -> None:
         window = MainWindow(self.repo_root, language="en")
         try:
             window._on_encoder_capability_detection_completed(
@@ -365,9 +365,11 @@ class GuiPresetSelectionTestCase(unittest.TestCase):
                     backend=BackendChoice.QSV,
                 )
             )
-            self.assertEqual(panel.backend_combo.currentData(), "auto")
-            options = panel.read_options()
-            self.assertEqual(options.backend, BackendChoice.AUTO)
+            self.assertEqual(panel.backend_combo.currentData(), "qsv")
+            with self.assertRaises(ValueError):
+                panel.read_options()
+            panel.backend_combo.setCurrentIndex(panel.backend_combo.findData("auto"))
+            self.assertEqual(panel.read_options().backend, BackendChoice.AUTO)
         finally:
             window.close()
 

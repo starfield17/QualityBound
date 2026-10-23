@@ -226,7 +226,7 @@ class AnalysisProfileGuiTestCase(unittest.TestCase):
         finally:
             window.close()
 
-    def test_settings_dialog_uses_profile_combo_and_discards_custom_values(self) -> None:
+    def test_settings_dialog_uses_profile_combo_without_overwriting_custom_values(self) -> None:
         tr = get_translator("en", self.repo_root / "config")
         dialog = SettingsDialog(
             tr,
@@ -241,7 +241,10 @@ class AnalysisProfileGuiTestCase(unittest.TestCase):
             self.assertFalse(hasattr(dialog, "_profile_pages"))
             values = dialog.values()
             self.assertEqual(values["analysis_profile"], "precise")
-            self.assertEqual(values["analysis_profiles"], {})
+            self.assertNotIn("analysis_profiles", values)
+            settings = {"analysis_profiles": {"precise": {"sample_duration_sec": 9.0}}}
+            settings.update(values)
+            self.assertEqual(settings["analysis_profiles"], {"precise": {"sample_duration_sec": 9.0}})
         finally:
             dialog.close()
 

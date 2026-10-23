@@ -378,8 +378,13 @@ class VideoToolboxCliAndGuiTestCase(unittest.TestCase):
             av1_index = panel.codec_combo.findData("av1")
             assert av1_index >= 0
             panel.codec_combo.setCurrentIndex(av1_index)
-            self.assertNotIn("videotoolbox", [panel.backend_combo.itemData(i) for i in range(panel.backend_combo.count())])
-            self.assertEqual(panel.backend_combo.currentData(), "auto")
+            pending_index = panel.backend_combo.findData("videotoolbox")
+            self.assertGreaterEqual(pending_index, 0)
+            self.assertFalse(combo_item(panel.backend_combo, pending_index).isEnabled())
+            with self.assertRaises(ValueError):
+                panel.read_options()
+            panel.backend_combo.setCurrentIndex(panel.backend_combo.findData("auto"))
+            self.assertEqual(panel.read_options().backend, BackendChoice.AUTO)
         finally:
             window.close()
 
