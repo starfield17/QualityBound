@@ -9,10 +9,21 @@ from enum import Enum
 from pathlib import Path
 from typing import Mapping
 
-from core.i18n import Translator
+from core.i18n import Text, Translator
 from core.models import CompressionMode, EncodeOptions, EncodePlan, EncodePlanItem, EncodeResult, MediaInfo, QualitySearchResult, SegmentedAnalysisResult, VideoFileItem
 from core.progress_events import ProgressEvent
 from core.smart import resolve_max_output_ratio
+
+
+TOOLTIP_SMART_ANALYSIS = Text(
+    en='Smart analysis: {reason}',
+    zh_cn='Smart 分析：{reason}',
+)
+
+TOOLTIP_START_BINDING = Text(
+    en='Encoding settings and output are selected when Start Queue is clicked. Per-item overrides are preserved.',
+    zh_cn='点击 Start Queue 时确定编码参数和输出路径；保留单项自定义设置。',
+)
 
 
 class QueueItemStatus(str, Enum):
@@ -29,67 +40,67 @@ class QueueItemStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-STATUS_KEY_BY_VALUE = {
-    QueueItemStatus.AWAITING_START: "gui.status.awaiting_start",
-    QueueItemStatus.QUEUED: "gui.status.ready",
-    QueueItemStatus.WAITING_ANALYSIS: "gui.status.waiting_analysis",
-    QueueItemStatus.ANALYZING: "gui.status.analyzing",
-    QueueItemStatus.ENCODING: "gui.status.encoding",
-    QueueItemStatus.VALIDATING: "gui.status.validating",
-    QueueItemStatus.DONE: "gui.status.done",
-    QueueItemStatus.FAILED: "gui.status.failed",
-    QueueItemStatus.NEEDS_DECISION: "gui.status.needs_decision",
-    QueueItemStatus.SKIPPED: "gui.status.skip",
-    QueueItemStatus.CANCELLED: "gui.status.cancelled",
+STATUS_TEXT_BY_VALUE = {
+    QueueItemStatus.AWAITING_START: Text(en='Awaiting Start', zh_cn='待启动'),
+    QueueItemStatus.QUEUED: Text(en='Ready', zh_cn='就绪'),
+    QueueItemStatus.WAITING_ANALYSIS: Text(en='Waiting analysis', zh_cn='等待分析'),
+    QueueItemStatus.ANALYZING: Text(en='Analyzing', zh_cn='分析中'),
+    QueueItemStatus.ENCODING: Text(en='Encoding', zh_cn='编码中'),
+    QueueItemStatus.VALIDATING: Text(en='Validating', zh_cn='验收中'),
+    QueueItemStatus.DONE: Text(en='Done', zh_cn='完成'),
+    QueueItemStatus.FAILED: Text(en='Failed', zh_cn='失败'),
+    QueueItemStatus.NEEDS_DECISION: Text(en='Needs decision', zh_cn='等待决定'),
+    QueueItemStatus.SKIPPED: Text(en='Skipped', zh_cn='已跳过'),
+    QueueItemStatus.CANCELLED: Text(en='Cancelled', zh_cn='已取消'),
 }
 
-PROGRESS_STAGE_KEYS = {
-    "planning": "gui.stage.planning",
-    "analysis": "gui.stage.analysis",
-    "encode": "gui.stage.encode",
+PROGRESS_STAGE_TEXT = {
+    "planning": Text(en='Planning', zh_cn='规划'),
+    "analysis": Text(en='Analysis', zh_cn='分析'),
+    "encode": Text(en='Encoding', zh_cn='编码'),
 }
 
-PROGRESS_STATE_KEYS = {
-    "scanning": "gui.state.scanning",
-    "analyzing": "gui.state.analyzing",
-    "candidate_finished": "gui.state.candidate_finished",
-    "scouting": "gui.state.scouting",
-    "scout_finished": "gui.state.scout_finished",
-    "sample_plan_ready": "gui.state.sample_plan_ready",
-    "boundary_alignment": "gui.state.boundary_alignment",
-    "searching": "gui.state.searching",
-    "holdout_verification": "gui.state.holdout_verification",
-    "refining": "gui.state.refining",
-    "receipt_loaded": "gui.state.receipt_loaded",
-    "receipt_write_failed": "gui.state.receipt_write_failed",
-    "running": "gui.state.running",
-    "failed": "gui.state.failed",
+PROGRESS_STATE_TEXT = {
+    "scanning": Text(en='Scanning folders', zh_cn='正在扫描目录'),
+    "analyzing": Text(en='Measuring candidates', zh_cn='正在测量候选项'),
+    "candidate_finished": Text(en='Candidate measured', zh_cn='候选项测量完成'),
+    "scouting": Text(en='Scanning scenes', zh_cn='正在扫描场景'),
+    "scout_finished": Text(en='Scene scan complete', zh_cn='场景扫描完成'),
+    "sample_plan_ready": Text(en='Samples selected', zh_cn='采样窗口已选定'),
+    "boundary_alignment": Text(en='Aligning boundaries', zh_cn='正在对齐边界'),
+    "searching": Text(en='Searching candidates', zh_cn='正在搜索候选项'),
+    "holdout_verification": Text(en='Validating holdouts', zh_cn='正在验证留出窗口'),
+    "refining": Text(en='Refining search', zh_cn='正在细化搜索'),
+    "receipt_loaded": Text(en='Reusing measurements', zh_cn='正在复用测量结果'),
+    "receipt_write_failed": Text(en='Could not save measurements', zh_cn='无法保存测量结果'),
+    "running": Text(en='Running', zh_cn='运行中'),
+    "failed": Text(en='Failed', zh_cn='失败'),
 
-    "probing": "gui.state.probing",
-    "started": "gui.state.started",
-    "starting_file": "gui.state.starting_file",
-    "running_pass": "gui.state.running_pass",
-    "validating": "gui.state.validating",
-    "needs_decision": "gui.state.needs_decision",
-    "finished_file": "gui.state.finished_file",
-    "cancelled_file": "gui.state.cancelled_file",
-    "failed_file": "gui.state.failed_file",
-    "paused": "gui.state.paused",
-    "cancelled": "gui.state.cancelled",
-    "cancelling": "gui.state.cancelling",
-    "finished": "gui.state.finished",
-    "skipped": "gui.state.skipped",
-    "waiting_analysis": "gui.state.waiting_analysis",
-    "analysis_finished": "gui.state.analysis_finished",
+    "probing": Text(en='Probing', zh_cn='探测中'),
+    "started": Text(en='Started', zh_cn='已开始'),
+    "starting_file": Text(en='Starting file', zh_cn='开始处理文件'),
+    "running_pass": Text(en='Running pass', zh_cn='执行编码遍'),
+    "validating": Text(en='Validating', zh_cn='验证中'),
+    "needs_decision": Text(en='Needs decision', zh_cn='等待决定'),
+    "finished_file": Text(en='Finished file', zh_cn='文件完成'),
+    "cancelled_file": Text(en='Cancelled', zh_cn='已取消'),
+    "failed_file": Text(en='Failed', zh_cn='失败'),
+    "paused": Text(en='Paused', zh_cn='已暂停'),
+    "cancelled": Text(en='Cancelled', zh_cn='已取消'),
+    "cancelling": Text(en='Stopping', zh_cn='正在停止'),
+    "finished": Text(en='Finished', zh_cn='已完成'),
+    "skipped": Text(en='Skipped', zh_cn='已跳过'),
+    "waiting_analysis": Text(en='Waiting for analysis', zh_cn='等待分析'),
+    "analysis_finished": Text(en='Analysis finished', zh_cn='分析完成'),
 }
 
 
-def progress_stage_key(stage: str) -> str:
-    return PROGRESS_STAGE_KEYS.get(stage, "gui.stage.unknown")
+def progress_stage_text(stage: str) -> Text:
+    return PROGRESS_STAGE_TEXT.get(stage, Text(en='Working', zh_cn='处理中'))
 
 
-def progress_state_key(state: str) -> str:
-    return PROGRESS_STATE_KEYS.get(state, "gui.state.unknown")
+def progress_state_text(state: str) -> Text:
+    return PROGRESS_STATE_TEXT.get(state, Text(en='Working', zh_cn='处理中'))
 
 
 ACTIVE_ITEM_STATUSES = {
@@ -294,8 +305,8 @@ def create_queue_records(plan: EncodePlan, workdir: Path) -> list[QueueItemRecor
     return records
 
 
-def status_key(status: QueueItemStatus) -> str:
-    return STATUS_KEY_BY_VALUE[status]
+def status_text(status: QueueItemStatus) -> Text:
+    return STATUS_TEXT_BY_VALUE[status]
 
 
 def short_error(message: str | None, limit: int = 120) -> str:
@@ -311,18 +322,18 @@ def build_tags(record: QueueItemRecord, translator: Translator) -> list[str]:
     tags: list[str] = []
     if record.plan_item is None:
         if record.draft is not None and record.draft.options_override is not None:
-            tags.append(translator.t("gui.tag.custom_options"))
+            tags.append(translator.t(Text(en='Custom options', zh_cn='自定义参数')))
         if record.draft is not None and record.draft.output_dir_override is not None:
-            tags.append(translator.t("gui.tag.custom_output"))
+            tags.append(translator.t(Text(en='Custom output', zh_cn='自定义目录')))
         return tags
     if record.total_passes > 1:
-        tags.append(translator.t("gui.tag.two_pass"))
+        tags.append(translator.t(Text(en='2-pass', zh_cn='双遍')))
     if record.bound_plan_item.options.overwrite:
-        tags.append(translator.t("gui.tag.overwrite"))
+        tags.append(translator.t(Text(en='Overwrite', zh_cn='覆盖')))
     if record.bound_plan_item.options.copy_external_subtitles:
-        tags.append(translator.t("gui.tag.external_subtitles"))
+        tags.append(translator.t(Text(en='ExtSub', zh_cn='外挂字幕')))
     if record.bound_plan_item.warnings:
-        tags.append(translator.t("gui.tag.warning"))
+        tags.append(translator.t(Text(en='Warn', zh_cn='警告')))
     # Status is already shown in the dedicated Status column; repeating it in
     # Tags only steals width from the flags a user cannot see elsewhere.
     if record.error_summary and record.status not in {
@@ -330,65 +341,65 @@ def build_tags(record: QueueItemRecord, translator: Translator) -> list[str]:
         QueueItemStatus.FAILED,
         QueueItemStatus.NEEDS_DECISION,
     }:
-        tags.append(translator.t("gui.tag.note"))
+        tags.append(translator.t(Text(en='Note', zh_cn='备注')))
     return tags
 
 
 def build_tooltip(record: QueueItemRecord, translator: Translator) -> str:
     if record.plan_item is None:
-        return "\n".join([str(record.source_path), translator.t("gui.tooltip.start_binding"), record.error_summary or ""])
+        return "\n".join([str(record.source_path), translator.t(TOOLTIP_START_BINDING), record.error_summary or ""])
     lines = [
-        translator.t("gui.tooltip.source", path=record.source_path),
-        translator.t("gui.tooltip.output", path=record.output_path),
+        translator.t(Text(en='Source: {path}', zh_cn='源文件：{path}'), path=record.source_path),
+        translator.t(Text(en='Output: {path}', zh_cn='输出：{path}'), path=record.output_path),
     ]
     if record.bound_plan_item.warnings:
         lines.append(
-            translator.t("gui.tooltip.warnings", warnings="; ".join(record.bound_plan_item.warnings))
+            translator.t(Text(en='Warnings: {warnings}', zh_cn='警告：{warnings}'), warnings="; ".join(record.bound_plan_item.warnings))
         )
     if record.error_summary:
-        lines.append(translator.t("gui.tooltip.detail", detail=record.error_summary))
+        lines.append(translator.t(Text(en='Detail: {detail}', zh_cn='详情：{detail}'), detail=record.error_summary))
     quality = record.bound_plan_item.quality_search_result
     segmented = record.bound_plan_item.segmented_analysis_result
     if segmented is not None:
         mean = segmented.final_mean_vmaf if segmented.final_mean_vmaf is not None else segmented.predicted_mean_vmaf
-        lines.append(translator.t("gui.tooltip.smart_v2_shots", count=len(segmented.shots)))
+        lines.append(translator.t(Text(en='Smart v2 (experimental): {count} shots', zh_cn='Smart v2（实验性）：{count} 个镜头'), count=len(segmented.shots)))
         if record.analysis_measurement_budget:
             lines.append(
                 translator.t(
-                    "gui.tooltip.measurement_budget",
+                    Text(en='Initial sample encode budget: {budget}; holdouts and repairs are additional.', zh_cn='初始样本编码预算：{budget}；留出验证与修复为额外开销。'),
                     budget=record.analysis_measurement_budget,
                 )
             )
         if mean is not None:
             if segmented.final_mean_vmaf is not None:
-                lines.append(translator.t("gui.tooltip.measured_mean_vmaf", value=f"{mean:.2f}"))
+                lines.append(translator.t(Text(en='Measured mean VMAF: {value}', zh_cn='实测平均 VMAF：{value}'), value=f"{mean:.2f}"))
             else:
-                lines.append(translator.t("gui.tooltip.predicted_mean_vmaf", value=f"{mean:.2f}"))
+                lines.append(translator.t(Text(en='Predicted mean VMAF: {value}', zh_cn='预测平均 VMAF：{value}'), value=f"{mean:.2f}"))
         if segmented.approximate:
-            lines.append(translator.t("gui.tooltip.allocation_compressed"))
+            lines.append(translator.t(Text(en='Allocation used bounded state compression.', zh_cn='码率分配使用了有界状态压缩。')))
         if segmented.reason:
-            lines.append(translator.t("gui.tooltip.smart_analysis", reason=segmented.reason))
+            lines.append(translator.t(TOOLTIP_SMART_ANALYSIS, reason=segmented.reason))
     if quality is not None:
         if quality.min_vmaf is not None:
             lines.append(
-                translator.t("gui.tooltip.smart_quality_score", value=f"{quality.min_vmaf:.2f}")
+                translator.t(Text(en='SMART quality score: {value}', zh_cn='SMART 质量分：{value}'), value=f"{quality.min_vmaf:.2f}")
             )
         if quality.predicted_output_ratio is not None:
             lines.append(
                 translator.t(
-                    "gui.tooltip.predicted_output",
+                    Text(en='Predicted output: {value}%', zh_cn='预测输出体积：{value}%'),
                     value=f"{quality.predicted_output_ratio * 100:.2f}",
                 )
             )
         if quality.required_output_ratio is not None:
             lines.append(
                 translator.t(
-                    "gui.tooltip.required_output",
+                    Text(en='Estimated required output: {value}%', zh_cn='预计所需输出体积：{value}%'),
                     value=f"{quality.required_output_ratio * 100:.2f}",
                 )
             )
         if quality.reason:
-            lines.append(translator.t("gui.tooltip.smart_analysis", reason=quality.reason))
+            lines.append(translator.t(TOOLTIP_SMART_ANALYSIS, reason=quality.reason))
     return "\n".join(lines)
 
 

@@ -12,11 +12,37 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.i18n import Translator
+from core.i18n import Text, Translator
 from gui.queue.model import QueueTableModel, format_duration
 from gui.queue.state import QueueMetrics
 from gui.queue.view import create_queue_view
 from gui.window_geometry import clamped_window_size
+
+
+DROP_OVERLAY = Text(
+    en='Drop to add videos',
+    zh_cn='松开以添加视频',
+)
+
+SUMMARY_QUEUE_PROGRESS = Text(
+    en='Queue: {percent}% ({completed}/{total})    ETA ≈ {eta}',
+    zh_cn='队列：{percent}%（{completed}/{total}）    ETA ≈{eta}',
+)
+
+SUMMARY_QUEUE_STATES = Text(
+    en='Ready {ready} / Running {running} / Needs decision {decision} / Failed {failed}',
+    zh_cn='就绪 {ready} / 运行 {running} / 待决定 {decision} / 失败 {failed}',
+)
+
+TOOLTIP_TABLE_HEADER = Text(
+    en="Click a header to sort the view. Sorting changes the queue's execution order; right-click the header to reset it.",
+    zh_cn='点击表头可排序；排序会改变队列的执行顺序，右键表头可恢复原顺序。',
+)
+
+VALUE_UNKNOWN = Text(
+    en='—',
+    zh_cn='—',
+)
 
 
 class QueueWindow(QMainWindow):
@@ -74,7 +100,7 @@ class QueueWindow(QMainWindow):
 
     @Slot(bool)
     def set_drop_overlay_visible(self, visible: bool) -> None:
-        self.drop_overlay.setText(self.translator.t("gui.drop.overlay"))
+        self.drop_overlay.setText(self.translator.t(DROP_OVERLAY))
         viewport = self.table_view.viewport()
         self.drop_overlay.setGeometry(QRect(viewport.mapTo(self, QPoint()), viewport.size()))
         self.drop_overlay.setVisible(visible and self.table_view.acceptDrops())
@@ -82,14 +108,14 @@ class QueueWindow(QMainWindow):
 
     def apply_translations(self, tr: Translator) -> None:
         self.translator = tr
-        self.setWindowTitle(self.translator.t("gui.window.queue"))
-        self.hint_label.setText(self.translator.t("gui.window.queue_hint"))
+        self.setWindowTitle(self.translator.t(Text(en='Queue', zh_cn='队列')))
+        self.hint_label.setText(self.translator.t(Text(en='Right-click a row for actions; drag rows to reorder. Header sorting changes the execution order.', zh_cn='右键行可执行操作；拖动行可调整顺序。表头排序会改变执行顺序。')))
         self.model.set_translator(tr)
-        self.table_view.horizontalHeader().setToolTip(self.translator.t("gui.tooltip.table_header"))
+        self.table_view.horizontalHeader().setToolTip(self.translator.t(TOOLTIP_TABLE_HEADER))
 
     def update_metrics(self, metrics: QueueMetrics) -> None:
         states_text = self.translator.t(
-            "gui.summary.queue_states",
+            SUMMARY_QUEUE_STATES,
             ready=metrics.ready_items,
             running=metrics.running_items,
             failed=metrics.failed_items,
@@ -98,16 +124,16 @@ class QueueWindow(QMainWindow):
         total_duration = format_duration(metrics.total_duration_sec)
         self.summary_label.setText(
             self.translator.t(
-                "gui.summary.queue_window",
+                Text(en='Items: {total}    {states}    Duration: {duration}', zh_cn='项目：{total}    {states}    时长：{duration}'),
                 total=metrics.total_items,
                 states=states_text,
                 duration=total_duration,
             )
         )
-        eta_text = format_duration(metrics.eta_sec) if metrics.eta_sec else self.translator.t("gui.value.unknown")
+        eta_text = format_duration(metrics.eta_sec) if metrics.eta_sec else self.translator.t(VALUE_UNKNOWN)
         self.queue_progress_label.setText(
             self.translator.t(
-                "gui.summary.queue_progress",
+                SUMMARY_QUEUE_PROGRESS,
                 percent=f"{metrics.queue_percent:.1f}",
                 completed=metrics.completed_items,
                 total=metrics.total_items,

@@ -15,13 +15,6 @@ class PostEncodeAction(str, Enum):
     QUIT = "quit"
 
 
-POST_ENCODE_ACTION_KEYS: dict[PostEncodeAction, str] = {
-    PostEncodeAction.DO_NOTHING: "gui.power.action.none",
-    PostEncodeAction.SLEEP: "gui.power.action.sleep",
-    PostEncodeAction.SHUTDOWN: "gui.power.action.shutdown",
-    PostEncodeAction.QUIT: "gui.power.action.quit",
-}
-
 DEFAULT_POWER_TIMEOUT_SEC: float = 5.0
 
 
@@ -35,10 +28,6 @@ class SystemPowerResult:
     timed_out: bool = False
     stdout: str = ""
     stderr: str = ""
-
-
-def post_encode_action_key(action: PostEncodeAction) -> str:
-    return POST_ENCODE_ACTION_KEYS.get(action, "gui.power.action.none")
 
 
 def parse_post_encode_action(value: object) -> PostEncodeAction:

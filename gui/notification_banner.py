@@ -5,8 +5,14 @@ from collections.abc import Callable
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QToolButton, QWidget
 
-from core.i18n import Translator
+from core.i18n import Text, Translator
 from gui.icons import set_button_icon
+
+
+BANNER_DISMISS = Text(
+    en='Dismiss',
+    zh_cn='忽略',
+)
 
 
 class NotificationBanner(QFrame):
@@ -42,8 +48,8 @@ class NotificationBanner(QFrame):
 
     def apply_translations(self, translator: Translator) -> None:
         self.translator = translator
-        self.dismiss_button.setToolTip(translator.t("gui.banner.dismiss"))
-        self.dismiss_button.setAccessibleName(translator.t("gui.banner.dismiss"))
+        self.dismiss_button.setToolTip(translator.t(BANNER_DISMISS))
+        self.dismiss_button.setAccessibleName(translator.t(BANNER_DISMISS))
 
     def show_message(
         self,

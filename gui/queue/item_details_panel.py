@@ -12,10 +12,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.i18n import Translator
+from core.i18n import Text, Translator
 from gui.icons import set_button_icon
-from gui.queue.model import format_size
-from gui.queue.state import QueueItemRecord, QueueItemStatus, build_tags, status_key
+from gui.queue.model import format_size, DETAILS_ACTUAL_SIZE
+from gui.queue.state import QueueItemRecord, QueueItemStatus, build_tags, status_text
+
+
+DETAILS_CLOSE = Text(
+    en='Close details',
+    zh_cn='关闭详情',
+)
 
 
 class ItemDetailsPanel(QFrame):
@@ -83,14 +89,14 @@ class ItemDetailsPanel(QFrame):
 
     def apply_translations(self, translator: Translator) -> None:
         self.translator = translator
-        self.title_label.setText(translator.t("gui.details.title"))
-        self.close_button.setToolTip(translator.t("gui.details.close"))
-        self.close_button.setAccessibleName(translator.t("gui.details.close"))
-        self.open_source_button.setText(translator.t("gui.details.open_source"))
-        self.open_output_button.setText(translator.t("gui.details.open_output"))
-        self.compare_button.setText(translator.t("gui.details.compare"))
-        self.resolve_button.setText(translator.t("gui.details.resolve"))
-        self.copy_button.setText(translator.t("gui.button.copy_details"))
+        self.title_label.setText(translator.t(Text(en='Selected item', zh_cn='选中项目')))
+        self.close_button.setToolTip(translator.t(DETAILS_CLOSE))
+        self.close_button.setAccessibleName(translator.t(DETAILS_CLOSE))
+        self.open_source_button.setText(translator.t(Text(en='Open source folder', zh_cn='打开源目录')))
+        self.open_output_button.setText(translator.t(Text(en='Open output folder', zh_cn='打开输出目录')))
+        self.compare_button.setText(translator.t(Text(en='Compare source and output', zh_cn='对比输入与输出')))
+        self.resolve_button.setText(translator.t(Text(en='Resolve decision', zh_cn='处理决定')))
+        self.copy_button.setText(translator.t(Text(en='Copy details', zh_cn='复制详情')))
         if self.record is not None:
             self.set_record(self.record, translator)
 
@@ -126,11 +132,11 @@ class ItemDetailsPanel(QFrame):
     def _details_text(self, record: QueueItemRecord, translator: Translator) -> str:
         tr = translator.t
         lines = [
-            f"{tr('gui.details.status')}: {tr(status_key(record.status))}",
-            f"{tr('gui.details.source')}: {record.source_path}",
+            f"{tr(Text(en='Status', zh_cn='状态'))}: {tr(status_text(record.status))}",
+            f"{tr(Text(en='Source', zh_cn='输入源'))}: {record.source_path}",
         ]
         if record.plan_item is not None:
-            lines.append(f"{tr('gui.details.output')}: {record.output_path}")
+            lines.append(f"{tr(Text(en='Output', zh_cn='输出'))}: {record.output_path}")
             quality = record.bound_plan_item.quality_search_result
             segmented = record.bound_plan_item.segmented_analysis_result
             planned_quality: float | None = None
@@ -146,32 +152,32 @@ class ItemDetailsPanel(QFrame):
                 planned_quality = quality.min_vmaf
                 planned_ratio = quality.predicted_output_ratio or quality.required_output_ratio
             if planned_quality is not None:
-                lines.append(f"{tr('gui.details.measured_quality') if measured_quality else tr('gui.details.planned_quality')}: {'' if measured_quality else '~'}{planned_quality:.1f}")
+                lines.append(f"{tr(Text(en='Measured VMAF', zh_cn='实测 VMAF')) if measured_quality else tr(Text(en='Planned VMAF', zh_cn='计划 VMAF'))}: {'' if measured_quality else '~'}{planned_quality:.1f}")
             if planned_ratio is not None:
-                lines.append(f"{tr('gui.details.planned_size')}: ~{planned_ratio * 100:.1f}%")
+                lines.append(f"{tr(Text(en='Planned size ratio', zh_cn='计划体积比例'))}: ~{planned_ratio * 100:.1f}%")
             if record.result is not None and record.result.rejected_output_path is not None:
-                lines.append(f"{tr('gui.decision.preserved_path')}: {record.result.rejected_output_path}")
-                lines.append(f"{tr('gui.details.preserved_size')}: {format_size(record.result.actual_output_bytes)}")
+                lines.append(f"{tr(Text(en='Preserved file', zh_cn='保留文件'))}: {record.result.rejected_output_path}")
+                lines.append(f"{tr(Text(en='Preserved file size (not published)', zh_cn='保留文件体积（尚未发布）'))}: {format_size(record.result.actual_output_bytes)}")
             actual_bytes = self._actual_output_bytes(record)
             if actual_bytes is not None:
-                lines.append(f"{tr('gui.details.actual_size')}: {format_size(actual_bytes)}")
+                lines.append(f"{tr(DETAILS_ACTUAL_SIZE)}: {format_size(actual_bytes)}")
                 source_bytes = self._source_bytes(record)
                 if source_bytes is not None:
                     lines.append(
-                        f"{tr('gui.details.saved_space')}: {format_size(source_bytes - actual_bytes)}"
+                        f"{tr(Text(en='Saved space', zh_cn='节省空间'))}: {format_size(source_bytes - actual_bytes)}"
                     )
         tags = build_tags(record, translator)
         if tags:
-            lines.append(f"{tr('gui.details.tags')}: {', '.join(tags)}")
+            lines.append(f"{tr(Text(en='Tags', zh_cn='标签'))}: {', '.join(tags)}")
         warnings = record.bound_plan_item.warnings if record.plan_item is not None else []
         if warnings:
-            lines.append(f"{tr('gui.details.warnings')}: {'; '.join(warnings)}")
+            lines.append(f"{tr(Text(en='Warnings', zh_cn='警告'))}: {'; '.join(warnings)}")
         reason = record.error_summary
         if not reason and record.plan_item is not None:
             quality = record.bound_plan_item.quality_search_result
             reason = quality.reason if quality is not None else None
         if reason:
-            lines.append(f"{tr('gui.details.reason')}: {reason}")
+            lines.append(f"{tr(Text(en='Reason', zh_cn='原因'))}: {reason}")
         return "\n".join(lines)
 
     @staticmethod

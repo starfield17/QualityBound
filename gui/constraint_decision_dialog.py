@@ -20,11 +20,47 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.i18n import Translator
+from core.i18n import Text, Translator
 from core.models import ConstraintFailureKind, DecisionActionCode, DecisionOption
 from gui.queue.state import QueueItemRecord
 from gui.window_geometry import clamped_window_size
 from gui.queue.model import format_size
+
+
+DECISION_DECIDE_LATER = Text(
+    en='Decide later',
+    zh_cn='稍后决定',
+)
+
+DECISION_NO_METRICS = Text(
+    en='No metric details are available for this decision.',
+    zh_cn='此决定没有可用的指标详情。',
+)
+
+DECISION_QUALITY_MISS_TITLE = Text(
+    en='Quality target not reached',
+    zh_cn='未达到画质目标',
+)
+
+DECISION_REASON = Text(
+    en='Reason',
+    zh_cn='原因',
+)
+
+DECISION_SIZE_CONFLICT_INTRO = Text(
+    en='Tested candidates meet the quality target but exceed the size limit for {file}, or its media budget is too small.',
+    zh_cn='{file} 已测试的候选达到画质目标，但超过体积上限，或其媒体预算不足。',
+)
+
+DECISION_SIZE_CONFLICT_TITLE = Text(
+    en='Quality and size conflict',
+    zh_cn='画质与体积冲突',
+)
+
+DECISION_SIZE_MISS_TITLE = Text(
+    en='Encoded file exceeded the size limit',
+    zh_cn='成片超过体积上限',
+)
 
 
 class SizeMissDecision(str, Enum):
@@ -49,26 +85,26 @@ class _LimitBar(QProgressBar):
 def _quality_action_text(tr: Translator, option: DecisionOption) -> str:
     value = option.suggested_value
     if option.action_code == DecisionActionCode.RELAX_SIZE and isinstance(value, (int, float)):
-        return tr.t("gui.decision.relax_size", value=f"{float(value) * 100:.1f}%")
+        return tr.t(Text(en='Allow output up to {value}', zh_cn='允许成片最大到 {value}'), value=f"{float(value) * 100:.1f}%")
     if option.action_code == DecisionActionCode.RELAX_QUALITY and isinstance(value, (int, float)):
-        return tr.t("gui.decision.relax_quality", value=f"{float(value):.1f}")
+        return tr.t(Text(en='Lower sampled-window mean VMAF target to {value}', zh_cn='把采样窗口平均 VMAF 下限降到 {value}'), value=f"{float(value):.1f}")
     if option.action_code == DecisionActionCode.CHANGE_MEDIA_BUDGET:
-        return tr.t("gui.decision.change_media_budget")
+        return tr.t(Text(en='Encode audio as AAC and retry', zh_cn='音频改用 AAC 后重试'))
     if option.action_code == DecisionActionCode.REANALYZE:
-        return tr.t("gui.decision.reanalyze")
-    return tr.t("gui.decision.skip")
+        return tr.t(Text(en='Run Smart analysis again with the current encoder', zh_cn='使用当前编码器重新运行 Smart 分析'))
+    return tr.t(Text(en='Skip this file', zh_cn='跳过这个文件'))
 
 
 def _quality_action_description(tr: Translator, option: DecisionOption) -> str:
     if option.action_code == DecisionActionCode.RELAX_SIZE:
-        return tr.t("gui.decision.relax_size_detail")
+        return tr.t(Text(en='Keep the quality target and allow a larger output, up to the source size.', zh_cn='保持质量目标，允许更大的输出，最大到源文件体积。'))
     if option.action_code == DecisionActionCode.RELAX_QUALITY:
-        return tr.t("gui.decision.relax_quality_detail")
+        return tr.t(Text(en='Keep the size ceiling and lower the quality target to the measured value.', zh_cn='保持体积上限，把质量目标降到测量值。'))
     if option.action_code == DecisionActionCode.CHANGE_MEDIA_BUDGET:
-        return tr.t("gui.decision.change_media_budget_detail")
+        return tr.t(Text(en='Encode audio as AAC to free bitrate for video, then retry.', zh_cn='把音频编码为 AAC，为视频腾出码率后重试。'))
     if option.action_code == DecisionActionCode.REANALYZE:
-        return tr.t("gui.decision.reanalyze_detail")
-    return tr.t("gui.decision.skip_detail")
+        return tr.t(Text(en='Run Smart analysis again with the current encoder.', zh_cn='使用当前编码器重新运行智能分析。'))
+    return tr.t(Text(en='Do not publish a file for this item.', zh_cn='不为该项目发布文件。'))
 
 
 class _DecisionDialog(QDialog):
@@ -169,7 +205,7 @@ def _quality_metrics(dialog: _DecisionDialog, record: QueueItemRecord) -> None:
     row = 0
     dialog.add_metric(
         row,
-        tr.t("gui.decision.quality_target"),
+        tr.t(Text(en='Quality target', zh_cn='质量目标')),
         f"{item.options.min_vmaf:.1f}",
     )
     row += 1
@@ -180,20 +216,20 @@ def _quality_metrics(dialog: _DecisionDialog, record: QueueItemRecord) -> None:
         measured = segmented.final_mean_vmaf if segmented.final_mean_vmaf is not None else segmented.predicted_mean_vmaf
     if measured is not None:
         final = segmented is not None and segmented.final_mean_vmaf is not None
-        dialog.add_metric(row, tr.t("gui.decision.measured_quality") if final else tr.t("gui.decision.estimated_quality"),
+        dialog.add_metric(row, tr.t(Text(en='Measured quality', zh_cn='测量质量')) if final else tr.t(Text(en='Estimated quality', zh_cn='预估画质')),
                           ("" if final else "~") + f"{measured:.1f}")
         row += 1
     if quality is not None and quality.predicted_output_ratio is not None:
         dialog.add_metric(
             row,
-            tr.t("gui.decision.output_ratio"),
+            tr.t(Text(en='Predicted output', zh_cn='预测输出比例')),
             f"~{quality.predicted_output_ratio * 100:.1f}%",
         )
         row += 1
     if quality is not None and quality.required_output_ratio is not None:
         dialog.add_metric(
             row,
-            tr.t("gui.decision.required_ratio"),
+            tr.t(Text(en='Required output', zh_cn='所需输出比例')),
             f"~{quality.required_output_ratio * 100:.1f}%",
         )
         row += 1
@@ -201,7 +237,7 @@ def _quality_metrics(dialog: _DecisionDialog, record: QueueItemRecord) -> None:
     if not reason and segmented is not None:
         reason = segmented.reason
     dialog.reason_label.setText(
-        f"{tr.t('gui.decision.reason')}: {reason or record.error_summary or tr.t('gui.decision.no_metrics')}"
+        f"{tr.t(DECISION_REASON)}: {reason or record.error_summary or tr.t(DECISION_NO_METRICS)}"
     )
 
 
@@ -212,8 +248,8 @@ def _size_metrics(dialog: _DecisionDialog, record: QueueItemRecord) -> None:
     actual = int(result.actual_output_bytes or 0)
     allowed = int(result.allowed_output_bytes or 0)
     tr = dialog.translator
-    dialog.add_metric(0, tr.t("gui.decision.actual_size"), format_size(actual))
-    dialog.add_metric(1, tr.t("gui.decision.size_limit"), format_size(allowed))
+    dialog.add_metric(0, tr.t(Text(en='Actual size', zh_cn='实际体积')), format_size(actual))
+    dialog.add_metric(1, tr.t(Text(en='Size limit', zh_cn='体积上限')), format_size(allowed))
     scale = max(actual, allowed, 1) * 1.1
     bar = _LimitBar(allowed / scale)
     bar.setRange(0, 1000)
@@ -221,11 +257,11 @@ def _size_metrics(dialog: _DecisionDialog, record: QueueItemRecord) -> None:
     bar.setTextVisible(True)
     ratio = actual / allowed * 100 if allowed > 0 else 0
     bar.setFormat(f"{format_size(actual)} / {format_size(allowed)} · {ratio:.1f}%")
-    bar.setToolTip(tr.t("gui.decision.size_ratio", value=f"{max(0.0, ratio - 100):.1f}"))
+    bar.setToolTip(tr.t(Text(en='{value}% over the limit; the marker shows the limit.', zh_cn='超出限额 {value}%；竖线表示限额。'), value=f"{max(0.0, ratio - 100):.1f}"))
     bar.setProperty("over", actual > allowed)
     dialog.metrics_layout.addWidget(bar, 2, 0, 1, 2)
     if result.rejected_output_path is not None:
-        dialog.add_metric(3, tr.t("gui.decision.preserved_path"), str(result.rejected_output_path))
+        dialog.add_metric(3, tr.t(Text(en='Preserved file', zh_cn='保留文件')), str(result.rejected_output_path))
 
 
 def choose_quality_decision(
@@ -238,13 +274,13 @@ def choose_quality_decision(
     quality_miss = quality is not None and quality.failure_kind == ConstraintFailureKind.QUALITY_UNREACHABLE
     dialog = _DecisionDialog(tr, parent)
     if quality_miss:
-        dialog.setWindowTitle(tr.t("gui.decision.quality_miss_title"))
-        dialog.title_label.setText(tr.t("gui.decision.quality_miss_title"))
-        dialog.intro_label.setText(tr.t("gui.decision.quality_miss_intro", file=record.source_path.name))
+        dialog.setWindowTitle(tr.t(DECISION_QUALITY_MISS_TITLE))
+        dialog.title_label.setText(tr.t(DECISION_QUALITY_MISS_TITLE))
+        dialog.intro_label.setText(tr.t(Text(en='Tested candidates did not meet the VMAF target for {file}.', zh_cn='{file} 已测试的候选未达到 VMAF 目标。'), file=record.source_path.name))
     else:
-        dialog.setWindowTitle(tr.t("gui.decision.size_conflict_title"))
-        dialog.title_label.setText(tr.t("gui.decision.size_conflict_title"))
-        dialog.intro_label.setText(tr.t("gui.decision.size_conflict_intro", file=record.source_path.name))
+        dialog.setWindowTitle(tr.t(DECISION_SIZE_CONFLICT_TITLE))
+        dialog.title_label.setText(tr.t(DECISION_SIZE_CONFLICT_TITLE))
+        dialog.intro_label.setText(tr.t(DECISION_SIZE_CONFLICT_INTRO, file=record.source_path.name))
     dialog.file_label.setText(str(record.source_path))
     _quality_metrics(dialog, record)
     for option in options:
@@ -254,7 +290,7 @@ def choose_quality_decision(
             option,
             role="danger" if option.action_code == DecisionActionCode.SKIP else "",
         )
-    dialog.decide_later_button.setText(tr.t("gui.decision.decide_later"))
+    dialog.decide_later_button.setText(tr.t(DECISION_DECIDE_LATER))
     if dialog.exec() != QDialog.DialogCode.Accepted:
         return None
     return dialog.choice if isinstance(dialog.choice, DecisionOption) else None
@@ -270,47 +306,47 @@ def choose_size_miss_decision(
     if result is None or result.rejected_output_path is None:
         return None
     dialog = _DecisionDialog(tr, parent)
-    dialog.setWindowTitle(tr.t("gui.decision.size_miss_title"))
-    dialog.title_label.setText(tr.t("gui.decision.size_miss_title"))
-    dialog.intro_label.setText(tr.t("gui.decision.size_miss_intro", file=record.source_path.name))
+    dialog.setWindowTitle(tr.t(DECISION_SIZE_MISS_TITLE))
+    dialog.title_label.setText(tr.t(DECISION_SIZE_MISS_TITLE))
+    dialog.intro_label.setText(tr.t(Text(en='The complete encode for {file} was kept instead of deleted.', zh_cn='{file} 已经编码完成，程序没有删除它。'), file=record.source_path.name))
     dialog.file_label.setText(str(record.source_path))
     _size_metrics(dialog, record)
     dialog.reason_label.setText(
-        f"{tr.t('gui.decision.reason')}: {result.error_message or tr.t('gui.decision.no_metrics')}"
+        f"{tr.t(DECISION_REASON)}: {result.error_message or tr.t(DECISION_NO_METRICS)}"
     )
     dialog.add_action(
-        tr.t("gui.decision.accept_size_miss"),
-        tr.t("gui.decision.accept_size_miss_detail"),
+        tr.t(Text(en='Accept this encoded file', zh_cn='接受这个成片')),
+        tr.t(Text(en='Publish the preserved file even though it exceeds the size limit.', zh_cn='即使超过体积上限，也发布保留的文件。')),
         SizeMissDecision.ACCEPT,
     )
     dialog.add_action(
-        tr.t("gui.decision.retry_size_miss"),
-        tr.t("gui.decision.retry_size_miss_detail"),
+        tr.t(Text(en='Retry with a corrected bitrate', zh_cn='按实测体积修正码率后重试')),
+        tr.t(Text(en='Encode again with a corrected bitrate.', zh_cn='用修正后的码率重新编码。')),
         SizeMissDecision.RETRY,
     )
     dialog.add_action(
-        tr.t("gui.decision.discard_size_miss"),
-        tr.t("gui.decision.discard_size_miss_detail"),
+        tr.t(Text(en='Delete it and skip', zh_cn='删除并跳过')),
+        tr.t(Text(en='Delete the preserved file and mark this item skipped.', zh_cn='删除保留文件，并把该项目标记为跳过。')),
         SizeMissDecision.DISCARD,
         role="danger",
     )
     preserved_path = result.rejected_output_path
     preserved_folder = preserved_path.parent
     footer = QHBoxLayout()
-    open_button = QPushButton(tr.t("gui.decision.open_preserved_folder"))
+    open_button = QPushButton(tr.t(Text(en='Open preserved folder', zh_cn='打开保留文件目录')))
     open_button.clicked.connect(
         lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(preserved_folder)))
     )
     footer.addWidget(open_button)
     if compare is not None:
-        compare_button = QPushButton(tr.t("gui.decision.compare_preserved"))
+        compare_button = QPushButton(tr.t(Text(en='Compare source and preserved file', zh_cn='对比源文件与保留文件')))
         compare_button.clicked.connect(
             lambda: compare(preserved_path)
         )
         footer.addWidget(compare_button)
     footer.addStretch(1)
     dialog.actions_layout.addLayout(footer)
-    dialog.decide_later_button.setText(tr.t("gui.decision.decide_later"))
+    dialog.decide_later_button.setText(tr.t(DECISION_DECIDE_LATER))
     if dialog.exec() != QDialog.DialogCode.Accepted:
         return None
     return dialog.choice if isinstance(dialog.choice, SizeMissDecision) else None

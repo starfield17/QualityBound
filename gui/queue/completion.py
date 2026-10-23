@@ -10,7 +10,7 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 
 from PySide6.QtWidgets import QDialog, QMessageBox, QWidget
 
-from core.i18n import Translator
+from core.i18n import Text, Translator
 from core.media import (
     PostEncodeAction,
     SpaceSavingsItem,
@@ -20,13 +20,28 @@ from core.media import (
     group_skipped_output_pairs,
     is_eligible_skipped_item,
     parse_post_encode_action,
-    post_encode_action_key,
     publish_skipped_source,
 )
 from core.models import EncodePlanItem, EncodeResult, SkippedOutputPolicy, SkippedOutputOutcome, OperationCancelledError
-from gui.power_action_dialog import PowerActionCountdownDialog
+from gui.power_action_dialog import post_encode_action_text, PowerActionCountdownDialog
 from gui.queue.model import format_size
 from gui.queue.state import QueueItemRecord, QueueItemStatus
+
+
+TITLE = Text(
+    en='QualityBound',
+    zh_cn='QualityBound',
+)
+
+DIALOG_COPY_SKIPPED_TEXT = Text(
+    en='Copy these sources skipped by Smart analysis to their planned output paths?\n\n{files}',
+    zh_cn='要把这些被 Smart 分析跳过的片源复制到预定输出路径吗？\n\n{files}',
+)
+
+DIALOG_COPY_SKIPPED_TITLE = Text(
+    en='Copy files skipped by Smart analysis?',
+    zh_cn='复制被 Smart 分析跳过的文件？',
+)
 
 
 class SkippedSourceCopyWorker(QThread):
@@ -53,7 +68,7 @@ class SkippedSourceCopyWorker(QThread):
             except (OSError, ValueError, RuntimeError) as exc:
                 result.skipped_output_outcome = SkippedOutputOutcome.FAILED
                 result.success = result.skipped = result.needs_decision = False
-                result.error_message = self.translator.t("gui.log.copy_failed", error=str(exc))
+                result.error_message = self.translator.t(Text(en='Source copy failed: {error}', zh_cn='源文件复制失败：{error}'), error=str(exc))
             self.copied.emit(item_id, result)
 
 
@@ -101,8 +116,8 @@ class QueueCompletionHandler(QObject):
         asked = grouped[SkippedOutputPolicy.ASK]
         if asked:
             listing = "\n".join(f"{item.source_path.name} → {item.output_path.name}" for item, _ in asked)
-            answer = QMessageBox.question(self._parent, tr.t("gui.dialog.copy_skipped_title"),
-                                          tr.t("gui.dialog.copy_skipped_text", files=listing),
+            answer = QMessageBox.question(self._parent, tr.t(DIALOG_COPY_SKIPPED_TITLE),
+                                          tr.t(DIALOG_COPY_SKIPPED_TEXT, files=listing),
                                           QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                           QMessageBox.StandardButton.Yes)
             if answer == QMessageBox.StandardButton.Yes:
@@ -151,10 +166,10 @@ class QueueCompletionHandler(QObject):
 
     def _log_publication(self, item: EncodePlanItem, result: EncodeResult, tr: Translator) -> None:
         if result.skipped_output_outcome == SkippedOutputOutcome.COPIED:
-            self._append_log(tr.t("gui.log.skipped_source_copied", source=item.source_path.name,
+            self._append_log(tr.t(Text(en='Copied Smart-skipped source {source} -> {output}', zh_cn='已复制被 Smart 分析跳过的片源 {source} -> {output}'), source=item.source_path.name,
                                   output=str(item.output_path)))
         else:
-            self._append_log(tr.t("gui.log.skipped_source_not_copied", source=item.source_path.name,
+            self._append_log(tr.t(Text(en='Did not copy Smart-skipped source {source}: {reason}', zh_cn='未复制被 Smart 分析跳过的片源 {source}：{reason}'), source=item.source_path.name,
                                   reason=result.error_message or ""))
         for warning in result.external_subtitle_warnings:
             self._append_log(warning)
@@ -166,7 +181,7 @@ class QueueCompletionHandler(QObject):
         config: Mapping[str, object],
     ) -> None:
         tr = translator
-        self._append_log(tr.t("gui.log.encode_done"))
+        self._append_log(tr.t(Text(en='Encode jobs completed.', zh_cn='编码任务已完成。')))
         self._maybe_publish_skipped_sources(records, tr)
         self._handle_post_queue_finished(records, tr, config)
 
@@ -200,8 +215,8 @@ class QueueCompletionHandler(QObject):
             listing = "\n".join(f"{item.source_path.name} → {item.output_path.name}" for item, _result in ask_pairs)
             answer = QMessageBox.question(
                 self._parent,
-                tr.t("gui.dialog.copy_skipped_title"),
-                tr.t("gui.dialog.copy_skipped_text", files=listing),
+                tr.t(DIALOG_COPY_SKIPPED_TITLE),
+                tr.t(DIALOG_COPY_SKIPPED_TEXT, files=listing),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.Yes,
             )
@@ -241,19 +256,19 @@ class QueueCompletionHandler(QObject):
         if savings.successful_files > 0:
             report_lines = [
                 "==================================================",
-                tr.t("gui.report.batch_complete"),
-                f"- {tr.t('gui.report.successful_files')}: {savings.successful_files}/{savings.total_files}",
-                f"- {tr.t('gui.report.original_size')}: {format_size(savings.original_total_bytes)}",
-                f"- {tr.t('gui.report.compressed_size')}: {format_size(savings.compressed_total_bytes)}",
-                f"- {tr.t('gui.report.saved_space')}: {format_size(savings.saved_bytes)} ({savings.saved_ratio * 100:.1f}%)",
+                tr.t(Text(en='Batch Encoding Complete', zh_cn='批处理转码完成')),
+                f"- {tr.t(Text(en='Successful', zh_cn='成功文件'))}: {savings.successful_files}/{savings.total_files}",
+                f"- {tr.t(Text(en='Original total size', zh_cn='原始总体积'))}: {format_size(savings.original_total_bytes)}",
+                f"- {tr.t(Text(en='Compressed total size', zh_cn='压缩后总体积'))}: {format_size(savings.compressed_total_bytes)}",
+                f"- {tr.t(Text(en='Saved space', zh_cn='节省空间'))}: {format_size(savings.saved_bytes)} ({savings.saved_ratio * 100:.1f}%)",
                 "==================================================",
             ]
             self._append_log("\n".join(report_lines))
             if config.get("desktop_notifications", True):
                 self._notify(
-                    tr.t("app.title"),
+                    tr.t(TITLE),
                     tr.t(
-                        "gui.notification.batch_done",
+                        Text(en='Batch finished: {count} videos compressed, saved {saved} ({ratio}) space.', zh_cn='批处理转码完成：共完成 {count} 个视频，节省 {saved} ({ratio}) 空间。'),
                         count=savings.successful_files,
                         saved=format_size(savings.saved_bytes),
                         ratio=f"{savings.saved_ratio * 100:.1f}%",
@@ -263,17 +278,17 @@ class QueueCompletionHandler(QObject):
         if savings.failed_files > 0 or savings.cancelled_files > 0:
             failure_lines = [
                 "==================================================",
-                tr.t("gui.report.batch_incomplete"),
-                f"- {tr.t('gui.report.failed_files')}: {savings.failed_files}",
-                f"- {tr.t('gui.report.cancelled_files')}: {savings.cancelled_files}",
+                tr.t(Text(en='Batch incomplete', zh_cn='批处理未全部完成')),
+                f"- {tr.t(Text(en='Failed files', zh_cn='失败文件'))}: {savings.failed_files}",
+                f"- {tr.t(Text(en='Cancelled files', zh_cn='已取消文件'))}: {savings.cancelled_files}",
                 "==================================================",
             ]
             self._append_log("\n".join(failure_lines))
             if config.get("desktop_notifications", True):
                 self._notify(
-                    tr.t("app.title"),
+                    tr.t(TITLE),
                     tr.t(
-                        "gui.notification.batch_incomplete",
+                        Text(en='Batch finished with {failed} failed and {cancelled} cancelled items.', zh_cn='批处理结束：{failed} 个失败，{cancelled} 个已取消。'),
                         failed=savings.failed_files,
                         cancelled=savings.cancelled_files,
                     ),
@@ -289,9 +304,9 @@ class QueueCompletionHandler(QObject):
                     result = execute_power_action(post_action)
                     if not result.success:
                         message = tr.t(
-                            "gui.power.action_failed",
-                            action=tr.t(post_encode_action_key(post_action)),
+                            Text(en='Could not {action}: {error}', zh_cn='无法执行【{action}】：{error}'),
+                            action=tr.t(post_encode_action_text(post_action)),
                             error=result.error or "unknown error",
                         )
                         self._append_log(message)
-                        QMessageBox.critical(self._parent, tr.t("gui.message.error"), message)
+                        QMessageBox.critical(self._parent, tr.t(Text(en='Error', zh_cn='错误')), message)

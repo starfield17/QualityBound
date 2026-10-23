@@ -66,10 +66,6 @@ def workdir_dir() -> Path:
     return app_root() / "workdir"
 
 
-def translations_dir() -> Path:
-    return app_root() / "translations"
-
-
 def app_icon_path() -> Path | None:
     """Return the canonical SVG icon in a source checkout or packaged build."""
     candidates = (
@@ -100,8 +96,6 @@ def _copy_tree_if_missing(source_dir: Path, target_dir: Path) -> None:
 
 def ensure_runtime_layout() -> tuple[Path, Path]:
     # Seeds the writable runtime directory from the bundled (potentially read-only) config.
-    # Built-in language packs are read directly from the bundle; the writable
-    # translations/ dir holds explicit user override packages only.
     # Returns (runtime_config_dir, runtime_workdir).
     runtime_root = app_root()
     runtime_root.mkdir(parents=True, exist_ok=True)
@@ -112,8 +106,6 @@ def ensure_runtime_layout() -> tuple[Path, Path]:
     runtime_workdir.mkdir(parents=True, exist_ok=True)
 
     _copy_tree_if_missing(bundle_root() / "config" / "presets", runtime_config / "presets")
-
-    translations_dir().mkdir(parents=True, exist_ok=True)
 
     for name in ("logs", "temp"):
         (runtime_workdir / name).mkdir(parents=True, exist_ok=True)

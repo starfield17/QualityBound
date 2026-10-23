@@ -11,7 +11,7 @@ main.py
 │   ├── comparison/  independent read-only A/B inspection and playback
 │   └── options/     encoding controls, settings, presets and capabilities
 └── core/
-    ├── config/    paths, settings, presets, and translations
+    ├── config/    paths, settings, and presets
     ├── media/     source discovery, subtitles, and file validation
     ├── ffmpeg/    discovery, probes, capabilities, and commands
     ├── smart/     Scout, VMAF measurement, search, and decisions (v1/, v2/)
@@ -25,6 +25,11 @@ main.py
 - `gui` imports the standard library, `gui`, `core`, and Qt, never `cli`.
 - Shared behavior belongs in the lowest suitable layer and dependencies remain
   acyclic.
+
+`core.i18n` defines immutable bilingual `Text` values, the supported language
+names and the per-consumer `Translator`. CLI and GUI declarations live beside
+their presentation code. Existing functional owners export shared text when
+both consumers express the same concept; there is no catalog or registration.
 
 The recursive architecture test enforces the root allowlist, capability-package
 DAG, public adapters, and layer boundaries.

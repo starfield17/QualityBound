@@ -22,10 +22,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.i18n import Translator
+from core.i18n import Text, Translator
 from gui.theme import current_tokens
 from gui.icons import action_icon
 from gui.window_geometry import clamped_window_size
+
+
+LOG_EXPORT_FAILED = Text(
+    en='Could not export the log to {path}:\n{error}',
+    zh_cn='无法将日志导出至 {path}：\n{error}',
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,17 +134,17 @@ class ActivityLogWindow(QMainWindow):
 
     def apply_translations(self, tr: Translator) -> None:
         self.translator = tr
-        self.setWindowTitle(self.translator.t("gui.window.activity_log"))
-        self.filter_label.setText(self.translator.t("gui.label.log_filter"))
-        self.filter_combo.setItemText(0, self.translator.t("gui.filter.all"))
-        self.filter_combo.setItemText(1, self.translator.t("gui.filter.command"))
-        self.filter_combo.setItemText(2, self.translator.t("gui.filter.process"))
-        self.filter_combo.setItemText(3, self.translator.t("gui.filter.error"))
-        self.search_edit.setPlaceholderText(self.translator.t("gui.log.search_placeholder"))
-        self.follow_check.setText(self.translator.t("gui.log.follow"))
-        self.export_button.setText(self.translator.t("gui.log.export_filtered"))
-        self.clear_button.setText(self.translator.t("gui.button.clear_log"))
-        self.log_output.setPlaceholderText(self.translator.t("gui.log.empty"))
+        self.setWindowTitle(self.translator.t(Text(en='Activity Log', zh_cn='活动日志')))
+        self.filter_label.setText(self.translator.t(Text(en='Log filter', zh_cn='日志过滤')))
+        self.filter_combo.setItemText(0, self.translator.t(Text(en='All', zh_cn='全部')))
+        self.filter_combo.setItemText(1, self.translator.t(Text(en='Command', zh_cn='命令')))
+        self.filter_combo.setItemText(2, self.translator.t(Text(en='Process', zh_cn='过程')))
+        self.filter_combo.setItemText(3, self.translator.t(Text(en='Error', zh_cn='错误')))
+        self.search_edit.setPlaceholderText(self.translator.t(Text(en='Search log…', zh_cn='搜索日志…')))
+        self.follow_check.setText(self.translator.t(Text(en='Follow output', zh_cn='跟随输出')))
+        self.export_button.setText(self.translator.t(Text(en='Export filtered log', zh_cn='导出筛选后的日志')))
+        self.clear_button.setText(self.translator.t(Text(en='Clear Log', zh_cn='清空日志')))
+        self.log_output.setPlaceholderText(self.translator.t(Text(en='No activity yet.', zh_cn='暂无活动。')))
         self._refresh_log_view()
 
     def refresh_icons(self) -> None:
@@ -238,9 +244,9 @@ class ActivityLogWindow(QMainWindow):
     def _export_logs(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self,
-            self.translator.t("gui.dialog.export_log"),
+            self.translator.t(Text(en='Export log', zh_cn='导出日志')),
             str(Path.home() / "qualitybound.log"),
-            self.translator.t("gui.log.file_filter"),
+            self.translator.t(Text(en='Log files (*.log *.txt);;All files (*)', zh_cn='日志文件 (*.log *.txt);;所有文件 (*)')),
         )
         if not path:
             return
@@ -255,6 +261,6 @@ class ActivityLogWindow(QMainWindow):
             Path(path).write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
         except OSError as exc:
             QMessageBox.warning(
-                self, self.translator.t("gui.message.warning"),
-                self.translator.t("gui.log.export_failed", path=path, error=str(exc)),
+                self, self.translator.t(Text(en='Warning', zh_cn='警告')),
+                self.translator.t(LOG_EXPORT_FAILED, path=path, error=str(exc)),
             )

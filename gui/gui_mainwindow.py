@@ -46,7 +46,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.i18n import TranslationCatalog
+from core.i18n import Text, Translator
 from core.models import (
     BackendChoice,
     CodecChoice,
@@ -69,16 +69,15 @@ from core.config import (
 from core.media import (
     PostEncodeAction,
     parse_post_encode_action,
-    post_encode_action_key,
 )
 from gui.activity_log_window import ActivityLogWindow
-from gui.comparison.window import ComparisonWindow
+from gui.comparison.window import ComparisonWindow, COMPARE_TITLE
 from gui.constraint_decision_dialog import (
     SizeMissDecision,
     choose_quality_decision,
     choose_size_miss_decision,
 )
-from gui.options.encode_options_panel import EncodeOptionsPanel
+from gui.options.encode_options_panel import EncodeOptionsPanel, TOOLTIP_SMART_UNAVAILABLE
 from gui.options.capability_worker import EncoderCapabilityDetectWorker
 from gui.queue.workers import QueueIntakeWorker, QueuePrepareWorker
 from gui.options.preset_manager_dialog import PresetManagerDialog
@@ -91,18 +90,183 @@ from gui.queue.state import (
     compute_metrics,
     QueueItemStatus,
     QueueMetrics,
-    progress_stage_key,
-    progress_state_key,
+    progress_stage_text,
+    progress_state_text,
 )
 from gui.queue.model import QueueTableModel, format_duration, format_size
 from gui.queue.view import ResponsiveQueueTableView, create_queue_view
-from gui.queue.window import QueueWindow
-from gui.options.settings_dialog import SettingsDialog
+from gui.queue.window import (
+    QueueWindow,
+    DROP_OVERLAY,
+    SUMMARY_QUEUE_PROGRESS,
+    SUMMARY_QUEUE_STATES,
+    TOOLTIP_TABLE_HEADER,
+    VALUE_UNKNOWN,
+)
+from gui.options.settings_dialog import (
+    SettingsDialog,
+    MESSAGE_PATH_MISSING,
+    MESSAGE_PATH_NOT_DIRECTORY,
+)
 from gui.icons import action_icon, refresh_button_icons
 from gui.queue.item_details_panel import ItemDetailsPanel
 from gui.notification_banner import NotificationBanner
 from gui.theme import apply_theme, current_tokens, theme_manager
 from gui.window_geometry import clamped_window_size
+
+
+from gui.power_action_dialog import post_encode_action_text, LABEL_POST_ENCODE_ACTION
+
+
+TITLE = Text(
+    en='QualityBound',
+    zh_cn='QualityBound',
+)
+
+ABOUT_TEXT = Text(
+    en='QualityBound is a local batch compressor.\n\nIt turns an explicit quality and size constraint into one published file whose quality and size were measured on the finished output. All probing, encoding and measurement stay on this machine.',
+    zh_cn='QualityBound 是一个本地批量压缩工具。\n\n它把明确的质量与体积约束转化为一个发布文件，并在完成文件上测量质量与体积。探测、编码和测量全部在本机完成。',
+)
+
+BUTTON_ADD_FILES = Text(
+    en='Add Files',
+    zh_cn='添加文件',
+)
+
+BUTTON_ADD_FOLDER = Text(
+    en='Add Folder',
+    zh_cn='添加目录',
+)
+
+BUTTON_ADD_TO_QUEUE = Text(
+    en='Add to Queue',
+    zh_cn='加入队列',
+)
+
+BUTTON_BROWSE_DIR = Text(
+    en='Pick Dir',
+    zh_cn='选择目录',
+)
+
+BUTTON_SETTINGS = Text(
+    en='Settings',
+    zh_cn='设置',
+)
+
+BUTTON_SETUP = Text(
+    en='Source and encoding',
+    zh_cn='输入源与编码',
+)
+
+COMPLETION_VIEW_LOG = Text(
+    en='View log',
+    zh_cn='查看日志',
+)
+
+DIALOG_SELECT_OUTPUT_DIR = Text(
+    en='Select output directory',
+    zh_cn='选择输出目录',
+)
+
+DIALOG_SELECT_SOURCE_DIR = Text(
+    en='Select source directory',
+    zh_cn='选择输入目录',
+)
+
+DIALOG_SELECT_SOURCE_FILE = Text(
+    en='Select source file',
+    zh_cn='选择输入文件',
+)
+
+EMPTY_BODY = Text(
+    en='Drop files or folders here, or add them from the toolbar. Set the quality and size targets, then start the queue.',
+    zh_cn='把文件或文件夹拖到这里，或从工具栏添加。设置质量与体积目标后开始队列。',
+)
+
+GROUP_JOBS = Text(
+    en='Queue',
+    zh_cn='队列',
+)
+
+LABEL_PRESET_MODIFIED = Text(
+    en='{name} (modified)',
+    zh_cn='{name}（已修改）',
+)
+
+LOG_CLEARED_COMPLETED = Text(
+    en='Cleared completed queue items: {count}',
+    zh_cn='已清除已完成队列项：{count}',
+)
+
+LOG_DECISION_RESOLVED = Text(
+    en='Resolved {file}: {action}',
+    zh_cn='已处理 {file}：{action}',
+)
+
+LOG_PRESET_LOADED = Text(
+    en='Preset loaded: {name}',
+    zh_cn='已加载预设: {name}',
+)
+
+LOG_REMOVED_FROM_QUEUE = Text(
+    en='Removed queue items: {count}',
+    zh_cn='已从队列移除：{count}',
+)
+
+LOG_STOP_REQUESTED = Text(
+    en='Stop requested...',
+    zh_cn='已请求停止任务...',
+)
+
+MENU_CLEAR_COMPLETED = Text(
+    en='Clear Finished',
+    zh_cn='清除已完成项',
+)
+
+MESSAGE_CLOSE_BUSY_TEXT = Text(
+    en='A task is currently running. Closing will request it to stop and the app will exit after the task has stopped. Close anyway?',
+    zh_cn='当前有任务正在运行。关闭会先请求停止任务，并在任务停止后退出程序。仍要关闭吗？',
+)
+
+MESSAGE_CLOSE_PENDING_TEXT = Text(
+    en='Some items are paused, queued, or waiting for a decision. Closing discards this queue (any preserved file remains on disk). Close anyway?',
+    zh_cn='部分项目已暂停、排队或等待决策。现在关闭会丢弃该队列（已保留的文件仍留在磁盘上）。仍要关闭吗？',
+)
+
+MESSAGE_ERROR = Text(
+    en='Error',
+    zh_cn='错误',
+)
+
+MESSAGE_INFO = Text(
+    en='Info',
+    zh_cn='提示',
+)
+
+MESSAGE_WARNING = Text(
+    en='Warning',
+    zh_cn='警告',
+)
+
+STATUS_DETECTING_ENCODERS = Text(
+    en='Detecting encoders…',
+    zh_cn='正在检测编码器…',
+)
+
+STATUSBAR_CURRENT_PROGRESS = Text(
+    en='Current: {value}',
+    zh_cn='当前：{value}',
+)
+
+SUMMARY_ESTIMATED_SAVED = Text(
+    en='Estimated saved space',
+    zh_cn='预计节省空间',
+)
+
+SUMMARY_STATES = Text(
+    en='Queue status',
+    zh_cn='队列状态',
+)
 
 
 EXPLICIT_BACKEND_ORDER: tuple[BackendChoice, ...] = (
@@ -169,21 +333,14 @@ class MainWindow(QMainWindow):
         self,
         repo_root: Path,
         language: str | None = None,
-        catalog: TranslationCatalog | None = None,
     ) -> None:
         super().__init__()
         self.repo_root = repo_root
         self.config_dir = repo_root / "config"
         self.default_workdir = repo_root / "workdir"
         self.app_config = load_app_config()
-        self.catalog = catalog or TranslationCatalog(
-            bundle_dir=self.config_dir / "i18n",
-            translations_dir=self.config_dir.parent / "translations",
-        )
-        self.language = language or self.app_config.get("language", "en")
-        if not self.catalog.has_locale(self.language):
-            self.language = "en"
-        self.translator = self.catalog.translator(self.language)
+        self.translator = Translator(language or self.app_config.get("language", "en"))
+        self.language = self.translator.language
 
         self.active_worker = None
         self.encoder_detection_worker = None
@@ -233,7 +390,6 @@ class MainWindow(QMainWindow):
         self.options_panel.sync_dependent_controls()
         self._update_queue_metrics(self.queue_model.metrics())
         self._refresh_action_state()
-        self._log_catalog_diagnostics()
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._only_encoder_detection_running():
@@ -248,8 +404,8 @@ class MainWindow(QMainWindow):
             if not self._close_after_running_task_stops and self._has_unsaved_queue_work():
                 result = QMessageBox.question(
                     self,
-                    self.translator.t("gui.message.close_pending_title"),
-                    self.translator.t("gui.message.close_pending_text"),
+                    self.translator.t(Text(en='Queue has unfinished items', zh_cn='队列中仍有未完成项目')),
+                    self.translator.t(MESSAGE_CLOSE_PENDING_TEXT),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
                 )
@@ -268,8 +424,8 @@ class MainWindow(QMainWindow):
 
         result = QMessageBox.question(
             self,
-            self.translator.t("gui.message.close_busy_title"),
-            self.translator.t("gui.message.close_busy_text"),
+            self.translator.t(Text(en='Tasks are still running', zh_cn='仍有任务正在运行')),
+            self.translator.t(MESSAGE_CLOSE_BUSY_TEXT),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -280,7 +436,7 @@ class MainWindow(QMainWindow):
         self._close_after_running_task_stops = True
         if self.encoder_detection_worker is not None:
             self.encoder_detection_worker.cancel()
-        self._append_log(self.translator.t("gui.log.close_after_stop_requested"))
+        self._append_log(self.translator.t(Text(en='Close requested; waiting for running tasks to stop...', zh_cn='已请求关闭；正在等待运行中的任务停止...')))
         self._stop_active_task()
         self._maybe_close_after_running_task()
         event.ignore()
@@ -422,7 +578,7 @@ class MainWindow(QMainWindow):
         self.tray_icon = QSystemTrayIcon(self)
         if self.tray_icon.isSystemTrayAvailable() and not self.windowIcon().isNull():
             self.tray_icon.setIcon(self.windowIcon())
-            self.tray_icon.setToolTip(self.translator.t("app.title"))
+            self.tray_icon.setToolTip(self.translator.t(TITLE))
             self.tray_show_action = QAction(self)
             self.tray_quit_action = QAction(self)
             self.tray_show_action.triggered.connect(self._show_main_window)
@@ -877,76 +1033,76 @@ class MainWindow(QMainWindow):
     # Translation and theme
 
     def _apply_translations(self) -> None:
-        self.translator = self.catalog.translator(self.language)
-        self.setWindowTitle(self.translator.t("app.title"))
-        self.source_box.setTitle(self.translator.t("gui.group.source"))
-        self.jobs_box.setTitle(self.translator.t("gui.group.jobs"))
+        self.translator = Translator(self.language)
+        self.setWindowTitle(self.translator.t(TITLE))
+        self.source_box.setTitle(self.translator.t(Text(en='Source Setup', zh_cn='源设置')))
+        self.jobs_box.setTitle(self.translator.t(GROUP_JOBS))
 
-        self.add_files_action.setText(self.translator.t("gui.button.add_files"))
-        self.add_folder_action.setText(self.translator.t("gui.button.add_folder"))
-        self.plan_action.setText(self.translator.t("gui.button.add_to_queue"))
-        self.start_queue_action.setText(self.translator.t("gui.button.start_queue"))
-        self.pause_after_current_action.setText(self.translator.t("gui.button.pause_after_current"))
-        self.stop_action.setText(self.translator.t("gui.button.stop"))
-        self.queue_action.setText(self.translator.t("gui.button.queue"))
-        self.activity_log_action.setText(self.translator.t("gui.button.activity_log"))
-        self.compare_action.setText(self.translator.t("gui.compare.title"))
-        self.presets_action.setText(self.translator.t("gui.button.presets"))
-        self.settings_action.setText(self.translator.t("gui.button.settings"))
-        self.exit_action.setText(self.translator.t("gui.button.exit"))
-        self.about_action.setText(self.translator.t("gui.button.about"))
-        self.remove_selected_action.setText(self.translator.t("gui.menu.remove_selected"))
-        self.clear_completed_action.setText(self.translator.t("gui.menu.clear_completed"))
-        self.file_menu.setTitle(self.translator.t("gui.menu.file"))
-        self.queue_menu.setTitle(self.translator.t("gui.menu.queue"))
-        self.view_menu.setTitle(self.translator.t("gui.menu.view"))
-        self.tools_menu.setTitle(self.translator.t("gui.menu.tools"))
-        self.help_menu.setTitle(self.translator.t("gui.menu.help"))
-        self.setup_toggle.setText(self.translator.t("gui.button.setup"))
-        self.empty_title_label.setText(self.translator.t("gui.empty.title"))
-        self.empty_body_label.setText(self.translator.t("gui.empty.body"))
-        self.empty_add_files_button.setText(self.translator.t("gui.button.add_files"))
-        self.empty_add_folder_button.setText(self.translator.t("gui.button.add_folder"))
-        self.empty_drop_label.setText(self.translator.t("gui.empty.drop"))
+        self.add_files_action.setText(self.translator.t(BUTTON_ADD_FILES))
+        self.add_folder_action.setText(self.translator.t(BUTTON_ADD_FOLDER))
+        self.plan_action.setText(self.translator.t(BUTTON_ADD_TO_QUEUE))
+        self.start_queue_action.setText(self.translator.t(Text(en='Start Queue', zh_cn='开始队列')))
+        self.pause_after_current_action.setText(self.translator.t(Text(en='Pause After Current', zh_cn='当前文件完成后暂停')))
+        self.stop_action.setText(self.translator.t(Text(en='Stop', zh_cn='停止')))
+        self.queue_action.setText(self.translator.t(Text(en='Queue', zh_cn='队列')))
+        self.activity_log_action.setText(self.translator.t(Text(en='Activity Log', zh_cn='活动日志')))
+        self.compare_action.setText(self.translator.t(COMPARE_TITLE))
+        self.presets_action.setText(self.translator.t(Text(en='Presets', zh_cn='预设')))
+        self.settings_action.setText(self.translator.t(BUTTON_SETTINGS))
+        self.exit_action.setText(self.translator.t(Text(en='Exit', zh_cn='退出')))
+        self.about_action.setText(self.translator.t(Text(en='About QualityBound', zh_cn='关于 QualityBound')))
+        self.remove_selected_action.setText(self.translator.t(Text(en='Remove Selected', zh_cn='移除选中项')))
+        self.clear_completed_action.setText(self.translator.t(MENU_CLEAR_COMPLETED))
+        self.file_menu.setTitle(self.translator.t(Text(en='&File', zh_cn='文件(&F)')))
+        self.queue_menu.setTitle(self.translator.t(Text(en='&Queue', zh_cn='队列(&Q)')))
+        self.view_menu.setTitle(self.translator.t(Text(en='&View', zh_cn='视图(&V)')))
+        self.tools_menu.setTitle(self.translator.t(Text(en='&Tools', zh_cn='工具(&T)')))
+        self.help_menu.setTitle(self.translator.t(Text(en='&Help', zh_cn='帮助(&H)')))
+        self.setup_toggle.setText(self.translator.t(BUTTON_SETUP))
+        self.empty_title_label.setText(self.translator.t(Text(en='Add videos to start', zh_cn='添加视频开始')))
+        self.empty_body_label.setText(self.translator.t(EMPTY_BODY))
+        self.empty_add_files_button.setText(self.translator.t(BUTTON_ADD_FILES))
+        self.empty_add_folder_button.setText(self.translator.t(BUTTON_ADD_FOLDER))
+        self.empty_drop_label.setText(self.translator.t(Text(en='Drop to add videos', zh_cn='松开以添加视频')))
         self.notification_banner.apply_translations(self.translator)
         self.details_panel.apply_translations(self.translator)
         if hasattr(self, "tray_show_action"):
-            self.tray_show_action.setText(self.translator.t("gui.tray.show"))
-            self.tray_quit_action.setText(self.translator.t("gui.tray.quit"))
-            self.tray_icon.setToolTip(self.translator.t("app.title"))
+            self.tray_show_action.setText(self.translator.t(Text(en='Show QualityBound', zh_cn='显示 QualityBound')))
+            self.tray_quit_action.setText(self.translator.t(Text(en='Quit QualityBound', zh_cn='退出 QualityBound')))
+            self.tray_icon.setToolTip(self.translator.t(TITLE))
         self._sync_action_tips()
 
-        self.source_label.setText(self.translator.t("gui.label.source"))
-        self.preset_label.setText(self.translator.t("gui.label.preset"))
-        self.post_encode_label.setText(self.translator.t("gui.label.post_encode_action"))
+        self.source_label.setText(self.translator.t(Text(en='Source', zh_cn='输入源')))
+        self.preset_label.setText(self.translator.t(Text(en='Preset', zh_cn='预设')))
+        self.post_encode_label.setText(self.translator.t(LABEL_POST_ENCODE_ACTION))
         for action in PostEncodeAction:
             idx = self.post_encode_combo.findData(action.value)
             if idx >= 0:
-                self.post_encode_combo.setItemText(idx, self.translator.t(post_encode_action_key(action)))
-        self.output_label.setText(self.translator.t("gui.label.output_folder"))
-        self.source_file_button.setText(self.translator.t("gui.button.browse_file"))
-        self.source_dir_button.setText(self.translator.t("gui.button.browse_dir"))
-        self.source_add_button.setText(self.translator.t("gui.button.add_to_queue"))
-        self.output_button.setText(self.translator.t("gui.button.browse_dir"))
-        self.manage_presets_button.setText(self.translator.t("gui.button.manage_presets"))
+                self.post_encode_combo.setItemText(idx, self.translator.t(post_encode_action_text(action)))
+        self.output_label.setText(self.translator.t(Text(en='Output folder', zh_cn='输出目录')))
+        self.source_file_button.setText(self.translator.t(Text(en='Pick File', zh_cn='选择文件')))
+        self.source_dir_button.setText(self.translator.t(BUTTON_BROWSE_DIR))
+        self.source_add_button.setText(self.translator.t(BUTTON_ADD_TO_QUEUE))
+        self.output_button.setText(self.translator.t(BUTTON_BROWSE_DIR))
+        self.manage_presets_button.setText(self.translator.t(Text(en='Manage Presets…', zh_cn='管理预设…')))
 
         self.options_panel.set_translator(self.translator)
         self._refresh_presets()
 
-        self.total_items_title.setText(self.translator.t("gui.summary.total_items"))
-        self.states_title.setText(self.translator.t("gui.summary.states"))
-        self.total_duration_title.setText(self.translator.t("gui.summary.total_duration"))
-        self.saved_space_title.setText(self.translator.t("gui.summary.estimated_saved"))
+        self.total_items_title.setText(self.translator.t(Text(en='Total items', zh_cn='项目总数')))
+        self.states_title.setText(self.translator.t(SUMMARY_STATES))
+        self.total_duration_title.setText(self.translator.t(Text(en='Total duration', zh_cn='总时长')))
+        self.saved_space_title.setText(self.translator.t(SUMMARY_ESTIMATED_SAVED))
 
         editable = self.source_combo.lineEdit()
         if editable is not None:
-            editable.setPlaceholderText(self.translator.t("gui.placeholder.source"))
-        self.output_edit.setPlaceholderText(self.translator.t("gui.placeholder.default_output"))
+            editable.setPlaceholderText(self.translator.t(Text(en='Select a source file or directory', zh_cn='选择输入文件或目录')))
+        self.output_edit.setPlaceholderText(self.translator.t(Text(en='Leave blank to use the default output root', zh_cn='留空则使用默认输出目录')))
         self._bind_accessibility()
 
         self.queue_model.set_translator(self.translator)
         for view in (self.table_view, self.queue_window.table_view):
-            view.horizontalHeader().setToolTip(self.translator.t("gui.tooltip.table_header"))
+            view.horizontalHeader().setToolTip(self.translator.t(TOOLTIP_TABLE_HEADER))
         self.activity_log_window.apply_translations(self.translator)
         self.queue_window.apply_translations(self.translator)
         for comparison in self.comparison_windows:
@@ -974,10 +1130,10 @@ class MainWindow(QMainWindow):
         for label, widget in pairs:
             label.setBuddy(widget)
             widget.setAccessibleName(label.text())
-        self.setup_toggle.setAccessibleName(self.translator.t("gui.button.setup"))
-        self.queue_state_label.setAccessibleName(self.translator.t("gui.summary.states"))
-        self.table_view.setAccessibleName(self.translator.t("gui.group.jobs"))
-        self.queue_window.table_view.setAccessibleName(self.translator.t("gui.group.jobs"))
+        self.setup_toggle.setAccessibleName(self.translator.t(BUTTON_SETUP))
+        self.queue_state_label.setAccessibleName(self.translator.t(SUMMARY_STATES))
+        self.table_view.setAccessibleName(self.translator.t(GROUP_JOBS))
+        self.queue_window.table_view.setAccessibleName(self.translator.t(GROUP_JOBS))
         self.setTabOrder(self.source_combo, self.output_edit)
         self.setTabOrder(self.output_edit, self.preset_combo)
         self.setTabOrder(self.preset_combo, self.post_encode_combo)
@@ -1057,8 +1213,8 @@ class MainWindow(QMainWindow):
     def _show_about(self) -> None:
         QMessageBox.about(
             self,
-            self.translator.t("gui.about.title"),
-            self.translator.t("gui.about.text"),
+            self.translator.t(Text(en='About QualityBound', zh_cn='关于 QualityBound')),
+            self.translator.t(ABOUT_TEXT),
         )
 
     # Configuration and encoder capabilities
@@ -1082,7 +1238,7 @@ class MainWindow(QMainWindow):
                     self.options_panel.apply_options(EncodeOptions())
                     with QSignalBlocker(self.preset_combo):
                         self.preset_combo.setCurrentIndex(0)
-                    self._append_log(self.translator.t("gui.log.invalid_preset", name=default_preset, error=str(exc)))
+                    self._append_log(self.translator.t(Text(en='Cannot load preset {name}: {error}. Using default options.', zh_cn='无法加载预设 {name}：{error}。已使用默认选项。'), name=default_preset, error=str(exc)))
                 finally:
                     self._applying_preset = False
             else:
@@ -1122,7 +1278,7 @@ class MainWindow(QMainWindow):
         return text or None
 
     def _browse_output(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, self.translator.t("gui.dialog.select_output_dir"))
+        path = QFileDialog.getExistingDirectory(self, self.translator.t(DIALOG_SELECT_OUTPUT_DIR))
         if path:
             self.output_edit.setText(path)
             self._persist_runtime_state()
@@ -1131,10 +1287,10 @@ class MainWindow(QMainWindow):
         current_name = self.preset_combo.currentData()
         self.preset_combo.blockSignals(True)
         self.preset_combo.clear()
-        self.preset_combo.addItem(self.translator.t("gui.value.preset_custom"), "")
+        self.preset_combo.addItem(self.translator.t(Text(en='Custom (unsaved)', zh_cn='自定义（未保存）')), "")
         for name in list_presets(self.config_dir):
             label = (
-                self.translator.t("gui.label.preset_modified", name=name)
+                self.translator.t(LABEL_PRESET_MODIFIED, name=name)
                 if self._preset_dirty and name == current_name
                 else name
             )
@@ -1162,7 +1318,7 @@ class MainWindow(QMainWindow):
             self.preset_combo.blockSignals(True)
             self.preset_combo.setItemText(
                 index,
-                self.translator.t("gui.label.preset_modified", name=name),
+                self.translator.t(LABEL_PRESET_MODIFIED, name=name),
             )
             self.preset_combo.blockSignals(False)
 
@@ -1179,14 +1335,14 @@ class MainWindow(QMainWindow):
             self._preset_dirty = False
             self._refresh_presets()
         except Exception as exc:
-            QMessageBox.critical(self, self.translator.t("gui.message.error"), str(exc))
+            QMessageBox.critical(self, self.translator.t(MESSAGE_ERROR), str(exc))
             return
         finally:
             self._applying_preset = False
-        self._append_log(self.translator.t("gui.log.preset_loaded", name=name))
+        self._append_log(self.translator.t(LOG_PRESET_LOADED, name=name))
 
     def _open_settings_dialog(self) -> None:
-        dialog = SettingsDialog(self.translator, self.app_config, self, languages=self.catalog.languages())
+        dialog = SettingsDialog(self.translator, self.app_config, self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         values = dialog.values()
@@ -1233,7 +1389,7 @@ class MainWindow(QMainWindow):
                 self._preset_dirty = False
                 self._refresh_presets()
                 self._select_preset(name)
-                self._append_log(self.translator.t("gui.log.preset_loaded", name=name))
+                self._append_log(self.translator.t(LOG_PRESET_LOADED, name=name))
             elif action == "save":
                 options = self.options_panel.read_options()
                 path = save_preset(name, options, self.config_dir)
@@ -1241,7 +1397,7 @@ class MainWindow(QMainWindow):
                 self._preset_dirty = False
                 self._refresh_presets()
                 self._select_preset(name)
-                self._append_log(self.translator.t("gui.log.preset_saved", name=name, path=path))
+                self._append_log(self.translator.t(Text(en='Preset saved: {name} -> {path}', zh_cn='预设已保存: {name} -> {path}'), name=name, path=path))
             elif action == "delete":
                 delete_preset(name, self.config_dir)
                 if self.app_config.get("default_preset_name") == name:
@@ -1249,14 +1405,14 @@ class MainWindow(QMainWindow):
                 if self.preset_combo.currentData() == name:
                     self._preset_dirty = False
                 self._refresh_presets()
-                self._append_log(self.translator.t("gui.log.preset_deleted", name=name))
+                self._append_log(self.translator.t(Text(en='Preset deleted: {name}', zh_cn='预设已删除: {name}'), name=name))
             elif action == "set_default":
                 self.app_config["default_preset_name"] = name
                 self._select_preset(name)
-                self._append_log(self.translator.t("gui.log.default_preset_set", name=name))
+                self._append_log(self.translator.t(Text(en='Default preset set: {name}', zh_cn='默认预设已设置为: {name}'), name=name))
             self._persist_runtime_state()
         except Exception as exc:
-            QMessageBox.critical(self, self.translator.t("gui.message.error"), str(exc))
+            QMessageBox.critical(self, self.translator.t(MESSAGE_ERROR), str(exc))
 
     def _on_options_changed(self) -> None:
         self._update_setup_summary()
@@ -1325,7 +1481,7 @@ class MainWindow(QMainWindow):
     def _encoder_capability_summary(self, capabilities: dict) -> str:
         codecs = capabilities.get("codecs", {})
         if not isinstance(codecs, dict):
-            return self.translator.t("gui.value.unknown")
+            return self.translator.t(VALUE_UNKNOWN)
 
         parts: list[str] = []
         for codec in (CodecChoice.HEVC, CodecChoice.AV1):
@@ -1339,11 +1495,11 @@ class MainWindow(QMainWindow):
                     encoder = str(item.get("encoder", "")).strip()
                     if backend and encoder:
                         labels.append(f"{encoder} ({backend})")
-            parts.append(f"{codec.value}: {', '.join(labels) if labels else self.translator.t('gui.label.none')}")
+            parts.append(f"{codec.value}: {', '.join(labels) if labels else self.translator.t(Text(en='none', zh_cn='无'))}")
         hwaccels = capabilities.get("hwaccels", [])
         if isinstance(hwaccels, list) and hwaccels:
             parts.append(
-                f"{self.translator.t('gui.label.decode_hwaccels')}: "
+                f"{self.translator.t(Text(en='Decode hwaccels', zh_cn='解码硬件加速器'))}: "
                 f"{', '.join(str(item) for item in hwaccels)}"
             )
         return "; ".join(parts)
@@ -1352,7 +1508,7 @@ class MainWindow(QMainWindow):
         if self.encoder_detection_worker is not None:
             if force_refresh:
                 self._pending_encoder_detection_force_refresh = True
-            self._append_log(self.translator.t("gui.log.encoder_detection_running"))
+            self._append_log(self.translator.t(Text(en='Encoder capability detection is already running.', zh_cn='编码器能力检测已在进行中。')))
             return
 
         self._encoder_capabilities_ready = False
@@ -1364,8 +1520,8 @@ class MainWindow(QMainWindow):
         )
         self.encoder_detection_worker = worker
         self._set_encoder_status(
-            self.translator.t("gui.status.detecting_encoders"),
-            self.translator.t("gui.status.detecting_encoders"),
+            self.translator.t(STATUS_DETECTING_ENCODERS),
+            self.translator.t(STATUS_DETECTING_ENCODERS),
             visible=True,
         )
         worker.log.connect(self._append_log)
@@ -1383,7 +1539,7 @@ class MainWindow(QMainWindow):
         self._set_encoder_status("", "", visible=False)
         self._append_log(
             self.translator.t(
-                "gui.log.encoder_detection_done",
+                Text(en='Encoder capabilities ready: {summary}', zh_cn='编码器能力已就绪：{summary}'),
                 summary=self._encoder_capability_summary(capabilities),
             )
         )
@@ -1392,15 +1548,15 @@ class MainWindow(QMainWindow):
         self._encoder_capabilities_ready = False
         self.options_panel.notify_capability_detection_failed()
         self._set_encoder_status(
-            self.translator.t("gui.status.detection_failed"),
+            self.translator.t(Text(en='Encoder detection failed', zh_cn='编码器检测失败')),
             message,
             visible=True,
         )
-        self._append_error_log(self.translator.t("gui.log.encoder_detection_failed", error=message))
+        self._append_error_log(self.translator.t(Text(en='Encoder capability detection failed: {error}', zh_cn='编码器能力检测失败：{error}'), error=message))
         self._set_runtime_banner(lambda: (
-            self.translator.t("gui.banner.detection_failed"),
+            self.translator.t(Text(en='Encoder detection failed. See the activity log for details.', zh_cn='编码器检测失败。详情见活动日志。')),
             "error",
-            [(self.translator.t("gui.completion.view_log"), self._show_activity_log)],
+            [(self.translator.t(COMPLETION_VIEW_LOG), self._show_activity_log)],
         ))
 
     def _set_encoder_status(self, text: str, tooltip: str, *, visible: bool) -> None:
@@ -1421,7 +1577,7 @@ class MainWindow(QMainWindow):
     def _runtime_encoder_capabilities(self) -> dict:
         capabilities = self.app_config.get("encoder_capabilities")
         if not self._encoder_capabilities_ready or not isinstance(capabilities, dict):
-            raise RuntimeError(self.translator.t("gui.message.encoder_capabilities_not_ready"))
+            raise RuntimeError(self.translator.t(Text(en='Encoder capabilities are not ready yet. Wait for background detection to finish and try again.', zh_cn='编码器能力尚未就绪。请等待后台检测完成后重试。')))
         return capabilities
 
     # Status and queue feedback
@@ -1439,24 +1595,24 @@ class MainWindow(QMainWindow):
         self._status_speed = speed
         self._status_elapsed = elapsed
         self._status_percent = percent
-        self.status_stage_label.setText(self.translator.t("gui.statusbar.stage", value=stage))
-        self.status_file_label.setText(self.translator.t("gui.statusbar.file", value=file_name))
+        self.status_stage_label.setText(self.translator.t(Text(en='Stage: {value}', zh_cn='阶段：{value}'), value=stage))
+        self.status_file_label.setText(self.translator.t(Text(en='File: {value}', zh_cn='文件：{value}'), value=file_name))
         self.status_file_label.setToolTip(file_name)
-        self.status_speed_label.setText(self.translator.t("gui.statusbar.speed", value=speed))
-        self.status_elapsed_label.setText(self.translator.t("gui.statusbar.elapsed", value=elapsed))
+        self.status_speed_label.setText(self.translator.t(Text(en='Speed: {value}', zh_cn='速度：{value}'), value=speed))
+        self.status_elapsed_label.setText(self.translator.t(Text(en='Elapsed: {value}', zh_cn='时间：{value}'), value=elapsed))
         if percent is None:
-            self.status_current_progress_label.setText(self.translator.t("gui.statusbar.current_progress", value="-"))
+            self.status_current_progress_label.setText(self.translator.t(STATUSBAR_CURRENT_PROGRESS, value="-"))
             self.current_progress_bar.setValue(0)
         else:
             bounded = max(0.0, min(100.0, percent))
-            self.status_current_progress_label.setText(self.translator.t("gui.statusbar.current_progress", value=f"{bounded:.1f}%"))
+            self.status_current_progress_label.setText(self.translator.t(STATUSBAR_CURRENT_PROGRESS, value=f"{bounded:.1f}%"))
             self.current_progress_bar.setValue(int(round(bounded * 10)))
 
     def _update_queue_metrics(self, metrics: QueueMetrics) -> None:
         self.total_items_value.setText(str(metrics.total_items))
         self.states_value.setText(
             self.translator.t(
-                "gui.summary.queue_states",
+                SUMMARY_QUEUE_STATES,
                 ready=metrics.ready_items,
                 running=metrics.running_items,
                 failed=metrics.failed_items,
@@ -1466,33 +1622,33 @@ class MainWindow(QMainWindow):
         self.total_duration_value.setText(format_duration(metrics.total_duration_sec))
         measured = metrics.actual_saved_bytes
         if measured is not None:
-            self.saved_space_title.setText(self.translator.t("gui.summary.measured_saved"))
+            self.saved_space_title.setText(self.translator.t(Text(en='Measured saved space', zh_cn='实测节省空间')))
             self.saved_space_value.setText(format_size(measured))
             self.saved_space_value.setToolTip(
                 self.translator.t(
-                    "gui.summary.measured_saved_tooltip",
+                    Text(en='Measured on {count} completed file(s).', zh_cn='基于 {count} 个已完成文件的实测值。'),
                     count=metrics.measured_saved_items,
                 )
             )
         else:
-            self.saved_space_title.setText(self.translator.t("gui.summary.estimated_saved"))
+            self.saved_space_title.setText(self.translator.t(SUMMARY_ESTIMATED_SAVED))
             self.saved_space_value.setToolTip("")
             saved_bytes = metrics.estimated_saved_bytes
             if saved_bytes is None:
-                self.saved_space_value.setText(self.translator.t("gui.value.unknown"))
+                self.saved_space_value.setText(self.translator.t(VALUE_UNKNOWN))
             elif metrics.estimated_saved_is_floor:
                 self.saved_space_value.setText(
                     self.translator.t(
-                        "gui.summary.saved_at_least",
+                        Text(en='at least {value}', zh_cn='至少 {value}'),
                         value=format_size(saved_bytes),
                     )
                 )
             else:
                 self.saved_space_value.setText(format_size(saved_bytes))
-        eta_text = format_duration(metrics.eta_sec) if metrics.eta_sec else self.translator.t("gui.value.unknown")
+        eta_text = format_duration(metrics.eta_sec) if metrics.eta_sec else self.translator.t(VALUE_UNKNOWN)
         self.queue_progress_text.setText(
             self.translator.t(
-                "gui.summary.queue_progress",
+                SUMMARY_QUEUE_PROGRESS,
                 percent=f"{metrics.queue_percent:.1f}",
                 completed=metrics.completed_items,
                 total=metrics.total_items,
@@ -1500,7 +1656,7 @@ class MainWindow(QMainWindow):
             )
         )
         self.queue_progress_bar.setValue(int(round(metrics.queue_percent * 10)))
-        self.compact_summary_label.setText(self.translator.t("gui.summary.compact", count=metrics.total_items, duration=format_duration(metrics.total_duration_sec), saved=("~" if metrics.actual_saved_bytes is None else "") + self.saved_space_value.text()))
+        self.compact_summary_label.setText(self.translator.t(Text(en='Items: {count} · Duration: {duration} · Saved: {saved}', zh_cn='项目：{count} · 总时长：{duration} · 节省：{saved}'), count=metrics.total_items, duration=format_duration(metrics.total_duration_sec), saved=("~" if metrics.actual_saved_bytes is None else "") + self.saved_space_value.text()))
         self.compact_summary_label.setToolTip(self.states_value.text())
         self.queue_window.update_metrics(metrics)
         self._update_queue_empty_state(metrics)
@@ -1532,12 +1688,12 @@ class MainWindow(QMainWindow):
             bounded_percent = max(0.0, min(100.0, float(percent)))
 
         stage_text = (
-            self.translator.t(progress_stage_key(stage))
+            self.translator.t(progress_stage_text(stage))
             if stage not in {"", "-"}
             else "-"
         )
         state_text = (
-            self.translator.t(progress_state_key(state))
+            self.translator.t(progress_state_text(state))
             if state not in {"", "-"}
             else "-"
         )
@@ -1546,18 +1702,18 @@ class MainWindow(QMainWindow):
 
     def _queue_state_text(self) -> str:
         if self._queue_state == "running":
-            return self.translator.t("gui.queue_state.running")
+            return self.translator.t(Text(en='Running', zh_cn='运行中'))
         if self._queue_state == "pause_after_current":
-            return self.translator.t("gui.queue_state.pause_after_current")
+            return self.translator.t(Text(en='Pausing after current', zh_cn='当前完成后暂停'))
         if self._queue_state == "paused":
-            return self.translator.t("gui.queue_state.paused")
+            return self.translator.t(Text(en='Paused', zh_cn='已暂停'))
         if self._queue_state == "awaiting_decision":
-            return self.translator.t("gui.queue_state.awaiting_decision")
+            return self.translator.t(Text(en='Awaiting decision', zh_cn='等待决定'))
         if self._queue_state == "cancelled":
-            return self.translator.t("gui.queue_state.cancelled")
+            return self.translator.t(Text(en='Cancelled', zh_cn='已取消'))
         if self._queue_state == "failed":
-            return self.translator.t("gui.queue_state.failed")
-        return self.translator.t("gui.queue_state.idle")
+            return self.translator.t(Text(en='Failed', zh_cn='失败'))
+        return self.translator.t(Text(en='Idle', zh_cn='空闲'))
 
     def _render_queue_state(self) -> None:
         self.queue_state_label.setText(self._queue_state_text())
@@ -1570,17 +1726,17 @@ class MainWindow(QMainWindow):
         self._queue_state = state
         self._render_queue_state()
         if state == "pause_after_current":
-            self._append_log(self.translator.t("gui.log.pause_after_current_requested"))
+            self._append_log(self.translator.t(Text(en='Queue will pause after all currently active files finish.', zh_cn='所有当前活动文件完成后将暂停队列。')))
         elif state == "paused":
-            self._append_log(self.translator.t("gui.log.queue_paused"))
+            self._append_log(self.translator.t(Text(en='Queue paused after the current item.', zh_cn='队列已在当前任务完成后暂停。')))
         elif state == "cancelled":
-            self._append_log(self.translator.t("gui.log.queue_cancelled"))
+            self._append_log(self.translator.t(Text(en='Queue cancelled.', zh_cn='队列已取消。')))
         elif state == "awaiting_decision":
-            self._append_log(self.translator.t("gui.log.queue_awaiting_decision"))
+            self._append_log(self.translator.t(Text(en='Encoding stopped with one or more items waiting for a constraint decision.', zh_cn='编码已停下，队列中有项目正在等待你处理约束冲突。')))
             if self.app_config.get("desktop_notifications", True):
                 self._send_desktop_notification(
-                    self.translator.t("app.title"),
-                    self.translator.t("gui.notification.awaiting_decision"),
+                    self.translator.t(TITLE),
+                    self.translator.t(Text(en='A queue item is waiting for your constraint decision.', zh_cn='有队列项目正在等待你的约束决策。')),
                 )
         if state in {"paused", "awaiting_decision", "cancelled", "failed"}:
             self._set_status_snapshot(self._queue_state_text(), "-", "-", "-", None)
@@ -1588,8 +1744,8 @@ class MainWindow(QMainWindow):
             self._refresh_action_state()
 
     def _on_queue_error(self, message: str) -> None:
-        self._append_log(f"{self.translator.t('gui.message.error')}: {message}", category="error")
-        QMessageBox.critical(self, self.translator.t("gui.message.error"), message)
+        self._append_log(f"{self.translator.t(MESSAGE_ERROR)}: {message}", category="error")
+        QMessageBox.critical(self, self.translator.t(MESSAGE_ERROR), message)
 
     def _set_controls_enabled(self, enabled: bool) -> None:
         for widget in [
@@ -1649,14 +1805,14 @@ class MainWindow(QMainWindow):
         self._update_decision_banner(self.queue_model.metrics())
 
     def _on_smart_unavailable(self, reason: str) -> None:
-        default_reason = reason == self.translator.t("gui.tooltip.smart_unavailable")
+        default_reason = reason == self.translator.t(TOOLTIP_SMART_UNAVAILABLE)
         self._set_runtime_banner(lambda: (
             self.translator.t(
-                "gui.banner.smart_unavailable",
-                reason=self.translator.t("gui.tooltip.smart_unavailable") if default_reason else reason,
+                Text(en='Smart mode is unavailable: {reason}', zh_cn='智能模式不可用：{reason}'),
+                reason=self.translator.t(TOOLTIP_SMART_UNAVAILABLE) if default_reason else reason,
             ),
             "warning",
-            [(self.translator.t("gui.button.settings"), self._open_settings_dialog)],
+            [(self.translator.t(BUTTON_SETTINGS), self._open_settings_dialog)],
         ))
 
     def _refresh_path_validation(self) -> None:
@@ -1664,7 +1820,7 @@ class MainWindow(QMainWindow):
         invalid_source = bool(text) and not Path(text).expanduser().exists()
         self.source_combo.setProperty("invalid", invalid_source)
         self.source_combo.setToolTip(
-            self.translator.t("gui.message.path_missing") if invalid_source else text
+            self.translator.t(MESSAGE_PATH_MISSING) if invalid_source else text
         )
         self.source_combo.style().unpolish(self.source_combo)
         self.source_combo.style().polish(self.source_combo)
@@ -1673,7 +1829,7 @@ class MainWindow(QMainWindow):
         invalid_output = bool(output_text) and Path(output_text).expanduser().is_file()
         self.output_edit.setProperty("invalid", invalid_output)
         self.output_edit.setToolTip(
-            self.translator.t("gui.message.path_not_directory") if invalid_output else output_text
+            self.translator.t(MESSAGE_PATH_NOT_DIRECTORY) if invalid_output else output_text
         )
         self.output_edit.style().unpolish(self.output_edit)
         self.output_edit.style().polish(self.output_edit)
@@ -1724,13 +1880,13 @@ class MainWindow(QMainWindow):
         return Path(text).expanduser().resolve() if text else None
 
     def _browse_source_file(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, self.translator.t("gui.dialog.select_source_file"))
+        path, _ = QFileDialog.getOpenFileName(self, self.translator.t(DIALOG_SELECT_SOURCE_FILE))
         if path:
             self.source_combo.setEditText(path)
             self._persist_runtime_state()
 
     def _browse_source_dir(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, self.translator.t("gui.dialog.select_source_dir"))
+        path = QFileDialog.getExistingDirectory(self, self.translator.t(DIALOG_SELECT_SOURCE_DIR))
         if path:
             self.source_combo.setEditText(path)
             self._persist_runtime_state()
@@ -1745,7 +1901,7 @@ class MainWindow(QMainWindow):
         self._persist_runtime_state()
 
     def _add_files_dialog(self) -> None:
-        paths, _ = QFileDialog.getOpenFileNames(self, self.translator.t("gui.dialog.select_source_file"))
+        paths, _ = QFileDialog.getOpenFileNames(self, self.translator.t(DIALOG_SELECT_SOURCE_FILE))
         if not paths:
             return
         self.source_combo.setEditText(paths[0])
@@ -1753,7 +1909,7 @@ class MainWindow(QMainWindow):
         self._start_plan_for_files([Path(path) for path in paths])
 
     def _add_folder_dialog(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, self.translator.t("gui.dialog.select_source_dir"))
+        path = QFileDialog.getExistingDirectory(self, self.translator.t(DIALOG_SELECT_SOURCE_DIR))
         if not path:
             return
         self.source_combo.setEditText(path)
@@ -1764,14 +1920,14 @@ class MainWindow(QMainWindow):
         input_path = self._selected_input()
         if input_path is None:
             self.notification_banner.show_message(
-                self.translator.t("gui.message.select_source"),
+                self.translator.t(Text(en='Please select a source file or directory first.', zh_cn='请先选择输入文件或目录。')),
                 severity="warning",
             )
             return
         if not input_path.exists():
             self._refresh_path_validation()
             self.notification_banner.show_message(
-                self.translator.t("gui.banner.path_invalid"),
+                self.translator.t(Text(en='The selected source path does not exist.', zh_cn='所选输入源路径不存在。')),
                 severity="error",
             )
             return
@@ -1798,7 +1954,7 @@ class MainWindow(QMainWindow):
         self.queue_model.add_records(unique)
         self._completion_banner = None
         self._dismissed_banner_key = None
-        self._append_log(self.translator.t("gui.log.sources_added", count=len(unique)))
+        self._append_log(self.translator.t(Text(en='Added {count} source(s); execution settings will be selected at Start Queue.', zh_cn='已添加 {count} 个源文件；启动队列时确定执行参数。'), count=len(unique)))
         self._refresh_action_state()
 
     def _start_queue(self) -> None:
@@ -1814,7 +1970,7 @@ class MainWindow(QMainWindow):
         try:
             options = self.options_panel.read_options()
         except ValueError as exc:
-            QMessageBox.warning(self, self.translator.t("gui.message.warning"), str(exc))
+            QMessageBox.warning(self, self.translator.t(MESSAGE_WARNING), str(exc))
             return
         output = self._selected_output()
         workdir = self._selected_workdir()
@@ -1841,8 +1997,8 @@ class MainWindow(QMainWindow):
             self.queue_manager.include_prepared_items(ids)
             self._start_bound_queue(max_workers)
 
-        self._append_log(self.translator.t("gui.log.preparing_queue"))
-        self._set_status_snapshot(self.translator.t("gui.status.preparing_queue"), "-", "-", "-", 0.0)
+        self._append_log(self.translator.t(Text(en='Preparing queue with the current settings.', zh_cn='使用当前设置准备队列。')))
+        self._set_status_snapshot(self.translator.t(Text(en='Preparing queue', zh_cn='准备队列')), "-", "-", "-", 0.0)
         self.queue_manager.begin_preparation()
         self._start_worker(worker, plans.append, finish_preparation)
 
@@ -1850,16 +2006,16 @@ class MainWindow(QMainWindow):
         if not self.queue_manager.start(max_workers=max_workers):
             self.queue_manager.reconcile_after_decision()
             if not self.queue_model.execution_records():
-                QMessageBox.information(self, self.translator.t("gui.message.info"), self.translator.t("gui.message.no_queued_items"))
+                QMessageBox.information(self, self.translator.t(MESSAGE_INFO), self.translator.t(Text(en='There are no queued items ready to run.', zh_cn='当前没有可执行的队列项。')))
             return
-        self._append_log(self.translator.t("gui.log.encoding"))
+        self._append_log(self.translator.t(Text(en='Running encode jobs...', zh_cn='正在执行编码任务...')))
         self._set_status_snapshot(
-            self.translator.t("gui.status.starting_queue"), "-", "-", "-", 0.0
+            self.translator.t(Text(en='Starting queue', zh_cn='正在启动队列')), "-", "-", "-", 0.0
         )
 
     def _pause_after_current(self) -> None:
         if not self.queue_busy:
-            QMessageBox.information(self, self.translator.t("gui.message.info"), self.translator.t("gui.message.no_running_queue"))
+            QMessageBox.information(self, self.translator.t(MESSAGE_INFO), self.translator.t(Text(en='There is no running queue to pause.', zh_cn='当前没有正在运行的队列可暂停。')))
             return
         self.queue_manager.pause_after_current()
 
@@ -1869,20 +2025,20 @@ class MainWindow(QMainWindow):
             self.queue_completion_handler.cancel()
             return
         if self.active_worker is not None and hasattr(self.active_worker, "cancel"):
-            self._append_log(self.translator.t("gui.log.stop_requested"))
+            self._append_log(self.translator.t(LOG_STOP_REQUESTED))
             self.active_worker.cancel()
             return
         if self.queue_busy:
-            self._append_log(self.translator.t("gui.log.stop_requested"))
+            self._append_log(self.translator.t(LOG_STOP_REQUESTED))
             self.queue_manager.stop()
             return
         if self.encoder_detection_worker is not None:
             self.encoder_detection_worker.cancel()
-            self._append_log(self.translator.t("gui.log.stop_requested"))
+            self._append_log(self.translator.t(LOG_STOP_REQUESTED))
             return
         if self.queue_manager.abandon_run():
             self._asked_analysis_decisions.clear()
-            self._append_log(self.translator.t("gui.log.queue_abandoned"))
+            self._append_log(self.translator.t(Text(en='Queue run abandoned; queued items remain ready.', zh_cn='已放弃本次队列运行；待处理项目仍保持就绪。')))
 
     def _start_worker(
         self,
@@ -1914,13 +2070,13 @@ class MainWindow(QMainWindow):
         self._set_worker_busy(False)
 
     def _on_worker_failed(self, message: str) -> None:
-        self._append_log(f"{self.translator.t('gui.message.error')}: {message}", category="error")
-        self._set_status_snapshot(self.translator.t("gui.status.failed"), "-", "-", "-", None)
-        QMessageBox.critical(self, self.translator.t("gui.message.error"), message)
+        self._append_log(f"{self.translator.t(MESSAGE_ERROR)}: {message}", category="error")
+        self._set_status_snapshot(self.translator.t(Text(en='Failed', zh_cn='失败')), "-", "-", "-", None)
+        QMessageBox.critical(self, self.translator.t(MESSAGE_ERROR), message)
 
     def _on_worker_cancelled(self, message: str) -> None:
         self._append_log(message)
-        self._set_status_snapshot(self.translator.t("gui.status.cancelled"), "-", "-", "-", None)
+        self._set_status_snapshot(self.translator.t(Text(en='Cancelled', zh_cn='已取消')), "-", "-", "-", None)
 
     def _on_queue_busy_changed(self, busy: bool) -> None:
         self.queue_busy = busy
@@ -1943,7 +2099,7 @@ class MainWindow(QMainWindow):
         if visible and not (
             self.active_worker is not None or self.queue_busy or self.queue_manager.is_busy()
         ):
-            self.drop_overlay.setText(self.translator.t("gui.drop.overlay"))
+            self.drop_overlay.setText(self.translator.t(DROP_OVERLAY))
             self._position_drop_overlay()
             self.drop_overlay.raise_()
             self.drop_overlay.setVisible(True)
@@ -2102,11 +2258,11 @@ class MainWindow(QMainWindow):
         can_edit = has_selection and self.queue_model.can_edit_rows(rows) and not busy
         can_reconfigure = can_edit
 
-        open_source_action = menu.addAction(self.translator.t("gui.menu.open_source_folder"))
-        open_output_action = menu.addAction(self.translator.t("gui.menu.open_output_folder"))
-        copy_source_action = menu.addAction(self.translator.t("gui.menu.copy_source_path"))
-        copy_output_action = menu.addAction(self.translator.t("gui.menu.copy_output_path"))
-        compare_action = menu.addAction(self.translator.t("gui.compare.queue_action"))
+        open_source_action = menu.addAction(self.translator.t(Text(en='Open Source Folder', zh_cn='打开源文件夹')))
+        open_output_action = menu.addAction(self.translator.t(Text(en='Open Output Folder', zh_cn='打开输出文件夹')))
+        copy_source_action = menu.addAction(self.translator.t(Text(en='Copy Source Path', zh_cn='复制源路径')))
+        copy_output_action = menu.addAction(self.translator.t(Text(en='Copy Output Path', zh_cn='复制输出路径')))
+        compare_action = menu.addAction(self.translator.t(Text(en='Compare source and output', zh_cn='对比原视频与输出')))
         compare_action.setEnabled(
             len(rows) == 1
             and selected_record is not None
@@ -2120,17 +2276,17 @@ class MainWindow(QMainWindow):
         )
         menu.addSeparator()
 
-        apply_options_action = menu.addAction(self.translator.t("gui.menu.apply_current_options"))
-        preset_sub_menu = menu.addMenu(self.translator.t("gui.menu.apply_preset"))
-        follow_options_action = menu.addAction(self.translator.t("gui.menu.follow_global_options"))
-        follow_output_action = menu.addAction(self.translator.t("gui.menu.follow_global_output"))
-        change_output_action = menu.addAction(self.translator.t("gui.menu.change_output_dir"))
+        apply_options_action = menu.addAction(self.translator.t(Text(en='Apply Current Options', zh_cn='批量应用当前面板设置')))
+        preset_sub_menu = menu.addMenu(self.translator.t(Text(en='Apply Preset', zh_cn='批量应用预设')))
+        follow_options_action = menu.addAction(self.translator.t(Text(en='Follow global encoding settings', zh_cn='参数跟随全局设置')))
+        follow_output_action = menu.addAction(self.translator.t(Text(en='Follow global output directory', zh_cn='输出目录跟随全局设置')))
+        change_output_action = menu.addAction(self.translator.t(Text(en='Change Output Directory…', zh_cn='更改输出目录…')))
         menu.addSeparator()
 
-        retry_action = menu.addAction(self.translator.t("gui.menu.retry_selected"))
-        resolve_action = menu.addAction(self.translator.t("gui.menu.resolve_decision"))
-        remove_action = menu.addAction(self.translator.t("gui.menu.remove_from_queue"))
-        clear_completed_action = menu.addAction(self.translator.t("gui.menu.clear_completed"))
+        retry_action = menu.addAction(self.translator.t(Text(en='Retry Selected', zh_cn='重试所选项')))
+        resolve_action = menu.addAction(self.translator.t(Text(en='Resolve Constraint…', zh_cn='处理约束…')))
+        remove_action = menu.addAction(self.translator.t(Text(en='Remove From Queue', zh_cn='从队列移除')))
+        clear_completed_action = menu.addAction(self.translator.t(MENU_CLEAR_COMPLETED))
 
         open_source_action.setEnabled(has_selection)
         has_output = selected_record is not None and selected_record.plan_item is not None
@@ -2185,10 +2341,10 @@ class MainWindow(QMainWindow):
                     runtime_capabilities=self._runtime_encoder_capabilities(),
                 )
             except Exception as exc:
-                QMessageBox.critical(self, self.translator.t("gui.message.error"), str(exc))
+                QMessageBox.critical(self, self.translator.t(MESSAGE_ERROR), str(exc))
             else:
                 if updated:
-                    self._append_log(self.translator.t("gui.log.batch_options_applied", count=updated))
+                    self._append_log(self.translator.t(Text(en='Applied options to {count} queue items.', zh_cn='已将当前面板设置应用至 {count} 个队列项。'), count=updated))
         elif action in preset_actions and can_reconfigure:
             preset_name = preset_actions[action]
             try:
@@ -2199,19 +2355,19 @@ class MainWindow(QMainWindow):
                     runtime_capabilities=self._runtime_encoder_capabilities(),
                 )
                 if updated:
-                    self._append_log(self.translator.t("gui.log.batch_preset_applied", count=updated, name=preset_name))
+                    self._append_log(self.translator.t(Text(en="Applied preset '{name}' to {count} queue items.", zh_cn="已将预设 '{name}' 应用至 {count} 个队列项。"), count=updated, name=preset_name))
             except Exception as exc:
-                QMessageBox.critical(self, self.translator.t("gui.message.error"), str(exc))
+                QMessageBox.critical(self, self.translator.t(MESSAGE_ERROR), str(exc))
         elif action == change_output_action and can_edit:
-            path = QFileDialog.getExistingDirectory(self, self.translator.t("gui.dialog.select_output_dir"))
+            path = QFileDialog.getExistingDirectory(self, self.translator.t(DIALOG_SELECT_OUTPUT_DIR))
             if path:
                 try:
                     updated = self.queue_model.apply_output_dir_to_rows(rows, Path(path))
                 except Exception as exc:
-                    QMessageBox.critical(self, self.translator.t("gui.message.error"), str(exc))
+                    QMessageBox.critical(self, self.translator.t(MESSAGE_ERROR), str(exc))
                 else:
                     if updated:
-                        self._append_log(self.translator.t("gui.log.batch_output_dir_applied", count=updated, dir=path))
+                        self._append_log(self.translator.t(Text(en='Changed output directory for {count} items to {dir}.', zh_cn='已将 {count} 个队列项的输出目录修改为 {dir}。'), count=updated, dir=path))
         elif action == follow_options_action and can_edit:
             self.queue_model.restore_global_options(rows)
         elif action == follow_output_action and can_edit:
@@ -2219,17 +2375,17 @@ class MainWindow(QMainWindow):
         elif action == retry_action:
             retried = self.queue_manager.retry_rows(rows)
             if retried:
-                self._append_log(self.translator.t("gui.log.retry_selected", count=retried))
+                self._append_log(self.translator.t(Text(en='Retried queue items: {count}', zh_cn='已重试队列项：{count}'), count=retried))
         elif action == resolve_action and selected_record is not None:
             self._resolve_queue_decision(rows[0], selected_record)
         elif action == remove_action:
             removed = self.queue_manager.remove_rows(rows)
             if removed:
-                self._append_log(self.translator.t("gui.log.removed_from_queue", count=removed))
+                self._append_log(self.translator.t(LOG_REMOVED_FROM_QUEUE, count=removed))
         elif action == clear_completed_action:
             removed = self.queue_manager.clear_completed()
             if removed:
-                self._append_log(self.translator.t("gui.log.cleared_completed", count=removed))
+                self._append_log(self.translator.t(LOG_CLEARED_COMPLETED, count=removed))
 
     def _remove_selected_queue_rows(self) -> None:
         if self.active_worker is not None or self.queue_manager.is_busy():
@@ -2239,12 +2395,12 @@ class MainWindow(QMainWindow):
             return
         removed = self.queue_manager.remove_rows(rows)
         if removed:
-            self._append_log(self.translator.t("gui.log.removed_from_queue", count=removed))
+            self._append_log(self.translator.t(LOG_REMOVED_FROM_QUEUE, count=removed))
 
     def _clear_completed_queue_rows(self) -> None:
         removed = self.queue_manager.clear_completed()
         if removed:
-            self._append_log(self.translator.t("gui.log.cleared_completed", count=removed))
+            self._append_log(self.translator.t(LOG_CLEARED_COMPLETED, count=removed))
 
     def _open_selected_source_folder(self) -> None:
         record = self._selected_record()
@@ -2277,7 +2433,7 @@ class MainWindow(QMainWindow):
             action.setChecked(not view.isColumnHidden(column))
             action.setData(column)
         menu.addSeparator()
-        reset_action = menu.addAction(self.translator.t("gui.menu.reset_queue_order"))
+        reset_action = menu.addAction(self.translator.t(Text(en='Reset Queue Order', zh_cn='恢复队列顺序')))
         reset_action.setEnabled(self.queue_model.has_sort_order())
         chosen = maybe_none(menu.exec(header.mapToGlobal(pos)))
         if chosen is None:
@@ -2380,7 +2536,7 @@ class MainWindow(QMainWindow):
                 self._report_decision_failure(record)
                 return
             self._append_log(
-                self.translator.t("gui.log.decision_resolved", file=record.source_path.name, action=choice.value)
+                self.translator.t(LOG_DECISION_RESOLVED, file=record.source_path.name, action=choice.value)
             )
             if record.result is not None:
                 for warning in record.result.external_subtitle_warnings:
@@ -2406,7 +2562,7 @@ class MainWindow(QMainWindow):
             return
         self._append_log(
             self.translator.t(
-                "gui.log.decision_resolved",
+                LOG_DECISION_RESOLVED,
                 file=record.source_path.name,
                 action=decision.action_code.value,
             )
@@ -2426,9 +2582,9 @@ class MainWindow(QMainWindow):
             self._process_stopped_records(QueueRunCompletion("local-decision", (record.item_id,)), ask_analysis=False)
 
     def _report_decision_failure(self, record: QueueItemRecord) -> None:
-        detail = record.error_summary or self.translator.t("gui.message.decision_failed")
-        self._append_log(f"{self.translator.t('gui.message.error')}: {detail}")
-        QMessageBox.warning(self, self.translator.t("gui.message.warning"), detail)
+        detail = record.error_summary or self.translator.t(Text(en='The decision could not be applied. See the item detail for the reason.', zh_cn='无法应用该决策，请查看项目详情了解原因。'))
+        self._append_log(f"{self.translator.t(MESSAGE_ERROR)}: {detail}")
+        QMessageBox.warning(self, self.translator.t(MESSAGE_WARNING), detail)
 
     def _on_banner_dismissed(self) -> None:
         self._dismissed_banner_key = self._banner_key
@@ -2441,17 +2597,17 @@ class MainWindow(QMainWindow):
                 self.notification_banner.hide_message()
                 return
             decision_text = (
-                self.translator.t("gui.banner.needs_decision_one")
+                self.translator.t(Text(en='1 item needs a decision.', zh_cn='1 个项目等待决定。'))
                 if metrics.needs_decision_items == 1
                 else self.translator.t(
-                    "gui.banner.needs_decision_many",
+                    Text(en='{count} items need a decision.', zh_cn='{count} 个项目等待决定。'),
                     count=metrics.needs_decision_items,
                 )
             )
             self.notification_banner.show_message(
                 decision_text,
                 severity="warning",
-                actions=[(self.translator.t("gui.banner.resolve"), self._resolve_next_decision)],
+                actions=[(self.translator.t(Text(en='Resolve', zh_cn='处理')), self._resolve_next_decision)],
                 actions_enabled=self.active_worker is None and not self.queue_manager.is_busy(),
             )
             return
@@ -2617,15 +2773,15 @@ class MainWindow(QMainWindow):
         def render() -> tuple[str, list[tuple[str, Callable[[], None]]]]:
             actions: list[tuple[str, Callable[[], None]]] = []
             if output_action is not None:
-                actions.append((self.translator.t("gui.completion.open_output"), output_action))
-            actions.append((self.translator.t("gui.completion.view_log"), self._show_activity_log))
+                actions.append((self.translator.t(Text(en='Open output folder', zh_cn='打开输出目录')), output_action))
+            actions.append((self.translator.t(COMPLETION_VIEW_LOG), self._show_activity_log))
             incomplete = self.translator.t(
-                "gui.completion.incomplete", failed=failed_count, cancelled=cancelled_count
+                Text(en='Batch finished with {failed} failed and {cancelled} cancelled.', zh_cn='批处理结束：{failed} 个失败，{cancelled} 个取消。'), failed=failed_count, cancelled=cancelled_count
             )
             if not done_count:
                 return incomplete, actions
-            text = self.translator.t("gui.completion.title") + " · " + self.translator.t(
-                "gui.completion.summary", count=done_count, saved=format_size(saved), ratio=f"{ratio:.1f}"
+            text = self.translator.t(Text(en='Batch complete', zh_cn='批处理完成')) + " · " + self.translator.t(
+                Text(en='{count} files · saved {saved} ({ratio}%)', zh_cn='{count} 个文件 · 节省 {saved}（{ratio}%）'), count=done_count, saved=format_size(saved), ratio=f"{ratio:.1f}"
             )
             if failed_count or cancelled_count:
                 text += "\n" + incomplete
@@ -2646,11 +2802,6 @@ class MainWindow(QMainWindow):
     def _append_error_log(self, message: str) -> None:
         self._append_log(message, category="error")
 
-    def _log_catalog_diagnostics(self) -> None:
-        for diagnostic in self.catalog.diagnostics():
-            self._append_log(
-                f"i18n warning ({diagnostic.locale}): {diagnostic.message}"
-            )
 
     def _copy_to_clipboard(self, text: str) -> None:
         QApplication.clipboard().setText(text)

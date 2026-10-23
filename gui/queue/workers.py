@@ -8,8 +8,7 @@ from typing import Iterable
 from PySide6.QtCore import QThread, Signal
 
 from core.encoding import prepare_encode_requests
-from core.config import bundle_root
-from core.i18n import TranslationCatalog, Translator
+from core.i18n import Text, Translator
 from core.ffmpeg import find_binary, probe_media_info, discover_ffmpeg_tools
 from core.media import collect_video_files
 from core.models import (
@@ -18,6 +17,17 @@ from core.models import (
     VideoFileItem,
 )
 from gui.queue.state import QueueItemRecord, QueueSourceDraft, create_draft_record
+
+
+LOG_INTAKE_CANCELLED = Text(
+    en='Source intake cancelled.',
+    zh_cn='已取消导入源文件。',
+)
+
+LOG_INTAKE_FAILED = Text(
+    en='Cannot read {file}: {error}',
+    zh_cn='无法读取 {file}：{error}',
+)
 
 
 class QueueIntakeWorker(QThread):
@@ -36,7 +46,7 @@ class QueueIntakeWorker(QThread):
         self.files = list(files) if files is not None else None
         self.ffmpeg_path = ffmpeg_path
         self.paths = list(paths) if paths is not None else None
-        self.translator = translator or TranslationCatalog(bundle_dir=bundle_root() / "config/i18n").translator("en")
+        self.translator = translator or Translator()
         self._cancel_event = threading.Event()
 
     def cancel(self) -> None:
@@ -57,11 +67,11 @@ class QueueIntakeWorker(QThread):
                     except (OSError, ValueError, RuntimeError) as exc:
                         if self.paths is None:
                             raise
-                        self.problem.emit(self.translator.t("gui.log.intake_failed", file=str(path), error=str(exc)))
+                        self.problem.emit(self.translator.t(LOG_INTAKE_FAILED, file=str(path), error=str(exc)))
                         continue
                     sources.extend((item, path if path.is_dir() else None) for item in items)
             if self._cancel_event.is_set():
-                raise OperationCancelledError(self.translator.t("gui.log.intake_cancelled"))
+                raise OperationCancelledError(self.translator.t(LOG_INTAKE_CANCELLED))
             if self.ffmpeg_path is not None:
                 _ffmpeg, probe = discover_ffmpeg_tools(self.ffmpeg_path, self.ffprobe_path)
             else:
@@ -71,7 +81,7 @@ class QueueIntakeWorker(QThread):
                 self.progress.emit({"stage": "planning", "state": "probing", "file_name": item.path.name,
                                     "percent": index * 100 / max(1, len(sources))})
                 if self._cancel_event.is_set():
-                    raise OperationCancelledError(self.translator.t("gui.log.intake_cancelled"))
+                    raise OperationCancelledError(self.translator.t(LOG_INTAKE_CANCELLED))
                 draft = QueueSourceDraft(item, input_root)
                 error = None
                 try:
@@ -80,13 +90,13 @@ class QueueIntakeWorker(QThread):
                     raise
                 except Exception as exc:
                     error = str(exc)
-                    self.problem.emit(self.translator.t("gui.log.intake_failed", file=item.path.name, error=error))
+                    self.problem.emit(self.translator.t(LOG_INTAKE_FAILED, file=item.path.name, error=error))
                 records.append(create_draft_record(draft, error))
             if self._cancel_event.is_set():
-                raise OperationCancelledError(self.translator.t("gui.log.intake_cancelled"))
+                raise OperationCancelledError(self.translator.t(LOG_INTAKE_CANCELLED))
             self.completed.emit(records)
         except OperationCancelledError:
-            self.cancelled.emit(self.translator.t("gui.log.intake_cancelled"))
+            self.cancelled.emit(self.translator.t(LOG_INTAKE_CANCELLED))
         except Exception as exc:
             self.failed.emit(str(exc))
 

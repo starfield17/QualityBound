@@ -28,7 +28,7 @@ FFmpeg/*.exe
 # Local workdir debug files
 workdir/
 
-# Local translation overrides (dev runtime override dir == repo/translations)
+# Legacy local translation files (no longer read; keep user data untracked)
 translations/
 
 # Logs and temp files

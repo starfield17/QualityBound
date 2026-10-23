@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.i18n import Translator
+from core.i18n import Text, Translator
 from core.media import VIDEO_EXTENSIONS
 from gui.comparison.decode import (ComparisonMedia, DecodeCancelled, FramePair,
                                    ToolRunner, decode_pair, inspect_pair, preview_pair)
@@ -42,6 +42,67 @@ from gui.comparison.state import ComparisonPhase, ComparisonTimeline
 from gui.comparison.playback import PlaybackSession
 from gui.window_geometry import clamped_window_size
 from gui.icons import set_button_icon
+
+
+COMPARE_AUDIO_HINT = Text(
+    en="Choose which file's audio track to hear.",
+    zh_cn='选择要播放哪个文件的音轨。',
+)
+
+COMPARE_ERROR = Text(
+    en='Comparison failed: {error}. Check the files/tools, or select normal synchronization if only precise inspection failed.',
+    zh_cn='对比失败：{error}。请检查文件和工具；如果仅精确检查失败，可选择普通同步。',
+)
+
+COMPARE_HELP = Text(
+    en='Space: play/pause · T: switch A/B in single view · ←/→: seek 5 seconds. Click or drag the timeline to seek both videos. Precise inspection aligns paused frames by timestamp; playback shares one presentation clock. All decoding uses the selected external FFmpeg.\nA frame: , / .   B frame: Shift+, / Shift+.   Editing controls keep their own keys.',
+    zh_cn='Space：播放/暂停 · T：单画面切换 A/B · ←/→：跳转 5 秒。点击或拖动进度条同步定位两个视频。精确检查按时间戳定位暂停画面；播放共用一个时钟。全部解码使用所选外部 FFmpeg。\nA 逐帧：, / .；B 逐帧：Shift+, / Shift+.。编辑控件保留自身按键。',
+)
+
+COMPARE_HELP_TOGGLE = Text(
+    en='Help',
+    zh_cn='帮助',
+)
+
+COMPARE_MODE_HINT = Text(
+    en='Choose side-by-side or a single A/B view.',
+    zh_cn='选择并排显示或单个 A/B 视图。',
+)
+
+COMPARE_OFFSET = Text(
+    en='B offset:',
+    zh_cn='B 偏移：',
+)
+
+COMPARE_OFFSET_HINT = Text(
+    en='B time = A time + offset. Positive values skip the beginning of B. Frame buttons use actual B frame timestamps.',
+    zh_cn='B 时间 = A 时间 + 偏移。正值跳过 B 的片头。帧微调按钮使用 B 的实际帧时间戳。',
+)
+
+COMPARE_PLACEHOLDER = Text(
+    en='Open or drop a video',
+    zh_cn='打开或拖入视频',
+)
+
+COMPARE_PRECISION_HINT = Text(
+    en='Precise inspection aligns paused frames by timestamp; normal mode uses the shared playback clock.',
+    zh_cn='精确检查按时间戳对齐暂停帧；普通模式使用共享播放时钟。',
+)
+
+COMPARE_SCRUBBING = Text(
+    en='Seeking both videos…',
+    zh_cn='正在同步定位两个视频…',
+)
+
+COMPARE_TITLE = Text(
+    en='Video comparison',
+    zh_cn='视频对比',
+)
+
+COMPARE_WAITING_OTHER = Text(
+    en='Ready. Open video {side} to compare.',
+    zh_cn='已就绪。请打开视频 {side} 以开始对比。',
+)
 
 
 class ComparisonWorker(QThread):
@@ -283,13 +344,13 @@ class ComparisonWindow(QWidget):
     def apply_translations(self, translator: Translator) -> None:
         self.translator = translator
         t = translator.t
-        self.setWindowTitle(t("gui.compare.title"))
+        self.setWindowTitle(t(COMPARE_TITLE))
         for side, button in enumerate(self.open_buttons):
-            button.setText(t("gui.compare.open_short", side="AB"[side]))
+            button.setText(t(Text(en='Open {side}…', zh_cn='打开 {side}…'), side="AB"[side]))
         for combo, labels in [
-            (self.mode, (t("gui.compare.side_by_side"), t("gui.compare.single"))),
-            (self.precision, (t("gui.compare.precise"), t("gui.compare.normal"))),
-            (self.audio, (t("gui.compare.audio_a"), t("gui.compare.audio_b"), t("gui.compare.muted"))),
+            (self.mode, (t(Text(en='Side by side', zh_cn='并排显示')), t(Text(en='Single view · A/B', zh_cn='单画面 · A/B')))),
+            (self.precision, (t(Text(en='Precise inspection', zh_cn='精确检查')), t(Text(en='Normal synchronization', zh_cn='普通同步')))),
+            (self.audio, (t(Text(en='Audio track A', zh_cn='音轨 A')), t(Text(en='Audio track B', zh_cn='音轨 B')), t(Text(en='Muted', zh_cn='静音')))),
         ]:
             index = max(0, combo.currentIndex())
             combo.blockSignals(True)
@@ -297,23 +358,23 @@ class ComparisonWindow(QWidget):
             combo.addItems(labels)
             combo.setCurrentIndex(index)
             combo.blockSignals(False)
-        self.switch_button.setText(t("gui.compare.switch"))
-        self.previous_button.setText(t("gui.compare.previous"))
-        self.next_button.setText(t("gui.compare.next"))
-        self.offset_previous.setText(t("gui.compare.offset_previous"))
-        self.offset_next.setText(t("gui.compare.offset_next"))
-        self.offset_label.setText(t("gui.compare.offset"))
-        self.offset.setToolTip(t("gui.compare.offset_hint"))
-        self.help_label.setText(t("gui.compare.help"))
-        self.help_button.setToolTip(t("gui.compare.help_toggle"))
-        self.help_button.setAccessibleName(t("gui.compare.help_toggle"))
-        for control, label in ((self.mode, t("gui.compare.mode_hint")), (self.precision, t("gui.compare.precision_hint")), (self.audio, t("gui.compare.audio_hint")), (self.slider, t("gui.compare.timeline")), (self.offset, t("gui.compare.offset"))):
+        self.switch_button.setText(t(Text(en='Switch A/B · Tab', zh_cn='切换 A/B · Tab')))
+        self.previous_button.setText(t(Text(en='A −1 frame', zh_cn='A −1 帧')))
+        self.next_button.setText(t(Text(en='A +1 frame', zh_cn='A +1 帧')))
+        self.offset_previous.setText(t(Text(en='B −1 frame', zh_cn='B −1 帧')))
+        self.offset_next.setText(t(Text(en='B +1 frame', zh_cn='B +1 帧')))
+        self.offset_label.setText(t(COMPARE_OFFSET))
+        self.offset.setToolTip(t(COMPARE_OFFSET_HINT))
+        self.help_label.setText(t(COMPARE_HELP))
+        self.help_button.setToolTip(t(COMPARE_HELP_TOGGLE))
+        self.help_button.setAccessibleName(t(COMPARE_HELP_TOGGLE))
+        for control, label in ((self.mode, t(COMPARE_MODE_HINT)), (self.precision, t(COMPARE_PRECISION_HINT)), (self.audio, t(COMPARE_AUDIO_HINT)), (self.slider, t(Text(en='Playback position', zh_cn='播放位置'))), (self.offset, t(COMPARE_OFFSET))):
             control.setAccessibleName(label)
-        self.mode.setToolTip(t("gui.compare.mode_hint"))
-        self.precision.setToolTip(t("gui.compare.precision_hint"))
-        self.audio.setToolTip(t("gui.compare.audio_hint"))
+        self.mode.setToolTip(t(COMPARE_MODE_HINT))
+        self.precision.setToolTip(t(COMPARE_PRECISION_HINT))
+        self.audio.setToolTip(t(COMPARE_AUDIO_HINT))
         for side, pane in enumerate(self.panes):
-            pane.placeholder.setText(t("gui.compare.waiting_other", side="AB"[1 - side]) if self.paths[side] is not None and self.media is None else t("gui.compare.placeholder"))
+            pane.placeholder.setText(t(COMPARE_WAITING_OTHER, side="AB"[1 - side]) if self.paths[side] is not None and self.media is None else t(COMPARE_PLACEHOLDER))
         self._update_labels()
         self._update_controls()
 
@@ -385,12 +446,12 @@ class ComparisonWindow(QWidget):
 
     def _video_filter(self) -> str:
         extensions = " ".join(f"*{suffix}" for suffix in sorted(VIDEO_EXTENSIONS))
-        return f"{self.translator.t('gui.compare.video_files')} ({extensions});;{self.translator.t('gui.compare.all_files')} (*)"
+        return f"{self.translator.t(Text(en='Video files', zh_cn='视频文件'))} ({extensions});;{self.translator.t(Text(en='All files', zh_cn='所有文件'))} (*)"
 
     def _choose_file(self, side: int) -> None:
         path, _filter = QFileDialog.getOpenFileName(
             self,
-            self.translator.t("gui.compare.open", side="AB"[side]),
+            self.translator.t(Text(en='Open video {side}…', zh_cn='打开视频 {side}…'), side="AB"[side]),
             "",
             self._video_filter(),
         )
@@ -415,7 +476,7 @@ class ComparisonWindow(QWidget):
         for pane in self.panes:
             pane.show_frame(QImage())
         self.phase = ComparisonPhase.LOADING
-        self.status.setText(self.translator.t("gui.compare.loading"))
+        self.status.setText(self.translator.t(Text(en='Inspecting videos…', zh_cn='正在读取视频信息…')))
         self._update_controls()
         self._update_labels()
         self._launch(lambda runner: inspect_pair((a, b), self.ffmpeg_setting, self.ffprobe_setting, runner),
@@ -430,34 +491,34 @@ class ComparisonWindow(QWidget):
 
     def _decode_error(self, error: str) -> None:
         error_keys = {
-            'FFmpeg video decoding cannot keep up with playback': self.translator.t("gui.compare.error_decode_slow"),
-            'Cannot open PCM audio output': self.translator.t("gui.compare.error_audio_open"),
-            'Cannot write PCM audio output': self.translator.t("gui.compare.error_audio_write"),
-            'Invalid decoded frame image': self.translator.t("gui.compare.error_invalid_image"),
-            'No FFmpeg frame timestamp within 60 seconds': self.translator.t("gui.compare.error_timestamp_timeout"),
-            'Video inspection exceeded 60 seconds': self.translator.t("gui.compare.error_inspection_timeout"),
-            'No decoded video frames': self.translator.t("gui.compare.error_no_frames"),
-            'Invalid FFmpeg video pipe header': self.translator.t("gui.compare.error_invalid_pipe"),
-            'Unsupported FFmpeg video pipe dimensions': self.translator.t("gui.compare.error_invalid_dimensions"),
-            'Incomplete FFmpeg video frame': self.translator.t("gui.compare.error_incomplete_frame"),
-            'Invalid FFmpeg video frame': self.translator.t("gui.compare.error_invalid_frame"),
-            'No decoded video frame': self.translator.t("gui.compare.error_no_frame"),
-            'No timestamped preview frame': self.translator.t("gui.compare.error_no_preview"),
-            'No video frames at the requested position': self.translator.t("gui.compare.error_no_position_frame"),
-            'Invalid video timing metadata': self.translator.t("gui.compare.error_invalid_timing"),
-            'Video duration and frame rate must be positive': self.translator.t("gui.compare.error_invalid_duration"),
+            'FFmpeg video decoding cannot keep up with playback': self.translator.t(Text(en='FFmpeg video decoding cannot keep up with playback', zh_cn='FFmpeg 解码速度无法跟上播放。')),
+            'Cannot open PCM audio output': self.translator.t(Text(en='Cannot open PCM audio output', zh_cn='无法打开 PCM 音频输出。')),
+            'Cannot write PCM audio output': self.translator.t(Text(en='Cannot write PCM audio output', zh_cn='无法写入 PCM 音频输出。')),
+            'Invalid decoded frame image': self.translator.t(Text(en='Invalid decoded frame image', zh_cn='解码后的帧图像无效。')),
+            'No FFmpeg frame timestamp within 60 seconds': self.translator.t(Text(en='No FFmpeg frame timestamp within 60 seconds', zh_cn='60 秒内未收到 FFmpeg 帧时间戳。')),
+            'Video inspection exceeded 60 seconds': self.translator.t(Text(en='Video inspection exceeded 60 seconds', zh_cn='视频检查超过 60 秒。')),
+            'No decoded video frames': self.translator.t(Text(en='No decoded video frames', zh_cn='未解码出视频帧。')),
+            'Invalid FFmpeg video pipe header': self.translator.t(Text(en='Invalid FFmpeg video pipe header', zh_cn='FFmpeg 视频管道头部无效。')),
+            'Unsupported FFmpeg video pipe dimensions': self.translator.t(Text(en='Unsupported FFmpeg video pipe dimensions', zh_cn='FFmpeg 视频管道尺寸不受支持。')),
+            'Incomplete FFmpeg video frame': self.translator.t(Text(en='Incomplete FFmpeg video frame', zh_cn='FFmpeg 视频帧不完整。')),
+            'Invalid FFmpeg video frame': self.translator.t(Text(en='Invalid FFmpeg video frame', zh_cn='FFmpeg 视频帧无效。')),
+            'No decoded video frame': self.translator.t(Text(en='No decoded video frame', zh_cn='未解码出视频帧。')),
+            'No timestamped preview frame': self.translator.t(Text(en='No timestamped preview frame', zh_cn='未获得带时间戳的预览帧。')),
+            'No video frames at the requested position': self.translator.t(Text(en='No video frames at the requested position', zh_cn='请求位置没有视频帧。')),
+            'Invalid video timing metadata': self.translator.t(Text(en='Invalid video timing metadata', zh_cn='视频时间信息无效。')),
+            'Video duration and frame rate must be positive': self.translator.t(Text(en='Video duration and frame rate must be positive', zh_cn='视频时长和帧率必须大于零。')),
         }
         if error in error_keys:
             error = error_keys[error]
         elif error.startswith("No video stream: "):
-            error = self.translator.t("gui.compare.no_video", file=error.removeprefix("No video stream: "))
+            error = self.translator.t(Text(en='No video stream: {file}', zh_cn='没有视频流：{file}'), file=error.removeprefix("No video stream: "))
         elif error.startswith("No timestamped video frames: "):
-            error = self.translator.t("gui.compare.no_timestamps", file=error.removeprefix("No timestamped video frames: "))
+            error = self.translator.t(Text(en='No timestamped video frames: {file}', zh_cn='视频帧没有时间戳：{file}'), file=error.removeprefix("No timestamped video frames: "))
         self._invalidate()
         self.preview_timer.stop()
         self.playback.stop()
         self.phase = ComparisonPhase.ERROR
-        self.status.setText(self.translator.t("gui.compare.error", error=error))
+        self.status.setText(self.translator.t(COMPARE_ERROR, error=error))
         self._update_controls()
 
     def _update_shortcuts(self, *_args: object) -> None:
@@ -492,9 +553,9 @@ class ComparisonWindow(QWidget):
         for button in (self.previous_button, self.next_button, self.offset_previous, self.offset_next):
             button.setEnabled(stepping)
         self.offset.setEnabled(self.media is not None and self.phase != ComparisonPhase.CLOSED)
-        self.play_button.setText(self.translator.t("gui.compare.pause")
+        self.play_button.setText(self.translator.t(Text(en='Pause · Space', zh_cn='暂停 · Space'))
                                  if self.phase == ComparisonPhase.PLAYING
-                                 else self.translator.t("gui.compare.play"))
+                                 else self.translator.t(Text(en='Play · Space', zh_cn='播放 · Space')))
         if timeline is not None and timeline.available and self.phase != ComparisonPhase.SCRUBBING:
             self.slider.blockSignals(True)
             self.slider.setRange(round(timeline.start * 1000), round(timeline.end * 1000))
@@ -505,7 +566,7 @@ class ComparisonWindow(QWidget):
     def _update_labels(self) -> None:
         for side, pane in enumerate(self.panes):
             if self.media is None:
-                pane.placeholder.setText(self.translator.t("gui.compare.waiting_other", side="AB"[1 - side]) if self.paths[side] is not None else self.translator.t("gui.compare.placeholder"))
+                pane.placeholder.setText(self.translator.t(COMPARE_WAITING_OTHER, side="AB"[1 - side]) if self.paths[side] is not None else self.translator.t(COMPARE_PLACEHOLDER))
             path = self.paths[side]
             stamp = self.timestamps[side]
             parts = ["AB"[side], path.name if path else "—"]
@@ -522,11 +583,11 @@ class ComparisonWindow(QWidget):
         self.time_label.setText(f"{display_time(self.position)} / {end}")
         if self.paths[0] is not None and self.paths[1] is not None:
             self.setWindowTitle(
-                f"{self.translator.t('gui.compare.title')} · "
+                f"{self.translator.t(COMPARE_TITLE)} · "
                 f"{self.paths[0].name} ↔ {self.paths[1].name}"
             )
         else:
-            self.setWindowTitle(self.translator.t("gui.compare.title"))
+            self.setWindowTitle(self.translator.t(COMPARE_TITLE))
 
     def _playback_frame(self, side: int, image: object, timestamp: float) -> None:
         if self.phase == ComparisonPhase.PLAYING and isinstance(image, QImage):
@@ -565,11 +626,11 @@ class ComparisonWindow(QWidget):
         if self.position >= timeline.end - 0.001:
             self.position = timeline.start
         self.phase = ComparisonPhase.PLAYING
-        self.status.setText(self.translator.t("gui.compare.playing"))
+        self.status.setText(self.translator.t(Text(en='Synchronized playback', zh_cn='同步播放中')))
         try:
             self.playback.start(self.media, self.position, timeline.offset, self.audio.currentIndex())
             if not self.playback.audio_available:
-                self.status.setText(self.translator.t("gui.compare.audio_unavailable"))
+                self.status.setText(self.translator.t(Text(en='Synchronized playback · no audio output device is available.', zh_cn='同步播放中 · 没有可用的音频输出设备。')))
         except Exception as exc:
             self._decode_error(str(exc))
         self._update_controls()
@@ -604,7 +665,7 @@ class ComparisonWindow(QWidget):
         position, offset = self.position, self.offset.value() / 1000
         self._resume_after_seek = resume
         self.phase = ComparisonPhase.SEEKING
-        self.status.setText(self.translator.t("gui.compare.aligning"))
+        self.status.setText(self.translator.t(Text(en='Decoding corresponding frames…', zh_cn='正在解码对应时间帧…')))
         self._update_controls()
         self._launch(lambda runner: decode_pair(media, position, offset, runner, side, direction),
                      lambda result: self._frames_ready(result, resume, side, direction))
@@ -625,8 +686,8 @@ class ComparisonWindow(QWidget):
         for index, image in enumerate(images):
             self.panes[index].show_frame(image)
         self.phase = ComparisonPhase.PAUSED
-        self.status.setText(self.translator.t("gui.compare.aligned") if self.precision.currentIndex() == 0
-                            else self.translator.t("gui.compare.normal_paused"))
+        self.status.setText(self.translator.t(Text(en='Paused · timestamp-aligned frames', zh_cn='已暂停 · 已按时间戳定位画面')) if self.precision.currentIndex() == 0
+                            else self.translator.t(Text(en='Paused · normal synchronization', zh_cn='已暂停 · 普通同步')))
         self._update_controls()
         self._update_labels()
         if resume:
@@ -654,7 +715,7 @@ class ComparisonWindow(QWidget):
             self._invalidate()
             self.playback.stop()
             self.phase = ComparisonPhase.PAUSED
-            self.status.setText(self.translator.t("gui.compare.no_overlap"))
+            self.status.setText(self.translator.t(Text(en='No common playback interval. Adjust the B offset.', zh_cn='没有共同播放区间，请调整 B 偏移。')))
             self._update_controls()
         else:
             self.seek(self.position)
@@ -664,7 +725,7 @@ class ComparisonWindow(QWidget):
         self._invalidate()
         self.playback.stop()
         self.phase = ComparisonPhase.SCRUBBING
-        self.status.setText(self.translator.t("gui.compare.scrubbing"))
+        self.status.setText(self.translator.t(COMPARE_SCRUBBING))
         self._update_controls()
 
     def _scrub_moved(self, value: int) -> None:
@@ -690,7 +751,7 @@ class ComparisonWindow(QWidget):
             position, offset = self.position, self.offset.value() / 1000
             self._resume_after_seek = resume
             self.phase = ComparisonPhase.SEEKING
-            self.status.setText(self.translator.t("gui.compare.scrubbing"))
+            self.status.setText(self.translator.t(COMPARE_SCRUBBING))
             self._launch(lambda runner: preview_pair(media, position, offset, runner),
                          lambda result: self._frames_ready(result, resume, 0, 0))
 

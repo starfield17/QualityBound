@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.config import parse_encode_workers, smart_policies_from_config
-from core.i18n import LanguageInfo, Translator
+from core.i18n import LANGUAGES, Text, Translator
 from core.models import (
     AnalysisProfileName,
     QualityUnreachablePolicy,
@@ -31,11 +31,79 @@ from core.smart import parse_analysis_profile_name
 from core.media import (
     PostEncodeAction,
     parse_post_encode_action,
-    post_encode_action_key,
 )
 from gui.qt_optionals import maybe_none
 from gui.icons import set_button_icon
 from gui.window_geometry import clamped_window_size
+
+from gui.options.encode_options_panel import TOOLTIP_ANALYSIS_PROFILE, VALUE_ANALYSIS_BALANCE, VALUE_ANALYSIS_FAST, VALUE_ANALYSIS_PRECISE
+from gui.power_action_dialog import post_encode_action_text, LABEL_POST_ENCODE_ACTION
+
+BUTTON_BROWSE_EXE = Text(
+    en='Pick File',
+    zh_cn='选择文件',
+)
+
+LABEL_FFMPEG = Text(
+    en='FFmpeg path',
+    zh_cn='FFmpeg 路径',
+)
+
+LABEL_FFPROBE = Text(
+    en='FFprobe path',
+    zh_cn='FFprobe 路径',
+)
+
+LABEL_WORKDIR = Text(
+    en='Temporary work folder',
+    zh_cn='临时工作目录',
+)
+
+MESSAGE_PATH_MISSING = Text(
+    en='Path does not exist.',
+    zh_cn='路径不存在。',
+)
+
+MESSAGE_PATH_NOT_DIRECTORY = Text(
+    en='Path is not a directory.',
+    zh_cn='路径不是目录。',
+)
+
+PLACEHOLDER_FFMPEG = Text(
+    en='Optional; blank uses project FFmpeg/ first.',
+    zh_cn='可选；留空优先使用项目 FFmpeg/。',
+)
+
+PLACEHOLDER_FFPROBE = Text(
+    en='Optional; blank uses project FFprobe/ first.',
+    zh_cn='可选；留空优先使用项目 FFprobe/。',
+)
+
+STATUS_RE_DETECT_PENDING = Text(
+    en='Re-detection starts after you press OK.',
+    zh_cn='按“确定”后开始重新检测。',
+)
+
+TOOLTIP_ENCODE_WORKERS = Text(
+    en='Maximum full-file encodes running at once (1-8). Smart analysis still finishes before full encoding. Higher values may contend for CPU, GPU memory, and hardware encoder sessions.',
+    zh_cn='最多同时运行 1–8 个完整文件编码。Smart 分析仍会在完整编码前全部完成；较高数值可能争用 CPU、GPU 显存和硬件编码会话。',
+)
+
+TOOLTIP_SIZE_BLOCKED_POLICY = Text(
+    en='Applies to candidate selection before the full encode. If the chosen policy cannot resolve a conflict and the required output is larger than the source, Smart skips the file. Actual full-encode size misses are preserved for a separate decision.',
+    zh_cn='用于完整编码前的候选选择。所选策略仍不能解决冲突且预测成片比片源大时，Smart 会跳过该文件。完整成片实际超限则保留文件并单独要求决定。',
+)
+
+TOOLTIP_SKIPPED_OUTPUT_POLICY = Text(
+    en='Applies to Smart-analysis skips, including predicted oversize and manual Skip choices. Runs after executable files finish even when other items still need a decision. planning skips and discarded actual-size misses are excluded.',
+    zh_cn='适用于 Smart 分析跳过，包括预测过大及人工选择跳过。可编码文件完成后处理，不受其他待决定项阻塞；不适用于 planning 跳过或丢弃实际体积超限成片。',
+)
+
+TOOLTIP_WORKDIR = Text(
+    en='Temporary files and logs are written here. Published videos go to the output folder.',
+    zh_cn='临时文件和日志写入此处；发布视频写入输出目录。',
+)
+
 
 class SettingsDialog(QDialog):
     def __init__(
@@ -43,15 +111,11 @@ class SettingsDialog(QDialog):
         tr: Translator,
         settings: dict[str, object],
         parent: QWidget | None = None,
-        languages: list[LanguageInfo] | None = None,
     ) -> None:
         super().__init__(parent)
         self.translator = tr
         self.redetect_requested = False
-        self._languages = languages or [
-            LanguageInfo("en", "English"),
-            LanguageInfo("zh_cn", "简体中文"),
-        ]
+        self._languages = LANGUAGES
         self._build_ui()
         self._load_settings(settings)
         self.apply_translations(tr)
@@ -222,36 +286,36 @@ class SettingsDialog(QDialog):
             return None
         path = Path(value).expanduser()
         if not path.exists():
-            return None if expect_directory else self.translator.t("gui.message.path_missing")
+            return None if expect_directory else self.translator.t(MESSAGE_PATH_MISSING)
         if expect_directory and not path.is_dir():
-            return self.translator.t("gui.message.path_not_directory")
+            return self.translator.t(MESSAGE_PATH_NOT_DIRECTORY)
         if not expect_directory and not path.is_file():
-            return self.translator.t("gui.message.path_missing")
+            return self.translator.t(MESSAGE_PATH_MISSING)
         return None
 
     def _check_paths(self) -> None:
         problems: list[str] = []
         workdir_problem = self._path_problem(self.workdir_edit.text(), expect_directory=True)
         if workdir_problem:
-            problems.append(f"{self.translator.t('gui.label.workdir')}: {workdir_problem}")
+            problems.append(f"{self.translator.t(LABEL_WORKDIR)}: {workdir_problem}")
         ffmpeg_text = self.ffmpeg_edit.text().strip()
         if ffmpeg_text:
             ffmpeg_problem = self._path_problem(ffmpeg_text, expect_directory=False)
             if ffmpeg_problem:
                 problems.append(
-                    f"{self.translator.t('gui.label.ffmpeg')}: "
-                    f"{self.translator.t('gui.message.ffmpeg_not_file')}"
+                    f"{self.translator.t(LABEL_FFMPEG)}: "
+                    f"{self.translator.t(Text(en='FFmpeg path is not a file.', zh_cn='FFmpeg 路径不是文件。'))}"
                 )
         ffprobe_text = self.ffprobe_edit.text().strip()
         if ffprobe_text:
             ffprobe_problem = self._path_problem(ffprobe_text, expect_directory=False)
             if ffprobe_problem:
                 problems.append(
-                    f"{self.translator.t('gui.label.ffprobe')}: "
-                    f"{self.translator.t('gui.message.ffprobe_not_file')}"
+                    f"{self.translator.t(LABEL_FFPROBE)}: "
+                    f"{self.translator.t(Text(en='FFprobe path is not a file.', zh_cn='FFprobe 路径不是文件。'))}"
                 )
         self.path_status_label.setText(
-            "\n".join(problems) if problems else self.translator.t("gui.status.paths_ok")
+            "\n".join(problems) if problems else self.translator.t(Text(en='Paths look usable.', zh_cn='路径可用。'))
         )
         self.path_status_label.setProperty("invalid", bool(problems))
         self.path_status_label.style().unpolish(self.path_status_label)
@@ -304,110 +368,110 @@ class SettingsDialog(QDialog):
 
     def apply_translations(self, tr: Translator) -> None:
         self.translator = tr
-        self.setWindowTitle(self.translator.t("gui.window.settings"))
-        self.queue_group.setTitle(self.translator.t("gui.group.queue_settings"))
-        self.toolchain_group.setTitle(self.translator.t("gui.group.toolchain"))
-        self.language_label.setText(self.translator.t("gui.label.language"))
-        self.workdir_label.setText(self.translator.t("gui.label.workdir"))
-        self.workdir_label.setToolTip(self.translator.t("gui.tooltip.workdir"))
-        self.workdir_edit.setToolTip(self.translator.t("gui.tooltip.workdir"))
-        self.ffmpeg_label.setText(self.translator.t("gui.label.ffmpeg"))
-        self.ffprobe_label.setText(self.translator.t("gui.label.ffprobe"))
-        self.log_level_label.setText(self.translator.t("gui.label.log_level"))
+        self.setWindowTitle(self.translator.t(Text(en='Settings', zh_cn='设置')))
+        self.queue_group.setTitle(self.translator.t(Text(en='Queue and output', zh_cn='队列与输出')))
+        self.toolchain_group.setTitle(self.translator.t(Text(en='FFmpeg toolchain', zh_cn='FFmpeg 工具链')))
+        self.language_label.setText(self.translator.t(Text(en='Language', zh_cn='语言')))
+        self.workdir_label.setText(self.translator.t(LABEL_WORKDIR))
+        self.workdir_label.setToolTip(self.translator.t(TOOLTIP_WORKDIR))
+        self.workdir_edit.setToolTip(self.translator.t(TOOLTIP_WORKDIR))
+        self.ffmpeg_label.setText(self.translator.t(LABEL_FFMPEG))
+        self.ffprobe_label.setText(self.translator.t(LABEL_FFPROBE))
+        self.log_level_label.setText(self.translator.t(Text(en='Log level', zh_cn='日志级别')))
         self.log_level_combo.setItemText(
             self.log_level_combo.findData("info"),
-            self.translator.t("gui.value.log_info"),
+            self.translator.t(Text(en='Info', zh_cn='信息')),
         )
         self.log_level_combo.setItemText(
             self.log_level_combo.findData("debug"),
-            self.translator.t("gui.value.log_debug"),
+            self.translator.t(Text(en='Debug', zh_cn='调试')),
         )
-        self.encode_workers_label.setText(self.translator.t("gui.label.encode_workers"))
-        encode_workers_tooltip = self.translator.t("gui.tooltip.encode_workers")
+        self.encode_workers_label.setText(self.translator.t(Text(en='Concurrent full encodes', zh_cn='同时进行的完整编码数')))
+        encode_workers_tooltip = self.translator.t(TOOLTIP_ENCODE_WORKERS)
         self.encode_workers_label.setToolTip(encode_workers_tooltip)
         self.encode_workers_spin.setToolTip(encode_workers_tooltip)
-        self.post_encode_label.setText(self.translator.t("gui.label.post_encode_action"))
-        self.desktop_notifications_check.setText(self.translator.t("gui.label.desktop_notifications"))
+        self.post_encode_label.setText(self.translator.t(LABEL_POST_ENCODE_ACTION))
+        self.desktop_notifications_check.setText(self.translator.t(Text(en='Send system notification when queue finishes', zh_cn='队列全部完成后发送桌面通知')))
         for action in PostEncodeAction:
             idx = self.post_encode_combo.findData(action.value)
             if idx >= 0:
-                self.post_encode_combo.setItemText(idx, self.translator.t(post_encode_action_key(action)))
-        self.policy_group.setTitle(self.translator.t("gui.group.smart_policies"))
-        self.size_blocked_policy_label.setText(self.translator.t("gui.label.size_blocked_policy"))
-        self.quality_unreachable_policy_label.setText(self.translator.t("gui.label.quality_unreachable_policy"))
+                self.post_encode_combo.setItemText(idx, self.translator.t(post_encode_action_text(action)))
+        self.policy_group.setTitle(self.translator.t(Text(en='When Smart analysis cannot meet both targets', zh_cn='Smart 分析无法同时满足时')))
+        self.size_blocked_policy_label.setText(self.translator.t(Text(en='If Smart analysis predicts VMAF needs a larger file', zh_cn='Smart 分析预测达到 VMAF 需要更大文件时')))
+        self.quality_unreachable_policy_label.setText(self.translator.t(Text(en='If tested candidates miss the VMAF target', zh_cn='已测试候选未达到 VMAF 目标时')))
         self.size_blocked_policy_combo.setItemText(
             self.size_blocked_policy_combo.findData(SizeBlockedPolicy.RELAX_SIZE.value),
-            self.translator.t("gui.value.size_blocked_relax_size"),
+            self.translator.t(Text(en='Allow a larger file, up to source size', zh_cn='放宽体积上限，最多到片源大小')),
         )
         self.size_blocked_policy_combo.setItemText(
             self.size_blocked_policy_combo.findData(SizeBlockedPolicy.RELAX_QUALITY.value),
-            self.translator.t("gui.value.size_blocked_relax_quality"),
+            self.translator.t(Text(en='Lower the VMAF target', zh_cn='降低 VMAF 门槛')),
         )
         self.size_blocked_policy_combo.setItemText(
             self.size_blocked_policy_combo.findData(SizeBlockedPolicy.ASK.value),
-            self.translator.t("gui.value.size_blocked_ask"),
+            self.translator.t(Text(en='Ask every time', zh_cn='每次询问')),
         )
         self.quality_unreachable_policy_combo.setItemText(
             self.quality_unreachable_policy_combo.findData(QualityUnreachablePolicy.SKIP.value),
-            self.translator.t("gui.value.quality_unreachable_skip"),
+            self.translator.t(Text(en='Skip the file', zh_cn='跳过该文件')),
         )
         self.quality_unreachable_policy_combo.setItemText(
             self.quality_unreachable_policy_combo.findData(QualityUnreachablePolicy.ASK.value),
-            self.translator.t("gui.value.quality_unreachable_ask"),
+            self.translator.t(Text(en='Ask every time', zh_cn='每次询问')),
         )
-        self.skipped_output_policy_label.setText(self.translator.t("gui.label.skipped_output_policy"))
+        self.skipped_output_policy_label.setText(self.translator.t(Text(en='When Smart analysis skips a file', zh_cn='Smart 分析跳过文件时')))
         self.skipped_output_policy_combo.setItemText(
             self.skipped_output_policy_combo.findData(SkippedOutputPolicy.COPY.value),
-            self.translator.t("gui.value.skipped_output_copy"),
+            self.translator.t(Text(en='Copy the source to the planned output path', zh_cn='把片源复制到预定输出位置')),
         )
         self.skipped_output_policy_combo.setItemText(
             self.skipped_output_policy_combo.findData(SkippedOutputPolicy.ASK.value),
-            self.translator.t("gui.value.skipped_output_ask"),
+            self.translator.t(Text(en='Ask after executable files finish', zh_cn='可编码文件完成后询问')),
         )
         self.skipped_output_policy_combo.setItemText(
             self.skipped_output_policy_combo.findData(SkippedOutputPolicy.IGNORE.value),
-            self.translator.t("gui.value.skipped_output_ignore"),
+            self.translator.t(Text(en='Leave Smart-skipped files unchanged', zh_cn='不处理 Smart 分析跳过的文件')),
         )
-        self.analysis_group.setTitle(self.translator.t("gui.group.analysis_scan"))
-        self.analysis_profile_label.setText(self.translator.t("gui.label.analysis_active_profile"))
+        self.analysis_group.setTitle(self.translator.t(Text(en='Analysis effort', zh_cn='分析强度')))
+        self.analysis_profile_label.setText(self.translator.t(Text(en='Active effort', zh_cn='当前强度')))
         self.analysis_profile_combo.setItemText(
             self.analysis_profile_combo.findData(AnalysisProfileName.FAST.value),
-            self.translator.t("gui.value.analysis_fast"),
+            self.translator.t(VALUE_ANALYSIS_FAST),
         )
         self.analysis_profile_combo.setItemText(
             self.analysis_profile_combo.findData(AnalysisProfileName.BALANCE.value),
-            self.translator.t("gui.value.analysis_balance"),
+            self.translator.t(VALUE_ANALYSIS_BALANCE),
         )
         self.analysis_profile_combo.setItemText(
             self.analysis_profile_combo.findData(AnalysisProfileName.PRECISE.value),
-            self.translator.t("gui.value.analysis_precise"),
+            self.translator.t(VALUE_ANALYSIS_PRECISE),
         )
-        self.workdir_button.setText(self.translator.t("gui.button.browse_dir"))
-        self.ffmpeg_button.setText(self.translator.t("gui.button.browse_exe"))
-        self.ffprobe_button.setText(self.translator.t("gui.button.browse_exe"))
-        self.redetect_button.setText(self.translator.t("gui.button.redetect_encoders"))
-        self.check_paths_button.setText(self.translator.t("gui.button.check_paths"))
+        self.workdir_button.setText(self.translator.t(Text(en='Pick Dir', zh_cn='选择目录')))
+        self.ffmpeg_button.setText(self.translator.t(BUTTON_BROWSE_EXE))
+        self.ffprobe_button.setText(self.translator.t(BUTTON_BROWSE_EXE))
+        self.redetect_button.setText(self.translator.t(Text(en='Re-detect encoders', zh_cn='重新检测编码器')))
+        self.check_paths_button.setText(self.translator.t(Text(en='Check paths', zh_cn='检查路径')))
         if self.redetect_requested:
-            self.detection_hint_label.setText(self.translator.t("gui.status.re_detect_pending"))
-        self.ffmpeg_edit.setPlaceholderText(self.translator.t("gui.placeholder.ffmpeg"))
-        self.ffprobe_edit.setPlaceholderText(self.translator.t("gui.placeholder.ffprobe"))
-        self.ffmpeg_edit.setToolTip(self.translator.t("gui.placeholder.ffmpeg"))
-        self.ffprobe_edit.setToolTip(self.translator.t("gui.placeholder.ffprobe"))
-        size_policy_tooltip = self.translator.t("gui.tooltip.size_blocked_policy")
+            self.detection_hint_label.setText(self.translator.t(STATUS_RE_DETECT_PENDING))
+        self.ffmpeg_edit.setPlaceholderText(self.translator.t(PLACEHOLDER_FFMPEG))
+        self.ffprobe_edit.setPlaceholderText(self.translator.t(PLACEHOLDER_FFPROBE))
+        self.ffmpeg_edit.setToolTip(self.translator.t(PLACEHOLDER_FFMPEG))
+        self.ffprobe_edit.setToolTip(self.translator.t(PLACEHOLDER_FFPROBE))
+        size_policy_tooltip = self.translator.t(TOOLTIP_SIZE_BLOCKED_POLICY)
         self.size_blocked_policy_label.setToolTip(size_policy_tooltip)
         self.size_blocked_policy_combo.setToolTip(size_policy_tooltip)
-        skipped_policy_tooltip = self.translator.t("gui.tooltip.skipped_output_policy")
+        skipped_policy_tooltip = self.translator.t(TOOLTIP_SKIPPED_OUTPUT_POLICY)
         self.skipped_output_policy_label.setToolTip(skipped_policy_tooltip)
         self.skipped_output_policy_combo.setToolTip(skipped_policy_tooltip)
-        self.analysis_profile_combo.setToolTip(self.translator.t("gui.tooltip.analysis_profile"))
+        self.analysis_profile_combo.setToolTip(self.translator.t(TOOLTIP_ANALYSIS_PROFILE))
         ok_button = maybe_none(self.button_box.button(QDialogButtonBox.StandardButton.Ok))
         cancel_button = maybe_none(self.button_box.button(QDialogButtonBox.StandardButton.Cancel))
         if ok_button is not None:
-            ok_button.setText(self.translator.t("gui.button.ok"))
+            ok_button.setText(self.translator.t(Text(en='OK', zh_cn='确定')))
         if cancel_button is not None:
-            cancel_button.setText(self.translator.t("gui.button.cancel"))
+            cancel_button.setText(self.translator.t(Text(en='Cancel', zh_cn='取消')))
         if self.detection_hint_label.isVisible():
-            self.detection_hint_label.setText(self.translator.t("gui.status.re_detect_pending"))
+            self.detection_hint_label.setText(self.translator.t(STATUS_RE_DETECT_PENDING))
         pairs = (
             (self.language_label, self.language_combo),
             (self.workdir_label, self.workdir_edit),
@@ -446,24 +510,24 @@ class SettingsDialog(QDialog):
         }
 
     def _browse_workdir(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, self.translator.t("gui.dialog.select_workdir"))
+        path = QFileDialog.getExistingDirectory(self, self.translator.t(Text(en='Select workdir', zh_cn='选择工作目录')))
         if path:
             self.workdir_edit.setText(path)
             self._check_paths()
 
     def _browse_ffmpeg(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, self.translator.t("gui.dialog.select_ffmpeg"))
+        path, _ = QFileDialog.getOpenFileName(self, self.translator.t(Text(en='Select ffmpeg executable', zh_cn='选择 ffmpeg 可执行文件')))
         if path:
             self.ffmpeg_edit.setText(path)
             self._check_paths()
 
     def _browse_ffprobe(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, self.translator.t("gui.dialog.select_ffprobe"))
+        path, _ = QFileDialog.getOpenFileName(self, self.translator.t(Text(en='Select ffprobe executable', zh_cn='选择 ffprobe 可执行文件')))
         if path:
             self.ffprobe_edit.setText(path)
             self._check_paths()
 
     def _request_redetect(self) -> None:
         self.redetect_requested = True
-        self.detection_hint_label.setText(self.translator.t("gui.status.re_detect_pending"))
+        self.detection_hint_label.setText(self.translator.t(STATUS_RE_DETECT_PENDING))
         self.detection_hint_label.setVisible(True)

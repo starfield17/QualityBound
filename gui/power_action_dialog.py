@@ -12,8 +12,26 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.i18n import Translator
-from core.media import PostEncodeAction, post_encode_action_key
+from core.i18n import Text, Translator
+from core.media import PostEncodeAction
+
+
+LABEL_POST_ENCODE_ACTION = Text(
+    en='After queue',
+    zh_cn='队列结束后',
+)
+
+
+POST_ENCODE_ACTION_TEXT: dict[PostEncodeAction, Text] = {
+    PostEncodeAction.DO_NOTHING: Text(en='Do nothing', zh_cn='无操作'),
+    PostEncodeAction.SLEEP: Text(en='Sleep system', zh_cn='系统睡眠'),
+    PostEncodeAction.SHUTDOWN: Text(en='Shut down system', zh_cn='系统关机'),
+    PostEncodeAction.QUIT: Text(en='Quit app', zh_cn='退出程序'),
+}
+
+
+def post_encode_action_text(action: PostEncodeAction) -> Text:
+    return POST_ENCODE_ACTION_TEXT.get(action, POST_ENCODE_ACTION_TEXT[PostEncodeAction.DO_NOTHING])
 
 
 class PowerActionCountdownDialog(QDialog):
@@ -30,7 +48,7 @@ class PowerActionCountdownDialog(QDialog):
         self.remaining_sec = timeout_sec
         self.total_sec = timeout_sec
 
-        self.setWindowTitle(self.translator.t("gui.power.title"))
+        self.setWindowTitle(self.translator.t(Text(en='Action on Queue Completion', zh_cn='转码完成自动操作')))
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
         self.setModal(True)
         self.resize(440, 180)
@@ -65,9 +83,9 @@ class PowerActionCountdownDialog(QDialog):
         button_layout = QHBoxLayout()
         button_layout.setSpacing(12)
 
-        self.cancel_button = QPushButton(self.translator.t("gui.button.cancel"))
+        self.cancel_button = QPushButton(self.translator.t(Text(en='Cancel', zh_cn='取消')))
         self.cancel_button.setDefault(True)
-        self.execute_button = QPushButton(self.translator.t("gui.power.execute_now"))
+        self.execute_button = QPushButton(self.translator.t(Text(en='Execute Now', zh_cn='立即执行')))
 
         button_layout.addStretch(1)
         button_layout.addWidget(self.cancel_button)
@@ -83,9 +101,9 @@ class PowerActionCountdownDialog(QDialog):
         self._update_text()
 
     def _update_text(self) -> None:
-        action_name = self.translator.t(post_encode_action_key(self.action))
+        action_name = self.translator.t(post_encode_action_text(self.action))
         self.message_label.setText(
-            self.translator.t("gui.power.countdown_message", action=action_name, seconds=self.remaining_sec)
+            self.translator.t(Text(en='Batch encoding finished. The system will {action} in {seconds} seconds.', zh_cn='批处理转码已完成。系统将在 {seconds} 秒后自动执行【{action}】。'), action=action_name, seconds=self.remaining_sec)
         )
         self.progress_bar.setValue(self.remaining_sec)
 

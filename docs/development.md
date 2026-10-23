@@ -174,17 +174,31 @@ rather than treating those deletions as lost coverage.
 
 ## Translations
 
-Built-in language packs live in `config/i18n/`. English is the complete
-baseline and every built-in pack covers the same keys. User language packs are
-partial JSON overrides placed in the writable `translations/` directory.
+Translations are immutable `Text(en=..., zh_cn=...)` values from `core.i18n`.
+Short text is declared at the call site; long or reused text is a named constant
+in the module that owns the behavior. Shared functional owners export text for
+consumers of the same concept. There are no keys, catalogs or registration.
 
-In a source checkout that directory is `<repo>/translations/`. In the macOS app
-it is `~/Library/Application Support/QualityBound/translations/`. A language
-pack must provide a string `language.name`; invalid entries are skipped with a
-startup diagnostic and missing entries fall back to English.
+```python
+from core.i18n import Text, Translator
 
-The QualityBound product name is not translated. Locale packs use `QualityBound`
-for `app.title`.
+tr = Translator("zh_cn")
+print(tr.t(Text(en="Plan items: {count}", zh_cn="计划项目：{count}"), count=3))
+```
+
+Both languages are required. Keep declarations literal and supply values as
+format arguments to `Translator.t()`, so language selection happens before
+formatting. The source validation test checks language completeness, valid
+named placeholders and placeholder parity without importing GUI modules.
+Each translator holds its own language; existing GUI refresh methods re-render
+visible controls when the language changes. Already emitted log lines retain
+the text recorded at the time of the event.
+
+Supported locale codes remain `en` and `zh_cn`. Saved unknown locale codes fall
+back to English. External JSON language packs and overrides are no longer
+supported; legacy files are left on disk but are neither read nor created.
+Adding a language requires extending `Text`, the language list and declarations
+in their owning modules. The QualityBound product name is not translated.
 
 ## Validation
 
@@ -297,9 +311,10 @@ for `test/` and `scripts/` — is recorded with its reason in the same section.
 `pyproject.toml` turns off six strict rules: `reportMissingTypeArgument`,
 `reportUnknownArgumentType`, `reportUnknownLambdaType`, `reportUnknownMemberType`,
 `reportUnknownParameterType`, `reportUnknownVariableType`. Measured over the current
-scope (`core`, `cli`, `gui`, `main.py`) they hold back 568 diagnostics: 468 in
+scope (`core`, `cli`, `gui`, `main.py`) they hold back 559 diagnostics: 459 in
 `core`, 89 in `gui`, 11 in `cli`. The v3.6.2 GUI maintenance pass narrowed the
-capability-cache boundary and reduced the previous 588-diagnostic baseline;
+capability-cache boundary from 588 diagnostics to 568; the v3.7.0 replacement
+of JSON translation catalogs with typed text values removed nine more;
 the six disabled rules and their checked scopes remain unchanged. The dominant pattern is capability snapshots,
 preset documents and analysis receipts travelling as `dict[str, object]` or
 JSON-decoded mappings, so the checker cannot name the types that flow through them.

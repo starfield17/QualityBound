@@ -27,7 +27,7 @@ from core.ffmpeg import (
     available_backends_for_codec,
     preset_choices_from_capabilities,
 )
-from core.i18n import Translator
+from core.i18n import Text, Translator
 from core.models import (
     AnalysisProfileName,
     AudioMode,
@@ -42,6 +42,98 @@ from core.models import (
 )
 from core.smart import analysis_profiles_from_config, parse_analysis_profile_name, resolve_max_output_ratio
 from gui.qt_optionals import maybe_none
+
+
+LOG_DECODE_ACCELERATION_RESET = Text(
+    en='VideoToolbox decoding is unavailable in the selected FFmpeg build; reset to software decoding.',
+    zh_cn='当前 FFmpeg 不支持 VideoToolbox 解码，已回退到软件解码。',
+)
+
+TOOLTIP_DECODE_ACCELERATION_UNAVAILABLE = Text(
+    en='VideoToolbox decoding is unavailable in the selected FFmpeg build; software decoding is used.',
+    zh_cn='当前 FFmpeg 不支持 VideoToolbox 解码，将使用软件解码。',
+)
+
+
+LABEL_MIN_VMAF = Text(
+    en='VMAF v1 target',
+    zh_cn='VMAF v1 目标值',
+)
+
+LABEL_RATIO = Text(
+    en='Size ratio',
+    zh_cn='体积比例',
+)
+
+MESSAGE_ENCODER_SELECTION_PENDING = Text(
+    en='The selected encoder or preset has not been verified. Wait for detection or choose an available encoder.',
+    zh_cn='所选编码器或预设尚未验证。请等待检测完成或选择可用编码器。',
+)
+
+MESSAGE_INVALID_AUDIO_BITRATE = Text(
+    en='Enter a positive audio bitrate, for example 128k or 0.192M.',
+    zh_cn='请输入正数音频码率，例如 128k 或 0.192M。',
+)
+
+MESSAGE_INVALID_RATIO = Text(
+    en='Enter a finite number greater than 0, or leave blank to use the default ratio.',
+    zh_cn='请输入大于 0 的有限数值，或留空使用默认比例。',
+)
+
+TOOLTIP_ANALYSIS_PROFILE = Text(
+    en='Controls Smart analysis confidence through timeline scouting, difficult-content coverage, and independent verification.',
+    zh_cn='通过全片侦察、困难内容覆盖与独立验证控制 Smart 分析置信度。',
+)
+
+TOOLTIP_ENCODER_PRESET_UNAVAILABLE = Text(
+    en='Preset choices are unavailable for the current encoder; using the encoder default preset.',
+    zh_cn='当前编码器无法提供可靠的预设列表，将使用编码器默认预设。',
+)
+
+TOOLTIP_MEAN_VMAF_V2 = Text(
+    en='Time-weighted mean target; each shot mean must be at least target minus 4, and the worst one-second score at least target minus 8.',
+    zh_cn='按时长加权的整片平均目标；每镜头平均不低于目标减4，最差连续一秒不低于目标减8。',
+)
+
+TOOLTIP_MIN_VMAF = Text(
+    en="Minimum SMART quality score. Recommended: 90. It combines each sample's mean VMAF with its worst one-second period; higher values usually increase file size.",
+    zh_cn='最低 SMART 画质分数，推荐 90。它综合每个样本的平均 VMAF 与最差一秒画质；数值越高通常文件越大。',
+)
+
+TOOLTIP_RATIO = Text(
+    en='Output size as a fraction of the source. Used only in fixed-bitrate mode.',
+    zh_cn='输出体积占输入源的比例，仅在固定码率模式使用。',
+)
+
+TOOLTIP_SMART_UNAVAILABLE = Text(
+    en='Smart mode is unavailable because the selected FFmpeg cannot run libvmaf.',
+    zh_cn='所选 FFmpeg 无法运行 libvmaf，智能模式不可用。',
+)
+
+TOOLTIP_SMART_V2 = Text(
+    en='Per-shot bitrate allocation. Candidate search uses samples; the final output is fully scored. May take substantially longer.',
+    zh_cn='逐镜头分配码率，候选搜索使用样本，最终输出完整评分。运行时间可能显著增加。',
+)
+
+TOOLTIP_VIEWING_CONTEXT = Text(
+    en='The default uses the stricter high-fidelity quality assumption, including demanding large-display viewing for 4K sources. Choose Standard display only when that viewing condition matches your intended use.',
+    zh_cn='默认采用更严格的高保真画质假设，对 4K 片源也按高要求的大屏观看条件评估。仅当标准显示设备符合预期用途时才选择该选项。',
+)
+
+VALUE_ANALYSIS_BALANCE = Text(
+    en='Balance',
+    zh_cn='均衡',
+)
+
+VALUE_ANALYSIS_FAST = Text(
+    en='Fast',
+    zh_cn='快速',
+)
+
+VALUE_ANALYSIS_PRECISE = Text(
+    en='Precise',
+    zh_cn='精细',
+)
 
 
 EXPLICIT_BACKEND_ORDER: tuple[BackendChoice, ...] = (
@@ -153,31 +245,31 @@ class EncodeOptionsPanel(QWidget):
 
     def _codec_label(self, codec: CodecChoice) -> str:
         if codec == CodecChoice.HEVC:
-            return self.translator.t("gui.value.codec_hevc")
-        return self.translator.t("gui.value.codec_av1")
+            return self.translator.t(Text(en='HEVC', zh_cn='HEVC'))
+        return self.translator.t(Text(en='AV1', zh_cn='AV1'))
 
     def _container_label(self, container: ContainerChoice) -> str:
         if container == ContainerChoice.MKV:
-            return self.translator.t("gui.value.container_mkv")
-        return self.translator.t("gui.value.container_mp4")
+            return self.translator.t(Text(en='MKV', zh_cn='MKV'))
+        return self.translator.t(Text(en='MP4', zh_cn='MP4'))
 
     def _backend_label(self, backend: BackendChoice) -> str:
         if backend == BackendChoice.AUTO:
-            return self.translator.t("gui.value.backend_auto")
+            return self.translator.t(Text(en='Auto', zh_cn='自动'))
         if backend == BackendChoice.CPU:
-            return self.translator.t("gui.value.backend_cpu")
+            return self.translator.t(Text(en='CPU', zh_cn='CPU'))
         if backend == BackendChoice.NVENC:
-            return self.translator.t("gui.value.backend_nvenc")
+            return self.translator.t(Text(en='NVIDIA NVENC', zh_cn='NVIDIA NVENC'))
         if backend == BackendChoice.QSV:
-            return self.translator.t("gui.value.backend_qsv")
+            return self.translator.t(Text(en='Intel QSV', zh_cn='Intel QSV'))
         if backend == BackendChoice.AMF:
-            return self.translator.t("gui.value.backend_amf")
-        return self.translator.t("gui.value.backend_videotoolbox")
+            return self.translator.t(Text(en='AMD AMF', zh_cn='AMD AMF'))
+        return self.translator.t(Text(en='VideoToolbox', zh_cn='VideoToolbox'))
 
     def _audio_mode_label(self, mode: AudioMode) -> str:
         if mode == AudioMode.COPY:
-            return self.translator.t("gui.value.audio_copy")
-        return self.translator.t("gui.value.audio_aac")
+            return self.translator.t(Text(en='Copy (no re-encode)', zh_cn='复制（不重新编码）'))
+        return self.translator.t(Text(en='AAC', zh_cn='AAC'))
 
     def summary_text(self) -> str:
         codec = self._current_codec()
@@ -185,19 +277,19 @@ class EncodeOptionsPanel(QWidget):
         smart = mode_data == CompressionMode.SMART.value
         if smart:
             quality = self.translator.t(
-                "gui.summary.quality_floor", value=f"{self.min_vmaf_spin.value():.1f}"
+                Text(en='VMAF ≥ {value}', zh_cn='VMAF ≥ {value}'), value=f"{self.min_vmaf_spin.value():.1f}"
             )
             size = self.translator.t(
-                "gui.summary.size_ceiling", value=f"{self.max_output_ratio_spin.value():.0f}"
+                Text(en='≤ {value}% of source', zh_cn='≤ 源体积的 {value}%'), value=f"{self.max_output_ratio_spin.value():.0f}"
             )
         else:
             ratio = self.ratio_edit.text().strip() or "—"
-            quality = f"{self.translator.t('gui.label.ratio')} {ratio}"
+            quality = f"{self.translator.t(LABEL_RATIO)} {ratio}"
             size = "—"
         container = self._container_label(ContainerChoice(str(self.container_combo.currentData())))
         mode = self.compression_mode_combo.currentText()
         return self.translator.t(
-            "gui.summary.encoding_compact",
+            Text(en='{codec} · {mode} · {quality} · {size} · {container}', zh_cn='{codec} · {mode} · {quality} · {size} · {container}'),
             codec=self._codec_label(codec),
             mode=mode,
             quality=quality,
@@ -442,7 +534,7 @@ class EncodeOptionsPanel(QWidget):
             self.ratio_edit.style().unpolish(self.ratio_edit)
             self.ratio_edit.style().polish(self.ratio_edit)
         self.ratio_edit.setToolTip(
-            self.translator.t("gui.tooltip.ratio") if valid else self.translator.t("gui.message.invalid_ratio")
+            self.translator.t(TOOLTIP_RATIO) if valid else self.translator.t(MESSAGE_INVALID_RATIO)
         )
         return valid
 
@@ -451,23 +543,23 @@ class EncodeOptionsPanel(QWidget):
         match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)([kKmM]?)", text or "128k")
         valid = self.audio_mode_combo.currentData() != AudioMode.AAC.value or bool(match and math.isfinite(float(match.group(1))) and float(match.group(1)) > 0)
         self.audio_bitrate_edit.setProperty("invalid", not valid)
-        self.audio_bitrate_edit.setToolTip("" if valid else self.translator.t("gui.message.invalid_audio_bitrate"))
+        self.audio_bitrate_edit.setToolTip("" if valid else self.translator.t(MESSAGE_INVALID_AUDIO_BITRATE))
         self.audio_bitrate_edit.style().unpolish(self.audio_bitrate_edit)
         self.audio_bitrate_edit.style().polish(self.audio_bitrate_edit)
         return valid
 
     def read_options(self) -> EncodeOptions:
         if self._pending_backend is not None or self._pending_encoder_preset is not None:
-            raise ValueError(self.translator.t("gui.message.encoder_selection_pending"))
+            raise ValueError(self.translator.t(MESSAGE_ENCODER_SELECTION_PENDING))
         if not self._validate_audio_bitrate():
             self.audio_bitrate_edit.setFocus()
-            raise ValueError(self.translator.t("gui.message.invalid_audio_bitrate"))
+            raise ValueError(self.translator.t(MESSAGE_INVALID_AUDIO_BITRATE))
         if self.max_bitrate_spin.value() and self.max_bitrate_spin.value() < self.min_bitrate_spin.value():
-            raise ValueError(self.translator.t("gui.message.invalid_bitrate_range"))
+            raise ValueError(self.translator.t(Text(en='Maximum video bitrate must be at least the minimum, or unlimited.', zh_cn='最高视频码率不能小于最低码率，或请选择不限。')))
         ratio_text = self.ratio_edit.text().strip()
         if not self._validate_ratio():
             self.ratio_edit.setFocus()
-            raise ValueError(self.translator.t("gui.message.invalid_ratio"))
+            raise ValueError(self.translator.t(MESSAGE_INVALID_RATIO))
         fixed = self.compression_mode_combo.currentData() == CompressionMode.FIXED_BITRATE.value
         preset_value = self.encoder_preset_combo.currentData()
         encoder_preset = str(preset_value) if isinstance(preset_value, str) and preset_value else None
@@ -654,7 +746,7 @@ class EncodeOptionsPanel(QWidget):
     def set_translator(self, translator: Translator) -> None:
         with QSignalBlocker(self):
             self.translator = translator
-            self.codec_label.setText(self.translator.t("gui.label.codec"))
+            self.codec_label.setText(self.translator.t(Text(en='Codec', zh_cn='编码格式')))
             for codec in (CodecChoice.HEVC, CodecChoice.AV1):
                 index = self.codec_combo.findData(codec.value)
                 if index >= 0:
@@ -667,92 +759,92 @@ class EncodeOptionsPanel(QWidget):
                 index = self.audio_mode_combo.findData(audio_mode.value)
                 if index >= 0:
                     self.audio_mode_combo.setItemText(index, self._audio_mode_label(audio_mode))
-            self.compression_mode_label.setText(self.translator.t("gui.label.compression_mode"))
-            self.smart_algorithm_label.setText(self.translator.t("gui.label.smart_algorithm"))
-            self.smart_algorithm_combo.setItemText(0, self.translator.t("gui.value.smart_v1"))
-            self.smart_algorithm_combo.setItemText(1, self.translator.t("gui.value.smart_v2"))
-            self.smart_algorithm_combo.setToolTip(self.translator.t("gui.tooltip.smart_v2"))
+            self.compression_mode_label.setText(self.translator.t(Text(en='Compression mode', zh_cn='压缩模式')))
+            self.smart_algorithm_label.setText(self.translator.t(Text(en='Smart algorithm', zh_cn='Smart 算法')))
+            self.smart_algorithm_combo.setItemText(0, self.translator.t(Text(en='Smart v1 (default)', zh_cn='Smart v1（默认）')))
+            self.smart_algorithm_combo.setItemText(1, self.translator.t(Text(en='Smart v2 (experimental)', zh_cn='Smart v2（实验性）')))
+            self.smart_algorithm_combo.setToolTip(self.translator.t(TOOLTIP_SMART_V2))
             smart_mode_index = self.compression_mode_combo.findData(CompressionMode.SMART.value)
             fixed_mode_index = self.compression_mode_combo.findData(CompressionMode.FIXED_BITRATE.value)
             if smart_mode_index >= 0:
                 self.compression_mode_combo.setItemText(
                     smart_mode_index,
-                    self.translator.t("gui.value.compression_smart"),
+                    self.translator.t(Text(en='Smart (VMAF)', zh_cn='智能（VMAF）')),
                 )
             if fixed_mode_index >= 0:
                 self.compression_mode_combo.setItemText(
                     fixed_mode_index,
-                    self.translator.t("gui.value.compression_fixed"),
+                    self.translator.t(Text(en='Fixed bitrate', zh_cn='固定码率')),
                 )
-            self.backend_label.setText(self.translator.t("gui.label.backend"))
-            self.container_label.setText(self.translator.t("gui.label.container"))
-            self.ratio_label.setText(self.translator.t("gui.label.ratio"))
-            ratio_tooltip = self.translator.t("gui.tooltip.ratio")
+            self.backend_label.setText(self.translator.t(Text(en='Backend', zh_cn='后端')))
+            self.container_label.setText(self.translator.t(Text(en='Container', zh_cn='容器')))
+            self.ratio_label.setText(self.translator.t(LABEL_RATIO))
+            ratio_tooltip = self.translator.t(TOOLTIP_RATIO)
             self.ratio_label.setToolTip(ratio_tooltip)
             self.ratio_edit.setToolTip(ratio_tooltip)
-            self.min_vmaf_label.setText(self.translator.t("gui.label.min_vmaf"))
-            self.min_vmaf_label.setToolTip(self.translator.t("gui.tooltip.min_vmaf"))
-            self.min_vmaf_spin.setToolTip(self.translator.t("gui.tooltip.min_vmaf"))
-            self.max_output_ratio_label.setText(self.translator.t("gui.label.max_output_ratio"))
-            max_ratio_tooltip = self.translator.t("gui.tooltip.max_output_ratio")
+            self.min_vmaf_label.setText(self.translator.t(LABEL_MIN_VMAF))
+            self.min_vmaf_label.setToolTip(self.translator.t(TOOLTIP_MIN_VMAF))
+            self.min_vmaf_spin.setToolTip(self.translator.t(TOOLTIP_MIN_VMAF))
+            self.max_output_ratio_label.setText(self.translator.t(Text(en='Max output size', zh_cn='最大输出体积')))
+            max_ratio_tooltip = self.translator.t(Text(en='Maximum output size as a percentage of the source. Smart mode also uses this as the size ceiling.', zh_cn='输出体积占输入源的最大百分比。智能模式也把它作为体积上限。'))
             self.max_output_ratio_label.setToolTip(max_ratio_tooltip)
             self.max_output_ratio_spin.setToolTip(max_ratio_tooltip)
-            self.analysis_profile_label.setText(self.translator.t("gui.label.analysis_profile"))
+            self.analysis_profile_label.setText(self.translator.t(Text(en='Analysis effort', zh_cn='分析强度')))
             self.analysis_profile_combo.setItemText(
                 self.analysis_profile_combo.findData(AnalysisProfileName.FAST.value),
-                self.translator.t("gui.value.analysis_fast"),
+                self.translator.t(VALUE_ANALYSIS_FAST),
             )
             self.analysis_profile_combo.setItemText(
                 self.analysis_profile_combo.findData(AnalysisProfileName.BALANCE.value),
-                self.translator.t("gui.value.analysis_balance"),
+                self.translator.t(VALUE_ANALYSIS_BALANCE),
             )
             self.analysis_profile_combo.setItemText(
                 self.analysis_profile_combo.findData(AnalysisProfileName.PRECISE.value),
-                self.translator.t("gui.value.analysis_precise"),
+                self.translator.t(VALUE_ANALYSIS_PRECISE),
             )
-            self.analysis_profile_combo.setToolTip(self.translator.t("gui.tooltip.analysis_profile"))
-            self.viewing_context_label.setText(self.translator.t("gui.label.viewing_context"))
+            self.analysis_profile_combo.setToolTip(self.translator.t(TOOLTIP_ANALYSIS_PROFILE))
+            self.viewing_context_label.setText(self.translator.t(Text(en='Viewing scenario', zh_cn='观看场景')))
             self.viewing_context_combo.setItemText(
                 self.viewing_context_combo.findData(VmafViewingContext.HIGH_FIDELITY.value),
-                self.translator.t("gui.value.viewing_high_fidelity"),
+                self.translator.t(Text(en='High-fidelity / Large display', zh_cn='高保真 / 大屏幕')),
             )
             self.viewing_context_combo.setItemText(
                 self.viewing_context_combo.findData(VmafViewingContext.STANDARD_DISPLAY.value),
-                self.translator.t("gui.value.viewing_standard_display"),
+                self.translator.t(Text(en='Standard display', zh_cn='标准显示设备')),
             )
-            viewing_tooltip = self.translator.t("gui.tooltip.viewing_context")
+            viewing_tooltip = self.translator.t(TOOLTIP_VIEWING_CONTEXT)
             self.viewing_context_label.setToolTip(viewing_tooltip)
             self.viewing_context_combo.setToolTip(viewing_tooltip)
-            self.overwrite_check.setText(self.translator.t("gui.checkbox.overwrite"))
-            self.recursive_check.setText(self.translator.t("gui.checkbox.recursive"))
-            self.encoder_preset_label.setText(self.translator.t("gui.label.encoder_preset"))
-            self.decode_acceleration_label.setText(self.translator.t("gui.label.decode_acceleration"))
+            self.overwrite_check.setText(self.translator.t(Text(en='Overwrite', zh_cn='允许覆盖')))
+            self.recursive_check.setText(self.translator.t(Text(en='Recursive', zh_cn='递归扫描')))
+            self.encoder_preset_label.setText(self.translator.t(Text(en='Encoder preset', zh_cn='编码器预设')))
+            self.decode_acceleration_label.setText(self.translator.t(Text(en='Decode acceleration', zh_cn='解码加速')))
             self.decode_acceleration_combo.setItemText(
                 self.decode_acceleration_combo.findData(DecodeAcceleration.SOFTWARE.value),
-                self.translator.t("gui.value.decode_software"),
+                self.translator.t(Text(en='Software', zh_cn='软件')),
             )
             self.decode_acceleration_combo.setItemText(
                 self.decode_acceleration_combo.findData(DecodeAcceleration.VIDEOTOOLBOX.value),
-                self.translator.t("gui.value.decode_videotoolbox"),
+                self.translator.t(Text(en='VideoToolbox', zh_cn='VideoToolbox')),
             )
-            self.pix_fmt_label.setText(self.translator.t("gui.label.pix_fmt"))
-            self.min_bitrate_label.setText(self.translator.t("gui.label.min_video_kbps"))
-            self.max_bitrate_label.setText(self.translator.t("gui.label.max_video_kbps"))
-            self.max_bitrate_spin.setSpecialValueText(self.translator.t("gui.value.unlimited"))
-            self.maxrate_factor_label.setText(self.translator.t("gui.label.maxrate_factor"))
-            self.bufsize_factor_label.setText(self.translator.t("gui.label.bufsize_factor"))
-            self.two_pass_check.setText(self.translator.t("gui.checkbox.two_pass"))
-            self.audio_mode_label.setText(self.translator.t("gui.label.audio_mode"))
-            self.audio_bitrate_label.setText(self.translator.t("gui.label.audio_bitrate"))
-            self.copy_subtitles_check.setText(self.translator.t("gui.checkbox.copy_subtitles"))
-            self.copy_external_subtitles_check.setText(self.translator.t("gui.checkbox.copy_external_subtitles"))
-            self.ratio_edit.setPlaceholderText(self.translator.t("gui.placeholder.auto_ratio"))
+            self.pix_fmt_label.setText(self.translator.t(Text(en='Pixel format', zh_cn='像素格式')))
+            self.min_bitrate_label.setText(self.translator.t(Text(en='Min video kbps', zh_cn='最低视频码率')))
+            self.max_bitrate_label.setText(self.translator.t(Text(en='Max video kbps', zh_cn='最高视频码率')))
+            self.max_bitrate_spin.setSpecialValueText(self.translator.t(Text(en='Unlimited', zh_cn='不限')))
+            self.maxrate_factor_label.setText(self.translator.t(Text(en='Maxrate factor', zh_cn='Maxrate 系数')))
+            self.bufsize_factor_label.setText(self.translator.t(Text(en='Bufsize factor', zh_cn='Bufsize 系数')))
+            self.two_pass_check.setText(self.translator.t(Text(en='Two-pass', zh_cn='双遍编码')))
+            self.audio_mode_label.setText(self.translator.t(Text(en='Audio mode', zh_cn='音频模式')))
+            self.audio_bitrate_label.setText(self.translator.t(Text(en='Audio bitrate', zh_cn='音频码率')))
+            self.copy_subtitles_check.setText(self.translator.t(Text(en='Copy subtitles', zh_cn='复制字幕')))
+            self.copy_external_subtitles_check.setText(self.translator.t(Text(en='Copy external subtitles', zh_cn='复制外挂字幕')))
+            self.ratio_edit.setPlaceholderText(self.translator.t(Text(en='Leave blank to use codec default ratio', zh_cn='留空则使用编码格式默认比例')))
             self.pix_fmt_edit.setPlaceholderText("yuv420p")
             self.audio_bitrate_edit.setPlaceholderText("128k")
 
-            self.options_tabs.setTabText(self.options_tabs.indexOf(self.basic_tab), self.translator.t("gui.tab.basic"))
-            self.options_tabs.setTabText(self.options_tabs.indexOf(self.video_tab), self.translator.t("gui.tab.video"))
-            self.options_tabs.setTabText(self.options_tabs.indexOf(self.audio_tab), self.translator.t("gui.tab.audio_subtitles"))
+            self.options_tabs.setTabText(self.options_tabs.indexOf(self.basic_tab), self.translator.t(Text(en='Basic', zh_cn='基础')))
+            self.options_tabs.setTabText(self.options_tabs.indexOf(self.video_tab), self.translator.t(Text(en='Video', zh_cn='视频')))
+            self.options_tabs.setTabText(self.options_tabs.indexOf(self.audio_tab), self.translator.t(Text(en='Audio / Subtitles', zh_cn='音频 / 字幕')))
 
             self._bind_labels()
             self.apply_tab_order()
@@ -827,7 +919,7 @@ class EncodeOptionsPanel(QWidget):
                 item.setEnabled(videotoolbox_available)
         if runtime_known and not videotoolbox_available:
             self.decode_acceleration_combo.setToolTip(
-                self.translator.t("gui.tooltip.decode_acceleration_unavailable")
+                self.translator.t(TOOLTIP_DECODE_ACCELERATION_UNAVAILABLE)
             )
         else:
             self.decode_acceleration_combo.setToolTip("")
@@ -835,7 +927,7 @@ class EncodeOptionsPanel(QWidget):
         if desired == DecodeAcceleration.VIDEOTOOLBOX and runtime_known and not videotoolbox_available:
             desired = DecodeAcceleration.SOFTWARE
             if log_reset:
-                self._append_log(self.translator.t("gui.log.decode_acceleration_reset"))
+                self._append_log(self.translator.t(LOG_DECODE_ACCELERATION_RESET))
 
         selected_index = self.decode_acceleration_combo.findData(desired.value)
         if selected_index < 0:
@@ -878,7 +970,7 @@ class EncodeOptionsPanel(QWidget):
             self._pending_backend = desired_backend
             choices.append(desired_backend)
             if log_reset and self._runtime_capabilities() is not None:
-                self._append_log(self.translator.t("gui.message.encoder_selection_pending"))
+                self._append_log(self.translator.t(MESSAGE_ENCODER_SELECTION_PENDING))
         else:
             self._pending_backend = None
         selected_backend = desired_backend
@@ -897,8 +989,8 @@ class EncodeOptionsPanel(QWidget):
                 item = maybe_none(model.item(selected_index))
                 if item is not None:
                     item.setEnabled(False)
-        tooltip_key = "gui.tooltip.backend_filtered" if self._runtime_capabilities() is not None else "gui.tooltip.backend_detecting"
-        self.backend_combo.setToolTip(self.translator.t("gui.message.encoder_selection_pending") if self._pending_backend is not None else self.translator.t(tooltip_key))
+        tooltip_text = Text(en='Only backends that passed hardware encoder detection are shown.', zh_cn='仅显示已通过硬件编码器检测的后端。') if self._runtime_capabilities() is not None else Text(en='Hardware encoder detection is running; only safe backend choices are shown.', zh_cn='正在检测硬件编码器；当前仅显示安全后端选项。')
+        self.backend_combo.setToolTip(self.translator.t(MESSAGE_ENCODER_SELECTION_PENDING) if self._pending_backend is not None else self.translator.t(tooltip_text))
 
         self.sync_dependent_controls()
 
@@ -911,11 +1003,11 @@ class EncodeOptionsPanel(QWidget):
         self.smart_algorithm_combo.setVisible(smart_mode)
         v2 = smart_mode and self.smart_algorithm_combo.currentData() == SmartAlgorithm.V2_EXPERIMENTAL.value
         if v2:
-            self.min_vmaf_label.setText(self.translator.t("gui.label.mean_vmaf_v2"))
-            self.min_vmaf_spin.setToolTip(self.translator.t("gui.tooltip.mean_vmaf_v2"))
+            self.min_vmaf_label.setText(self.translator.t(Text(en='Whole-video mean VMAF target', zh_cn='整片平均 VMAF 目标')))
+            self.min_vmaf_spin.setToolTip(self.translator.t(TOOLTIP_MEAN_VMAF_V2))
         else:
-            self.min_vmaf_label.setText(self.translator.t("gui.label.min_vmaf"))
-            self.min_vmaf_spin.setToolTip(self.translator.t("gui.tooltip.min_vmaf"))
+            self.min_vmaf_label.setText(self.translator.t(LABEL_MIN_VMAF))
+            self.min_vmaf_spin.setToolTip(self.translator.t(TOOLTIP_MIN_VMAF))
         self.ratio_label.setVisible(not smart_mode)
         self.ratio_edit.setVisible(not smart_mode)
         self.min_vmaf_label.setVisible(smart_mode)
@@ -992,7 +1084,7 @@ class EncodeOptionsPanel(QWidget):
             message = ""
             if isinstance(vmaf, dict):
                 message = str(vmaf.get("error_message") or "")
-            reason = message or self.translator.t("gui.tooltip.smart_unavailable")
+            reason = message or self.translator.t(TOOLTIP_SMART_UNAVAILABLE)
             self.compression_mode_combo.setToolTip(reason)
             self.smart_unavailable.emit(reason)
         else:
@@ -1000,7 +1092,7 @@ class EncodeOptionsPanel(QWidget):
         self.sync_dependent_controls()
 
     def _default_preset_text(self) -> str:
-        return self.translator.t("gui.value.encoder_preset_default")
+        return self.translator.t(Text(en='(default)', zh_cn='（默认）'))
 
     def _current_encoder_preset(self) -> str | None:
         value = self.encoder_preset_combo.currentData()
@@ -1023,7 +1115,7 @@ class EncodeOptionsPanel(QWidget):
             if index < 0:
                 self._pending_encoder_preset = preset
                 self.encoder_preset_combo.setEnabled(True)
-                self.encoder_preset_combo.addItem(self.translator.t("gui.value.unavailable_choice", value=preset), preset)
+                self.encoder_preset_combo.addItem(self.translator.t(Text(en='{value} (unavailable)', zh_cn='{value}（不可用）'), value=preset), preset)
                 index = self.encoder_preset_combo.count() - 1
                 model = self.encoder_preset_combo.model()
                 if isinstance(model, QStandardItemModel):
@@ -1031,7 +1123,7 @@ class EncodeOptionsPanel(QWidget):
                     if item is not None:
                         item.setEnabled(False)
                 if log_invalid:
-                    self._append_log(self.translator.t("gui.message.encoder_selection_pending"))
+                    self._append_log(self.translator.t(MESSAGE_ENCODER_SELECTION_PENDING))
             self.encoder_preset_combo.setCurrentIndex(index)
 
     def refresh_encoder_preset_choices(
@@ -1052,7 +1144,7 @@ class EncodeOptionsPanel(QWidget):
                     self._pending_encoder_preset = None
                 self._set_encoder_preset_items([])
                 self.encoder_preset_combo.setEnabled(False)
-                self.encoder_preset_combo.setToolTip(self.translator.t("gui.tooltip.encoder_preset_auto"))
+                self.encoder_preset_combo.setToolTip(self.translator.t(Text(en='Auto backend uses resolved encoder default preset.', zh_cn='自动后端会使用实际解析到的编码器默认预设。')))
                 self._select_encoder_preset(None, log_invalid=False)
                 return
             capabilities = self._runtime_capabilities()
@@ -1063,7 +1155,7 @@ class EncodeOptionsPanel(QWidget):
                     self._pending_encoder_preset = None
                 self._set_encoder_preset_items([])
                 self.encoder_preset_combo.setEnabled(False)
-                self.encoder_preset_combo.setToolTip(self.translator.t("gui.tooltip.encoder_preset_unavailable"))
+                self.encoder_preset_combo.setToolTip(self.translator.t(TOOLTIP_ENCODER_PRESET_UNAVAILABLE))
                 self._select_encoder_preset(None, log_invalid=log_invalid and desired_preset is not None)
                 return
             self._pending_encoder_preset = None
@@ -1074,6 +1166,6 @@ class EncodeOptionsPanel(QWidget):
             )
             self._set_encoder_preset_items(choices)
             self.encoder_preset_combo.setEnabled(bool(choices))
-            tooltip_key = "gui.tooltip.encoder_preset_unavailable" if not choices else ""
-            self.encoder_preset_combo.setToolTip(self.translator.t(tooltip_key) if tooltip_key else "")
+            tooltip_text = TOOLTIP_ENCODER_PRESET_UNAVAILABLE if not choices else None
+            self.encoder_preset_combo.setToolTip(self.translator.t(tooltip_text) if tooltip_text else "")
             self._select_encoder_preset(desired_preset, log_invalid=log_invalid)

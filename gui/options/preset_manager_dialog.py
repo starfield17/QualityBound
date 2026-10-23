@@ -15,9 +15,20 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.i18n import Translator
+from core.i18n import Text, Translator
 from gui.qt_optionals import maybe_none
 from gui.window_geometry import clamped_window_size
+
+
+BUTTON_SAVE_CURRENT_AS_PRESET = Text(
+    en='Save Current As…',
+    zh_cn='当前设置另存为…',
+)
+
+MESSAGE_WARNING = Text(
+    en='Warning',
+    zh_cn='警告',
+)
 
 
 class PresetManagerDialog(QDialog):
@@ -87,12 +98,12 @@ class PresetManagerDialog(QDialog):
 
     def apply_translations(self, tr: Translator) -> None:
         self.translator = tr
-        self.setWindowTitle(self.translator.t("gui.window.presets"))
-        self.load_button.setText(self.translator.t("gui.button.load_preset"))
-        self.save_current_button.setText(self.translator.t("gui.button.save_current_as_preset"))
-        self.delete_button.setText(self.translator.t("gui.button.delete_preset"))
-        self.default_button.setText(self.translator.t("gui.button.set_default_preset"))
-        self.close_button.setText(self.translator.t("gui.button.close"))
+        self.setWindowTitle(self.translator.t(Text(en='Preset Manager', zh_cn='预设管理')))
+        self.load_button.setText(self.translator.t(Text(en='Load', zh_cn='加载')))
+        self.save_current_button.setText(self.translator.t(BUTTON_SAVE_CURRENT_AS_PRESET))
+        self.delete_button.setText(self.translator.t(Text(en='Delete Preset', zh_cn='删除预设')))
+        self.default_button.setText(self.translator.t(Text(en='Set Default', zh_cn='设为默认')))
+        self.close_button.setText(self.translator.t(Text(en='Close', zh_cn='关闭')))
         self._update_info_label()
         self._update_button_state()
 
@@ -102,7 +113,7 @@ class PresetManagerDialog(QDialog):
         self.default_preset_name = default_preset_name
         self.list_widget.blockSignals(True)
         self.list_widget.clear()
-        marker = self.translator.t("gui.label.default_preset_marker")
+        marker = self.translator.t(Text(en='default', zh_cn='默认'))
         for name in preset_names:
             label = f"{name} ({marker})" if name == default_preset_name else name
             item = QListWidgetItem(label)
@@ -132,8 +143,8 @@ class PresetManagerDialog(QDialog):
         return name if isinstance(name, str) else ""
 
     def _update_info_label(self) -> None:
-        default_text = self.default_preset_name or self.translator.t("gui.label.none")
-        self.info_label.setText(self.translator.t("gui.label.default_preset", name=default_text))
+        default_text = self.default_preset_name or self.translator.t(Text(en='none', zh_cn='无'))
+        self.info_label.setText(self.translator.t(Text(en='Default preset: {name}', zh_cn='默认预设：{name}'), name=default_text))
 
     def _update_button_state(self) -> None:
         has_selection = bool(self._selected_preset_name())
@@ -151,8 +162,8 @@ class PresetManagerDialog(QDialog):
     def _request_save(self) -> None:
         name, ok = QInputDialog.getText(
             self,
-            self.translator.t("gui.button.save_current_as_preset"),
-            self.translator.t("gui.message.enter_preset_name"),
+            self.translator.t(BUTTON_SAVE_CURRENT_AS_PRESET),
+            self.translator.t(Text(en='Enter a preset name:', zh_cn='请输入预设名称：')),
         )
         if not ok or not name.strip():
             return
@@ -160,8 +171,8 @@ class PresetManagerDialog(QDialog):
         if name in self._preset_names:
             answer = QMessageBox.question(
                 self,
-                self.translator.t("gui.message.warning"),
-                self.translator.t("gui.message.overwrite_preset_confirm", name=name),
+                self.translator.t(MESSAGE_WARNING),
+                self.translator.t(Text(en="Preset '{name}' already exists. Overwrite it?", zh_cn='预设“{name}”已存在，覆盖吗？'), name=name),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
@@ -176,8 +187,8 @@ class PresetManagerDialog(QDialog):
             return
         answer = QMessageBox.question(
             self,
-            self.translator.t("gui.message.warning"),
-            self.translator.t("gui.message.delete_preset_confirm", name=name),
+            self.translator.t(MESSAGE_WARNING),
+            self.translator.t(Text(en="Delete preset '{name}'?", zh_cn='删除预设“{name}”？'), name=name),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
