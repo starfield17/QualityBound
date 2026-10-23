@@ -425,7 +425,7 @@ class CliPresetValidationTestCase(unittest.TestCase):
             patch("cli.cli_entry.print_plan"),
         ):
             plan_mock.return_value = type("Plan", (), {"items": [], "warnings": []})()
-            exit_code = run_cli(["plan", "input.mp4", "--backend", "nvenc", "--encoder-preset", "p6"])
+            exit_code = run_cli(["plan", "input.mp4", "--lang", "en", "--backend", "nvenc", "--encoder-preset", "p6"])
         self.assertEqual(exit_code, 0)
 
     def test_cli_rejects_invalid_preset(self) -> None:
@@ -437,7 +437,7 @@ class CliPresetValidationTestCase(unittest.TestCase):
             patch("cli.cli_entry.resolve_encoder", return_value=_encoder_info("hevc_nvenc", BackendChoice.NVENC, "p6")),
             patch("cli.cli_entry.preset_choices_for_encoder", return_value=["p5", "p6"]),
         ):
-            exit_code = run_cli(["plan", "input.mp4", "--backend", "nvenc", "--encoder-preset", "slow"])
+            exit_code = run_cli(["plan", "input.mp4", "--lang", "en", "--backend", "nvenc", "--encoder-preset", "slow"])
         self.assertEqual(exit_code, 2)
         self.assertIn("hevc_nvenc", stderr.getvalue())
         self.assertIn("p5, p6", stderr.getvalue())
@@ -445,13 +445,13 @@ class CliPresetValidationTestCase(unittest.TestCase):
     def test_cli_rejects_explicit_preset_with_auto_backend(self) -> None:
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr):
-            exit_code = run_cli(["plan", "input.mp4", "--backend", "auto", "--encoder-preset", "slow"])
+            exit_code = run_cli(["plan", "input.mp4", "--lang", "en", "--backend", "auto", "--encoder-preset", "slow"])
         self.assertEqual(exit_code, 2)
         self.assertIn("--encoder-preset cannot be used with --backend auto", stderr.getvalue())
 
     def test_cli_ignores_inherited_preset_with_auto_backend(self) -> None:
         parser = _build_parser()
-        args = parser.parse_args(["plan", "input.mp4"])
+        args = parser.parse_args(["plan", "input.mp4", "--lang", "en"])
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr):
             options = _normalize_auto_backend_preset(EncodeOptions(encoder_preset="p6"), args)

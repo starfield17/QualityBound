@@ -74,6 +74,8 @@ class SmartConfigurationTestCase(unittest.TestCase):
                 [
                     "plan",
                     "missing.mov",
+                    "--lang",
+                    "en",
                     "--compression-mode",
                     "smart",
                     "--ratio",
