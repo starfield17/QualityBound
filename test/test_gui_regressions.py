@@ -398,6 +398,40 @@ class GuiRegressionTests(unittest.TestCase):
                             label_rect = QRect(label.mapTo(window.empty_state, QPoint()), label.size())
                             self.assertFalse(rect.intersects(label_rect))
 
+    def test_toolbar_overflow_uses_application_icon_and_keeps_hidden_actions(self) -> None:
+        from PySide6.QtGui import QIcon
+        from PySide6.QtWidgets import QToolButton
+        from gui.icons import action_icon
+        from gui.theme import current_tokens, theme_manager
+        window = self.window()
+        window.show()
+        window.resize(760, 520)
+        window.queue_window.show()
+        window.queue_window.resize(260, 420)
+        manager = theme_manager()
+        assert manager is not None
+        for dark in (False, True):
+            with self.subTest(dark=dark):
+                with patch("gui.theme._scheme_is_dark", return_value=dark):
+                    manager.refresh()
+                for _ in range(8):
+                    self.app.processEvents()
+                tokens = current_tokens()
+                expected = action_icon("overflow", tokens.icon, tokens.icon_disabled)
+                for toolbar in (window.toolbar, window.queue_window.action_toolbar):
+                    extension = toolbar.findChild(QToolButton, "qt_toolbar_ext_button")
+                    assert extension is not None
+                    self.assertTrue(extension.isVisible())
+                    self.assertEqual(extension.icon().cacheKey(), expected.cacheKey())
+                    for mode in (QIcon.Mode.Normal, QIcon.Mode.Disabled):
+                        self.assertFalse(extension.icon().pixmap(18, 18, mode).isNull())
+                extension = window.toolbar.findChild(QToolButton, "qt_toolbar_ext_button")
+                assert extension is not None
+                menu = extension.menu()
+                assert menu is not None
+                self.assertIn(window.settings_action, menu.actions())
+        window.queue_window.close()
+
     def test_native_window_gc_keeps_parent_before_child_ownership(self) -> None:
         import gc
         for _ in range(5):
