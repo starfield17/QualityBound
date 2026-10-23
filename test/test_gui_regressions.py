@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import ntpath
+import posixpath
 import tempfile
 import unittest
 from pathlib import Path
@@ -87,14 +89,22 @@ class GuiRegressionTests(unittest.TestCase):
         file.touch()
         self.assertIn("directory", dialog._path_problem(str(file), expect_directory=True) or "")
 
-    def test_source_identity_keeps_distinct_case_on_sensitive_volumes(self) -> None:
+    def test_source_identity_respects_case_normalization(self) -> None:
         from core.models import VideoFileItem
         from gui.queue.state import QueueSourceDraft, create_draft_record
-        window = self.window()
-        records = [create_draft_record(QueueSourceDraft(VideoFileItem(self.root / name, Path(name)), None))
-                   for name in ("Clip.mp4", "clip.mp4")]
-        window._on_sources_ready(records)
-        self.assertEqual(window.queue_model.rowCount(), 2)
+        # Exercise both policies on every OS; the host's normcase is not
+        # evidence that the temporary volume supports distinct case variants.
+        for normalize, expected in ((posixpath.normcase, 2), (ntpath.normcase, 1)):
+            with self.subTest(normalize=normalize.__module__):
+                window = self.window()
+                def records() -> list:
+                    return [create_draft_record(QueueSourceDraft(VideoFileItem(self.root / name, Path(name)), None))
+                            for name in ("Clip.mp4", "clip.mp4", "Clip.mp4")]
+                with patch("gui.gui_mainwindow.os.path.normcase", normalize):
+                    window._on_sources_ready(records())
+                    self.assertEqual(window.queue_model.rowCount(), expected)
+                    window._on_sources_ready(records())
+                    self.assertEqual(window.queue_model.rowCount(), expected)
 
     def test_multi_directory_intake_retains_each_root(self) -> None:
         folders = [self.root / name for name in ("one", "two")]
