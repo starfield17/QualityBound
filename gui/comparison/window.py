@@ -38,7 +38,7 @@ from core.i18n import Text, Translator
 from core.media import VIDEO_EXTENSIONS
 from gui.comparison.decode import (ComparisonMedia, DecodeCancelled, FramePair,
                                    ToolRunner, decode_pair, inspect_pair, preview_pair)
-from gui.comparison.state import ComparisonPhase, ComparisonTimeline
+from gui.comparison.state import ComparisonPhase, ComparisonTimeline, PlaybackIntent
 from gui.comparison.playback import PlaybackSession
 from gui.window_geometry import clamped_window_size
 from gui.icons import set_button_icon
@@ -57,9 +57,9 @@ COMPARE_ERROR = Text(
 )
 
 COMPARE_HELP = Text(
-    en='Space: play/pause · T: switch A/B in single view · ←/→: seek 5 seconds. Click or drag the timeline to seek both videos. Precise inspection aligns paused frames by timestamp; playback shares one presentation clock. All decoding uses the selected external FFmpeg.\nA frame: , / .   B frame: Shift+, / Shift+.   Editing controls keep their own keys.',
-    zh_cn='Space：播放/暂停 · T：单画面切换 A/B · ←/→：跳转 5 秒。点击或拖动进度条同步定位两个视频。精确检查按时间戳定位暂停画面；播放共用一个时钟。全部解码使用所选外部 FFmpeg。\nA 逐帧：, / .；B 逐帧：Shift+, / Shift+.。编辑控件保留自身按键。',
-    ja='Space: 再生/一時停止 · T: 単一ビューでA/B切り替え · ←/→: 5秒シーク。タイムラインをクリックまたはドラッグして両方の動画を同期シーク。精密検査では一時停止フレームをタイムスタンプで整列し、再生時は共通のクロックを使用します。すべてのデコードは選択された外部FFmpegを使用します。\nAフレーム: , / .   Bフレーム: Shift+, / Shift+.   編集コントロールは独自のキーを維持します。',
+    en='Space: play/pause · Tab / T: switch A/B in single view · ←/→: seek 5 seconds (the timeline keeps its arrow keys). Click or drag the timeline to seek both videos. Precise inspection aligns paused frames by timestamp; playback shares one presentation clock. All decoding uses the selected external FFmpeg.\nA frame: , / .   B frame: Shift+, / Shift+.   Editors and menus keep their own keys. Shift+Tab moves focus backwards.',
+    zh_cn='Space：播放/暂停 · Tab / T：单画面切换 A/B · ←/→：跳转 5 秒（进度条保留自身方向键）。点击或拖动进度条同步定位两个视频。精确检查按时间戳定位暂停画面；播放共用一个时钟。全部解码使用所选外部 FFmpeg。\nA 逐帧：, / .；B 逐帧：Shift+, / Shift+.。编辑控件和菜单保留自身按键；Shift+Tab 向前一个控件移动焦点。',
+    ja='Space: 再生/一時停止 · Tab / T: 単一ビューでA/B切り替え · ←/→: 5秒シーク（タイムラインは独自の矢印キーを維持）。クリックまたはドラッグして両方の動画を同期シーク。精密検査はタイムスタンプで整列し、再生時は共通クロックを使用します。デコードは選択された外部FFmpegを使用します。\nAフレーム: , / .   Bフレーム: Shift+, / Shift+.   編集とメニューは独自のキーを維持。Shift+Tabで前のコントロールに移動します。',
 )
 
 COMPARE_HELP_TOGGLE = Text(
@@ -179,6 +179,7 @@ class SeekSlider(QSlider):
 class FrameCanvas(QWidget):
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.image = QImage()
 
     def paintEvent(self, event: QPaintEvent) -> None:
@@ -241,8 +242,7 @@ class ComparisonWindow(QWidget):
         self.timestamps: list[float | None] = [None, None]
         self._generation = 0
         self._jobs: list[ComparisonWorker] = []
-        self._resume_after_scrub = False
-        self._resume_after_seek = False
+        self._intent = PlaybackIntent.PAUSED
         self._selected_side = 0
         self.setObjectName("comparisonWindow")
         self.setAcceptDrops(True)
@@ -260,13 +260,14 @@ class ComparisonWindow(QWidget):
         self.preview_timer.setInterval(100)
         self.preview_timer.timeout.connect(self._preview_seek)
         self._shortcuts: list[QShortcut] = []
-        for key, callback in [("Space", self.toggle_play), ("T", self.toggle_side),
+        for key, callback in [("Space", self.toggle_play), ("T", self.toggle_side), ("Tab", self.toggle_side),
                               ("Left", lambda: self.seek(self.position - 5)),
                               ("Right", lambda: self.seek(self.position + 5)),
                               (",", lambda: self.step_frame(-1)), (".", lambda: self.step_frame(1)),
                               ("Shift+,", lambda: self.step_frame(-1, side=1)),
                               ("Shift+.", lambda: self.step_frame(1, side=1))]:
             shortcut = QShortcut(QKeySequence(key), self)
+            shortcut.setAutoRepeat(key not in {"Space", "T", "Tab"})
             shortcut.activated.connect(callback)
             self._shortcuts.append(shortcut)
         app = QApplication.instance()
@@ -370,7 +371,7 @@ class ComparisonWindow(QWidget):
             combo.addItems(labels)
             combo.setCurrentIndex(index)
             combo.blockSignals(False)
-        self.switch_button.setText(t(Text(en='Switch A/B · Tab', zh_cn='切换 A/B · Tab', ja='A/B 切り替え · Tab')))
+        self.switch_button.setText(t(Text(en='Switch A/B · Tab / T', zh_cn='切换 A/B · Tab / T', ja='A/B 切り替え · Tab / T')))
         self.previous_button.setText(t(Text(en='A −1 frame', zh_cn='A −1 帧', ja='A −1 フレーム')))
         self.next_button.setText(t(Text(en='A +1 frame', zh_cn='A +1 帧', ja='A +1 フレーム')))
         self.offset_previous.setText(t(Text(en='B −1 frame', zh_cn='B −1 帧', ja='B −1 フレーム')))
@@ -481,7 +482,7 @@ class ComparisonWindow(QWidget):
         self.media = None
         self.timestamps = [None, None]
         self.position = 0
-        self._resume_after_seek = False
+        self._intent = PlaybackIntent.PAUSED
         self.offset.blockSignals(True)
         self.offset.setValue(0)
         self.offset.blockSignals(False)
@@ -529,15 +530,22 @@ class ComparisonWindow(QWidget):
         self._invalidate()
         self.preview_timer.stop()
         self.playback.stop()
+        self._intent = PlaybackIntent.PAUSED
         self.phase = ComparisonPhase.ERROR
         self.status.setText(self.translator.t(COMPARE_ERROR, error=error))
         self._update_controls()
 
     def _update_shortcuts(self, *_args: object) -> None:
         focus = QApplication.focusWidget()
-        editing = isinstance(focus, (QLineEdit, QAbstractSpinBox, QComboBox, QSlider))
+        editing = isinstance(focus, (QLineEdit, QAbstractSpinBox, QComboBox))
+        popup = QApplication.activePopupWidget() is not None
         for shortcut in self._shortcuts:
-            shortcut.setEnabled(not editing and (shortcut.key().toString() != "T" or self.mode.currentIndex() == 1))
+            key = shortcut.key().toString()
+            shortcut.setEnabled(
+                not editing and not popup
+                and (key not in {"T", "Tab"} or self.mode.currentIndex() == 1)
+                and (key not in {"Left", "Right"} or not isinstance(focus, QSlider))
+            )
 
     def _update_layout(self) -> None:
         single = self.mode.currentIndex() == 1
@@ -566,7 +574,7 @@ class ComparisonWindow(QWidget):
             button.setEnabled(stepping)
         self.offset.setEnabled(self.media is not None and self.phase != ComparisonPhase.CLOSED)
         self.play_button.setText(self.translator.t(Text(en='Pause · Space', zh_cn='暂停 · Space', ja='一時停止 · Space'))
-                                 if self.phase == ComparisonPhase.PLAYING
+                                 if self._playback_intent()
                                  else self.translator.t(Text(en='Play · Space', zh_cn='播放 · Space', ja='再生 · Space')))
         if timeline is not None and timeline.available and self.phase != ComparisonPhase.SCRUBBING:
             self.slider.blockSignals(True)
@@ -625,7 +633,10 @@ class ComparisonWindow(QWidget):
         self._update_labels()
 
     def toggle_play(self) -> None:
-        if self.phase == ComparisonPhase.PLAYING:
+        if self.phase in {ComparisonPhase.SEEKING, ComparisonPhase.SCRUBBING}:
+            self._intent = PlaybackIntent.PAUSED if self._playback_intent() else PlaybackIntent.PLAYING
+            self._update_controls()
+        elif self.phase == ComparisonPhase.PLAYING:
             self.pause()
         elif self.play_button.isEnabled():
             self._play()
@@ -637,6 +648,7 @@ class ComparisonWindow(QWidget):
         self._invalidate()
         if self.position >= timeline.end - 0.001:
             self.position = timeline.start
+        self._intent = PlaybackIntent.PLAYING
         self.phase = ComparisonPhase.PLAYING
         self.status.setText(self.translator.t(Text(en='Synchronized playback', zh_cn='同步播放中', ja='同期再生中')))
         try:
@@ -652,6 +664,7 @@ class ComparisonWindow(QWidget):
         if self.phase == ComparisonPhase.PLAYING and timeline is not None:
             self.position = timeline.clamp(self.playback.tick())
         self.playback.stop()
+        self._intent = PlaybackIntent.PAUSED
         self.phase = ComparisonPhase.PAUSED
         self.seek(self.position)
 
@@ -675,14 +688,14 @@ class ComparisonWindow(QWidget):
         if media is None:
             return
         position, offset = self.position, self.offset.value() / 1000
-        self._resume_after_seek = resume
+        self._intent = PlaybackIntent.PLAYING if resume else PlaybackIntent.PAUSED
         self.phase = ComparisonPhase.SEEKING
         self.status.setText(self.translator.t(Text(en='Decoding corresponding frames…', zh_cn='正在解码对应时间帧…', ja='対応するフレームをデコード中…')))
         self._update_controls()
         self._launch(lambda runner: decode_pair(media, position, offset, runner, side, direction),
-                     lambda result: self._frames_ready(result, resume, side, direction))
+                     lambda result: self._frames_ready(result, side, direction))
 
-    def _frames_ready(self, result: object, resume: bool, side: int, direction: int) -> None:
+    def _frames_ready(self, result: object, side: int, direction: int) -> None:
         if not isinstance(result, FramePair):
             raise TypeError("Expected comparison frame pair")
         images = [QImage.fromData(result.a.png), QImage.fromData(result.b.png)]
@@ -702,7 +715,7 @@ class ComparisonWindow(QWidget):
                             else self.translator.t(Text(en='Paused · normal synchronization', zh_cn='已暂停 · 普通同步', ja='一時停止中 · 通常同期')))
         self._update_controls()
         self._update_labels()
-        if resume:
+        if self._playback_intent():
             self._play()
 
     def step_frame(self, direction: int, *, side: int = 0) -> None:
@@ -717,7 +730,7 @@ class ComparisonWindow(QWidget):
 
     def _playback_intent(self) -> bool:
         return (self.phase == ComparisonPhase.PLAYING
-                or (self.phase == ComparisonPhase.SEEKING and self._resume_after_seek))
+                or self._intent == PlaybackIntent.PLAYING)
 
     def _offset_changed(self) -> None:
         timeline = self.timeline
@@ -726,6 +739,7 @@ class ComparisonWindow(QWidget):
         if not timeline.available:
             self._invalidate()
             self.playback.stop()
+            self._intent = PlaybackIntent.PAUSED
             self.phase = ComparisonPhase.PAUSED
             self.status.setText(self.translator.t(Text(en='No common playback interval. Adjust the B offset.', zh_cn='没有共同播放区间，请调整 B 偏移。', ja='共通の再生区間がありません。Bのオフセットを調整してください。')))
             self._update_controls()
@@ -733,7 +747,7 @@ class ComparisonWindow(QWidget):
             self.seek(self.position)
 
     def _scrub_started(self) -> None:
-        self._resume_after_scrub = self._playback_intent()
+        self._intent = PlaybackIntent.PLAYING if self._playback_intent() else PlaybackIntent.PAUSED
         self._invalidate()
         self.playback.stop()
         self.phase = ComparisonPhase.SCRUBBING
@@ -761,11 +775,11 @@ class ComparisonWindow(QWidget):
         media = self.media
         if media is not None:
             position, offset = self.position, self.offset.value() / 1000
-            self._resume_after_seek = resume
+            self._intent = PlaybackIntent.PLAYING if resume else PlaybackIntent.PAUSED
             self.phase = ComparisonPhase.SEEKING
             self.status.setText(self.translator.t(COMPARE_SCRUBBING))
             self._launch(lambda runner: preview_pair(media, position, offset, runner),
-                         lambda result: self._frames_ready(result, resume, 0, 0))
+                         lambda result: self._frames_ready(result, 0, 0))
 
     def _scrub_preview_ready(self, result: object) -> None:
         if self.phase == ComparisonPhase.SCRUBBING and isinstance(result, FramePair):
@@ -780,10 +794,11 @@ class ComparisonWindow(QWidget):
         if self.phase != ComparisonPhase.SCRUBBING:
             return
         self.preview_timer.stop()
-        self.seek(self.slider.value() / 1000, resume=self._resume_after_scrub)
+        self.seek(self.slider.value() / 1000)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self.closed.emit(self.saveGeometry())
+        self._intent = PlaybackIntent.PAUSED
         self.phase = ComparisonPhase.CLOSED
         self._invalidate()
         self.timer.stop()

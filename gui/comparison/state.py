@@ -18,6 +18,16 @@ class ComparisonPhase(Enum):
     CLOSED = "closed"
 
 
+class PlaybackIntent(Enum):
+    """Desired transport state, retained while seeking or scrubbing.
+
+    Loading, errors and closing reset to PAUSED. A decode completion reads the
+    current intent rather than the intent captured when that decode started.
+    """
+    PAUSED = "paused"
+    PLAYING = "playing"
+
+
 @dataclass(frozen=True)
 class VideoDetails:
     """Video interval in container-relative seconds (duration is its endpoint)."""
