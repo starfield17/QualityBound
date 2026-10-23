@@ -4,7 +4,7 @@ import os
 from collections.abc import Callable
 from pathlib import Path
 
-from core.models import VideoFileItem
+from core.models import OperationCancelledError, VideoFileItem
 
 
 VIDEO_EXTENSIONS = {
@@ -35,6 +35,7 @@ def _iter_video_paths(
     input_root: Path,
     recursive: bool,
     on_error: Callable[[str], None] | None,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> list[Path]:
     """Walk ``input_root`` for video files, reporting folders we cannot read.
 
@@ -46,6 +47,8 @@ def _iter_video_paths(
     found: list[Path] = []
     pending: list[Path] = [input_root]
     while pending:
+        if cancel_check is not None and cancel_check():
+            raise OperationCancelledError("Source intake cancelled.")
         directory = pending.pop()
         try:
             with os.scandir(directory) as handle:
@@ -54,6 +57,8 @@ def _iter_video_paths(
             _report_skip(on_error, f"Skipping unreadable folder: {directory} | {exc}")
             continue
         for entry in entries:
+            if cancel_check is not None and cancel_check():
+                raise OperationCancelledError("Source intake cancelled.")
             try:
                 if entry.is_dir(follow_symlinks=False):
                     if recursive:
@@ -69,6 +74,7 @@ def collect_video_files(
     input_path: Path,
     recursive: bool,
     on_error: Callable[[str], None] | None = None,
+    *, cancel_check: Callable[[], bool] | None = None,
 ) -> list[VideoFileItem]:
     input_path = input_path.expanduser().resolve()
     if input_path.is_file():
@@ -86,7 +92,7 @@ def collect_video_files(
         raise RuntimeError(f"Cannot read folder: {input_path} | {exc}") from exc
 
     files: list[VideoFileItem] = []
-    for path in _iter_video_paths(input_path, recursive, on_error):
+    for path in _iter_video_paths(input_path, recursive, on_error, cancel_check):
         try:
             resolved = path.resolve()
             files.append(VideoFileItem(path=resolved, relative_path=resolved.relative_to(input_path)))

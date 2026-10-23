@@ -220,9 +220,9 @@ class SettingsDialog(QDialog):
             return None
         path = Path(value).expanduser()
         if not path.exists():
-            return self.translator.t("gui.message.path_missing")
+            return None if expect_directory else self.translator.t("gui.message.path_missing")
         if expect_directory and not path.is_dir():
-            return self.translator.t("gui.message.path_missing")
+            return self.translator.t("gui.message.path_not_directory")
         if not expect_directory and not path.is_file():
             return self.translator.t("gui.message.path_missing")
         return None
@@ -441,7 +441,6 @@ class SettingsDialog(QDialog):
             or SkippedOutputPolicy.COPY.value,
             "analysis_profile": self.analysis_profile_combo.currentData()
             or AnalysisProfileName.BALANCE.value,
-            "analysis_profiles": {},
         }
 
     def _browse_workdir(self) -> None:

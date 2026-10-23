@@ -539,5 +539,14 @@
   "gui.banner.needs_decision_one": "1 个项目等待决定。",
   "gui.banner.needs_decision_many": "{count} 个项目等待决定。",
   "gui.message.invalid_ratio": "请输入大于 0 的有限数值，或留空使用默认比例。",
-  "gui.log.export_failed": "无法将日志导出至 {path}：\n{error}"
+  "gui.log.export_failed": "无法将日志导出至 {path}：\n{error}",
+  "gui.message.path_not_directory": "路径不是目录。",
+  "gui.message.invalid_audio_bitrate": "请输入正数音频码率，例如 128k 或 0.192M。",
+  "gui.message.invalid_bitrate_range": "最高视频码率不能小于最低码率，或请选择不限。",
+  "gui.message.encoder_selection_pending": "所选编码器或预设尚未验证。请等待检测完成或选择可用编码器。",
+  "gui.value.unlimited": "不限",
+  "gui.log.invalid_preset": "无法加载预设 {name}：{error}。已使用默认选项。",
+  "gui.log.intake_failed": "无法读取 {file}：{error}",
+  "gui.log.intake_cancelled": "已取消导入源文件。",
+  "gui.state.scanning": "正在扫描目录"
 }

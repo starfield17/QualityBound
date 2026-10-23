@@ -1,4 +1,5 @@
 import sys
+import os
 import json
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -67,8 +68,6 @@ from core.config import (
 )
 from core.media import (
     PostEncodeAction,
-    VIDEO_EXTENSIONS,
-    collect_video_files,
     parse_post_encode_action,
     post_encode_action_key,
 )
@@ -568,6 +567,9 @@ class MainWindow(QMainWindow):
 
         self.output_label = QLabel()
         self.output_edit = QLineEdit()
+        self.source_add_button = QPushButton()
+        self.source_add_button.setProperty("role", "primary")
+        self.source_add_button.clicked.connect(self.plan_action.trigger)
         self.output_button = QPushButton()
         self.output_button.setMaximumWidth(110)
 
@@ -583,6 +585,7 @@ class MainWindow(QMainWindow):
         source_layout.addWidget(self.manage_presets_button, 2, 2)
         source_layout.addWidget(self.post_encode_label, 2, 3)
         source_layout.addWidget(self.post_encode_combo, 2, 4, 1, 2)
+        source_layout.addWidget(self.source_add_button, 3, 1, 1, 2)
         source_layout.setColumnStretch(1, 1)
         source_layout.setColumnStretch(2, 1)
         source_layout.setColumnStretch(3, 1)
@@ -786,7 +789,7 @@ class MainWindow(QMainWindow):
         self.output_edit.editingFinished.connect(self._persist_runtime_state)
         self.source_combo.currentTextChanged.connect(self._refresh_path_validation)
         self.output_edit.textChanged.connect(self._refresh_path_validation)
-        self.preset_combo.currentIndexChanged.connect(self._preset_combo_changed)
+        self.preset_combo.activated.connect(self._preset_combo_changed)
         self.options_panel.options_changed.connect(self._on_options_changed)
         self.options_panel.smart_unavailable.connect(self._on_smart_unavailable)
         self.notification_banner.dismissed.connect(self._on_banner_dismissed)
@@ -885,6 +888,7 @@ class MainWindow(QMainWindow):
         self.output_label.setText(self.translator.t("gui.label.output_folder"))
         self.source_file_button.setText(self.translator.t("gui.button.browse_file"))
         self.source_dir_button.setText(self.translator.t("gui.button.browse_dir"))
+        self.source_add_button.setText(self.translator.t("gui.button.add_to_queue"))
         self.output_button.setText(self.translator.t("gui.button.browse_dir"))
         self.manage_presets_button.setText(self.translator.t("gui.button.manage_presets"))
 
@@ -1024,12 +1028,16 @@ class MainWindow(QMainWindow):
         if default_preset:
             preset_index = self.preset_combo.findText(default_preset)
             if preset_index >= 0:
-                self.preset_combo.setCurrentIndex(preset_index)
+                with QSignalBlocker(self.preset_combo):
+                    self.preset_combo.setCurrentIndex(preset_index)
                 try:
                     self._applying_preset = True
                     self.options_panel.apply_options(load_preset(default_preset, self.config_dir))
-                except FileNotFoundError:
+                except (OSError, ValueError, TypeError, KeyError) as exc:
                     self.options_panel.apply_options(EncodeOptions())
+                    with QSignalBlocker(self.preset_combo):
+                        self.preset_combo.setCurrentIndex(0)
+                    self._append_log(self.translator.t("gui.log.invalid_preset", name=default_preset, error=str(exc)))
                 finally:
                     self._applying_preset = False
             else:
@@ -1095,6 +1103,7 @@ class MainWindow(QMainWindow):
         index = self.preset_combo.findData(name)
         if index >= 0:
             self.preset_combo.setCurrentIndex(index)
+            self._preset_combo_changed()
 
     def _mark_preset_modified(self) -> None:
         if self._loading_initial_state or self._applying_preset:
@@ -1117,6 +1126,7 @@ class MainWindow(QMainWindow):
         name = self.preset_combo.currentData()
         if not isinstance(name, str) or not name:
             self._preset_dirty = False
+            self._refresh_presets()
             return
         try:
             self._applying_preset = True
@@ -1207,6 +1217,7 @@ class MainWindow(QMainWindow):
         self._mark_preset_modified()
 
     def _on_analysis_profile_changed(self, _name: object) -> None:
+        self._update_setup_summary()
         self._persist_runtime_state()
 
     def _save_app_config_preserving_capabilities(self) -> None:
@@ -1322,6 +1333,7 @@ class MainWindow(QMainWindow):
         self._encoder_capabilities_ready = True
         self._runtime_banner = None
         self.options_panel.set_runtime_capabilities(capabilities)
+        self._update_setup_summary()
         self._set_encoder_status("", "", visible=False)
         self._append_log(
             self.translator.t(
@@ -1535,6 +1547,7 @@ class MainWindow(QMainWindow):
         for widget in [
             self.source_file_button,
             self.source_dir_button,
+            self.source_add_button,
             self.output_button,
             self.manage_presets_button,
             self.source_combo,
@@ -1611,7 +1624,7 @@ class MainWindow(QMainWindow):
         invalid_output = bool(output_text) and Path(output_text).expanduser().is_file()
         self.output_edit.setProperty("invalid", invalid_output)
         self.output_edit.setToolTip(
-            self.translator.t("gui.message.path_missing") if invalid_output else output_text
+            self.translator.t("gui.message.path_not_directory") if invalid_output else output_text
         )
         self.output_edit.style().unpolish(self.output_edit)
         self.output_edit.style().polish(self.output_edit)
@@ -1711,7 +1724,7 @@ class MainWindow(QMainWindow):
             )
             return
         self._persist_runtime_state()
-        worker = QueueIntakeWorker(input_path, self.options_panel.recursive_scan_enabled(), self._selected_ffprobe(), ffmpeg_path=self._selected_ffmpeg())
+        worker = QueueIntakeWorker(input_path, self.options_panel.recursive_scan_enabled(), self._selected_ffprobe(), ffmpeg_path=self._selected_ffmpeg(), translator=self.translator)
         self._start_worker(worker, self._on_sources_ready)
 
     def _start_plan_for_files(self, files: Sequence[Path | VideoFileItem]) -> None:
@@ -1719,14 +1732,14 @@ class MainWindow(QMainWindow):
             return
         self._persist_runtime_state()
         file_items = [item if isinstance(item, VideoFileItem) else VideoFileItem(item.resolve(), Path(item.name)) for item in files]
-        worker = QueueIntakeWorker(None, False, self._selected_ffprobe(), file_items, ffmpeg_path=self._selected_ffmpeg())
+        worker = QueueIntakeWorker(None, False, self._selected_ffprobe(), file_items, ffmpeg_path=self._selected_ffmpeg(), translator=self.translator)
         self._start_worker(worker, self._on_sources_ready)
 
     def _on_sources_ready(self, records: list[QueueItemRecord]) -> None:
-        existing = {str(record.source_path).casefold() for record in self.queue_model.records()}
+        existing = {os.path.normcase(str(record.source_path)) for record in self.queue_model.records()}
         unique = []
         for record in records:
-            key = str(record.source_path).casefold()
+            key = os.path.normcase(str(record.source_path))
             if key not in existing:
                 existing.add(key)
                 unique.append(record)
@@ -1951,26 +1964,9 @@ class MainWindow(QMainWindow):
             self._plan_current_source()
             return
 
-        all_video_files: list[VideoFileItem] = []
-        for p in existing_paths:
-            if p.is_file():
-                if p.suffix.lower() in VIDEO_EXTENSIONS:
-                    all_video_files.append(
-                        VideoFileItem(path=p.resolve(), relative_path=Path(p.name))
-                    )
-            elif p.is_dir():
-                try:
-                    discovered = collect_video_files(p, recursive=self.options_panel.recursive_scan_enabled())
-                    all_video_files.extend(discovered)
-                except Exception:
-                    pass
-        if not all_video_files:
-            self._append_log(self.translator.t("gui.log.no_video_files_dropped"))
-            return
-        if len(existing_paths) == 1 and existing_paths[0].is_file():
-            self.source_combo.setEditText(str(existing_paths[0]))
-            self._persist_runtime_state()
-        self._start_plan_for_files(all_video_files)
+        worker = QueueIntakeWorker(None, self.options_panel.recursive_scan_enabled(), self._selected_ffprobe(),
+                                   paths=existing_paths, ffmpeg_path=self._selected_ffmpeg(), translator=self.translator)
+        self._start_worker(worker, self._on_sources_ready)
 
     # Queue selection and views
 

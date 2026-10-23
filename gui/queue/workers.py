@@ -8,6 +8,8 @@ from typing import Iterable
 from PySide6.QtCore import QThread, Signal
 
 from core.encoding import prepare_encode_requests
+from core.config import bundle_root
+from core.i18n import TranslationCatalog, Translator
 from core.ffmpeg import find_binary, probe_media_info, discover_ffmpeg_tools
 from core.media import collect_video_files
 from core.models import (
@@ -26,11 +28,14 @@ class QueueIntakeWorker(QThread):
     progress = Signal(object)
 
     def __init__(self, input_path: Path | None, recursive: bool, ffprobe_path: str | None,
-                 files: Iterable[VideoFileItem] | None = None, *, ffmpeg_path: str | None = None) -> None:
+                 files: Iterable[VideoFileItem] | None = None, *, ffmpeg_path: str | None = None,
+                 paths: Iterable[Path] | None = None, translator: Translator | None = None) -> None:
         super().__init__()
         self.input_path, self.recursive, self.ffprobe_path = input_path, recursive, ffprobe_path
         self.files = list(files) if files is not None else None
         self.ffmpeg_path = ffmpeg_path
+        self.paths = list(paths) if paths is not None else None
+        self.translator = translator or TranslationCatalog(bundle_dir=bundle_root() / "config/i18n").translator("en")
         self._cancel_event = threading.Event()
 
     def cancel(self) -> None:
@@ -38,17 +43,30 @@ class QueueIntakeWorker(QThread):
 
     def run(self) -> None:
         try:
-            files = self.files if self.files is not None else collect_video_files(
-                self.input_path or Path(), self.recursive, self.log.emit)
+            sources: list[tuple[VideoFileItem, Path | None]] = []
+            if self.files is not None:
+                sources = [(item, None) for item in self.files]
+            else:
+                for path in self.paths if self.paths is not None else [self.input_path or Path()]:
+                    self.progress.emit({"stage": "planning", "state": "scanning", "file_path": str(path)})
+                    try:
+                        items = collect_video_files(path, self.recursive, self.log.emit, cancel_check=self._cancel_event.is_set)
+                    except (OSError, ValueError, RuntimeError) as exc:
+                        if self.paths is None:
+                            raise
+                        self.log.emit(self.translator.t("gui.log.intake_failed", file=str(path), error=str(exc)))
+                        continue
+                    sources.extend((item, path if path.is_dir() else None) for item in items)
             if self.ffmpeg_path is not None:
                 _ffmpeg, probe = discover_ffmpeg_tools(self.ffmpeg_path, self.ffprobe_path)
             else:
                 probe = find_binary(self.ffprobe_path, "ffprobe")
-            input_root = self.input_path if self.input_path is not None and self.input_path.is_dir() else None
             records: list[QueueItemRecord] = []
-            for item in files:
+            for index, (item, input_root) in enumerate(sources):
+                self.progress.emit({"stage": "planning", "state": "probing", "file_name": item.path.name,
+                                    "percent": index * 100 / max(1, len(sources))})
                 if self._cancel_event.is_set():
-                    raise OperationCancelledError("Source intake cancelled.")
+                    raise OperationCancelledError(self.translator.t("gui.log.intake_cancelled"))
                 draft = QueueSourceDraft(item, input_root)
                 error = None
                 try:
@@ -57,10 +75,10 @@ class QueueIntakeWorker(QThread):
                     raise
                 except Exception as exc:
                     error = str(exc)
-                    self.log.emit(f"Cannot read {item.path.name}: {error}")
+                    self.log.emit(self.translator.t("gui.log.intake_failed", file=item.path.name, error=error))
                 records.append(create_draft_record(draft, error))
             if self._cancel_event.is_set():
-                raise OperationCancelledError("Source intake cancelled.")
+                raise OperationCancelledError(self.translator.t("gui.log.intake_cancelled"))
             self.completed.emit(records)
         except OperationCancelledError as exc:
             self.cancelled.emit(str(exc))

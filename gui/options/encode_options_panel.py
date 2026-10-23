@@ -3,9 +3,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from enum import Enum
 import math
+import re
 from typing import Final
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QSignalBlocker, Signal
 from PySide6.QtGui import QResizeEvent, QStandardItemModel
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -103,13 +104,14 @@ class EncodeOptionsPanel(QWidget):
 
         self._connect_signals()
         self.ratio_edit.textChanged.connect(self._validate_ratio)
+        self.audio_bitrate_edit.textChanged.connect(self._validate_audio_bitrate)
 
     def _connect_signals(self) -> None:
         self.smart_algorithm_combo.currentIndexChanged.connect(self._on_smart_algorithm_changed)
         self.compression_mode_combo.currentIndexChanged.connect(self._on_compression_mode_changed)
         self.audio_mode_combo.currentIndexChanged.connect(self.sync_dependent_controls)
         self.codec_combo.currentIndexChanged.connect(self._on_codec_changed)
-        self.backend_combo.currentIndexChanged.connect(self.refresh_encoder_preset_choices)
+        self.backend_combo.currentIndexChanged.connect(self._on_backend_changed)
         self.decode_acceleration_combo.currentIndexChanged.connect(self.sync_dependent_controls)
         self.analysis_profile_combo.currentIndexChanged.connect(self._on_analysis_profile_changed)
         for combo in (
@@ -120,7 +122,6 @@ class EncodeOptionsPanel(QWidget):
             self.container_combo,
             self.audio_mode_combo,
             self.viewing_context_combo,
-            self.analysis_profile_combo,
         ):
             combo.currentIndexChanged.connect(self._emit_options_changed)
         for spin in (self.min_vmaf_spin, self.max_output_ratio_spin, self.min_bitrate_spin,
@@ -324,11 +325,13 @@ class EncodeOptionsPanel(QWidget):
         self.min_bitrate_spin = QSpinBox()
         self.min_bitrate_spin.setRange(0, 500000)
         self.min_bitrate_spin.setValue(250)
+        self.min_bitrate_spin.setSuffix(" kbps")
 
         self.max_bitrate_label = QLabel()
         self.max_bitrate_spin = QSpinBox()
         self.max_bitrate_spin.setRange(0, 500000)
         self.max_bitrate_spin.setValue(0)
+        self.max_bitrate_spin.setSuffix(" kbps")
 
         self.maxrate_factor_label = QLabel()
         self.maxrate_factor_spin = QDoubleSpinBox()
@@ -412,10 +415,11 @@ class EncodeOptionsPanel(QWidget):
     # ---------------------------------------------------------------- profiles
 
     def apply_analysis_profile_settings(self) -> None:
-        name, _settings = analysis_profiles_from_config(self.app_config)
-        index = self.analysis_profile_combo.findData(name.value)
-        if index >= 0:
-            self.analysis_profile_combo.setCurrentIndex(index)
+        with QSignalBlocker(self):
+            name, _settings = analysis_profiles_from_config(self.app_config)
+            index = self.analysis_profile_combo.findData(name.value)
+            if index >= 0:
+                self.analysis_profile_combo.setCurrentIndex(index)
 
     def current_analysis_profile_name(self) -> AnalysisProfileName:
         return parse_analysis_profile_name(self.analysis_profile_combo.currentData())
@@ -441,7 +445,24 @@ class EncodeOptionsPanel(QWidget):
         )
         return valid
 
+    def _validate_audio_bitrate(self) -> bool:
+        text = self.audio_bitrate_edit.text().strip()
+        match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)([kKmM]?)", text or "128k")
+        valid = self.audio_mode_combo.currentData() != AudioMode.AAC.value or bool(match and float(match.group(1)) > 0)
+        self.audio_bitrate_edit.setProperty("invalid", not valid)
+        self.audio_bitrate_edit.setToolTip("" if valid else self.translator.t("gui.message.invalid_audio_bitrate"))
+        self.audio_bitrate_edit.style().unpolish(self.audio_bitrate_edit)
+        self.audio_bitrate_edit.style().polish(self.audio_bitrate_edit)
+        return valid
+
     def read_options(self) -> EncodeOptions:
+        if self._pending_backend is not None or self._pending_encoder_preset is not None:
+            raise ValueError(self.translator.t("gui.message.encoder_selection_pending"))
+        if not self._validate_audio_bitrate():
+            self.audio_bitrate_edit.setFocus()
+            raise ValueError(self.translator.t("gui.message.invalid_audio_bitrate"))
+        if self.max_bitrate_spin.value() and self.max_bitrate_spin.value() < self.min_bitrate_spin.value():
+            raise ValueError(self.translator.t("gui.message.invalid_bitrate_range"))
         ratio_text = self.ratio_edit.text().strip()
         if not self._validate_ratio():
             self.ratio_edit.setFocus()
@@ -496,81 +517,89 @@ class EncodeOptionsPanel(QWidget):
         )
 
     def apply_options(self, options: EncodeOptions) -> None:
-        self.smart_algorithm_combo.setCurrentIndex(self.smart_algorithm_combo.findData(options.smart_algorithm.value))
-        codec_index = self.codec_combo.findData(options.codec.value)
-        if codec_index >= 0:
-            self.codec_combo.setCurrentIndex(codec_index)
-        mode_index = self.compression_mode_combo.findData(options.compression_mode.value)
-        if mode_index >= 0:
-            self.compression_mode_combo.setCurrentIndex(mode_index)
-        self._rebuild_backend_controls(preferred_backend=options.backend, log_reset=options.backend != BackendChoice.AUTO)
-        self._refresh_decode_acceleration_choices(
-            preferred=options.decode_acceleration,
-            log_reset=options.decode_acceleration != DecodeAcceleration.SOFTWARE,
-        )
-        self.ratio_edit.setText("" if options.ratio is None else str(options.ratio))
-        self.min_vmaf_spin.setValue(options.min_vmaf)
-        viewing_index = self.viewing_context_combo.findData(options.viewing_context.value)
-        if viewing_index >= 0:
-            self.viewing_context_combo.setCurrentIndex(viewing_index)
-        self.max_output_ratio_spin.setValue(
-            resolve_max_output_ratio(options.codec, options.max_output_ratio) * 100.0
-        )
-        container_index = self.container_combo.findData(options.container.value)
-        if container_index >= 0:
-            self.container_combo.setCurrentIndex(container_index)
-        audio_index = self.audio_mode_combo.findData(options.audio_mode.value)
-        if audio_index >= 0:
-            self.audio_mode_combo.setCurrentIndex(audio_index)
-        self.audio_bitrate_edit.setText(options.audio_bitrate)
-        self.pix_fmt_edit.setText(options.pix_fmt)
-        self.min_bitrate_spin.setValue(options.min_video_kbps)
-        self.max_bitrate_spin.setValue(options.max_video_kbps)
-        self.maxrate_factor_spin.setValue(options.maxrate_factor)
-        self.bufsize_factor_spin.setValue(options.bufsize_factor)
-        self.copy_subtitles_check.setChecked(options.copy_subtitles)
-        self.copy_external_subtitles_check.setChecked(options.copy_external_subtitles)
-        self.two_pass_check.setChecked(options.two_pass)
-        self.overwrite_check.setChecked(options.overwrite)
-        self.recursive_check.setChecked(options.recursive)
-        self.refresh_encoder_preset_choices(preset=options.encoder_preset, log_invalid=options.encoder_preset is not None)
-        self.sync_dependent_controls()
+        with QSignalBlocker(self):
+            self.smart_algorithm_combo.setCurrentIndex(self.smart_algorithm_combo.findData(options.smart_algorithm.value))
+            codec_index = self.codec_combo.findData(options.codec.value)
+            if codec_index >= 0:
+                self.codec_combo.setCurrentIndex(codec_index)
+            mode_index = self.compression_mode_combo.findData(options.compression_mode.value)
+            if mode_index >= 0:
+                self.compression_mode_combo.setCurrentIndex(mode_index)
+            self._rebuild_backend_controls(preferred_backend=options.backend, log_reset=options.backend != BackendChoice.AUTO)
+            self._refresh_decode_acceleration_choices(
+                preferred=options.decode_acceleration,
+                log_reset=options.decode_acceleration != DecodeAcceleration.SOFTWARE,
+            )
+            self.ratio_edit.setText("" if options.ratio is None else str(options.ratio))
+            self.min_vmaf_spin.setValue(options.min_vmaf)
+            viewing_index = self.viewing_context_combo.findData(options.viewing_context.value)
+            if viewing_index >= 0:
+                self.viewing_context_combo.setCurrentIndex(viewing_index)
+            self.max_output_ratio_spin.setValue(
+                resolve_max_output_ratio(options.codec, options.max_output_ratio) * 100.0
+            )
+            container_index = self.container_combo.findData(options.container.value)
+            if container_index >= 0:
+                self.container_combo.setCurrentIndex(container_index)
+            audio_index = self.audio_mode_combo.findData(options.audio_mode.value)
+            if audio_index >= 0:
+                self.audio_mode_combo.setCurrentIndex(audio_index)
+            self.audio_bitrate_edit.setText(options.audio_bitrate)
+            self.pix_fmt_edit.setText(options.pix_fmt)
+            self.min_bitrate_spin.setValue(options.min_video_kbps)
+            self.max_bitrate_spin.setValue(options.max_video_kbps)
+            self.maxrate_factor_spin.setValue(options.maxrate_factor)
+            self.bufsize_factor_spin.setValue(options.bufsize_factor)
+            self.copy_subtitles_check.setChecked(options.copy_subtitles)
+            self.copy_external_subtitles_check.setChecked(options.copy_external_subtitles)
+            self.two_pass_check.setChecked(options.two_pass)
+            self.overwrite_check.setChecked(options.overwrite)
+            self.recursive_check.setChecked(options.recursive)
+            self.refresh_encoder_preset_choices(preset=options.encoder_preset, log_invalid=options.encoder_preset is not None)
+            self.sync_dependent_controls()
 
     # ------------------------------------------------------ capabilities logic
 
     def begin_capability_detection(self) -> None:
-        self._encoder_capabilities_ready = False
-        self._runtime_capabilities_snapshot = None
-        self._rebuild_backend_controls()
-        # Do not show stale choices while the worker refreshes the snapshot.
-        # ``refresh_encoder_preset_choices`` retains a selected value so it
-        # can be restored after detection completes.
-        self.refresh_encoder_preset_choices()
+        with QSignalBlocker(self):
+            self._encoder_capabilities_ready = False
+            self._runtime_capabilities_snapshot = None
+            self._rebuild_backend_controls()
+            # Do not show stale choices while the worker refreshes the snapshot.
+            # ``refresh_encoder_preset_choices`` retains a selected value so it
+            # can be restored after detection completes.
+            self.refresh_encoder_preset_choices()
 
     def set_runtime_capabilities(self, capabilities: dict) -> None:
-        self._encoder_capabilities_ready = True
-        self._runtime_capabilities_snapshot = dict(capabilities)
-        pending_backend = self._pending_backend
-        self._pending_backend = None
-        pending_preset = self._pending_encoder_preset
-        self._pending_encoder_preset = None
-        self._rebuild_backend_controls(
-            preferred_backend=pending_backend,
-            log_reset=pending_backend is not None,
-        )
-        self._refresh_decode_acceleration_choices(log_reset=True)
-        self._refresh_smart_mode_availability()
-        self.refresh_encoder_preset_choices(preset=pending_preset)
+        with QSignalBlocker(self):
+            self._encoder_capabilities_ready = True
+            self._runtime_capabilities_snapshot = dict(capabilities)
+            pending_backend = self._pending_backend
+            self._pending_backend = None
+            pending_preset = self._pending_encoder_preset
+            self._pending_encoder_preset = None
+            self._rebuild_backend_controls(
+                preferred_backend=pending_backend,
+                log_reset=pending_backend is not None,
+            )
+            self._refresh_decode_acceleration_choices(log_reset=True)
+            self._refresh_smart_mode_availability()
+            self.refresh_encoder_preset_choices(preset=pending_preset)
+        vmaf = capabilities.get("vmaf")
+        if isinstance(vmaf, dict) and not vmaf.get("runnable"):
+            self.smart_unavailable.emit(self.compression_mode_combo.toolTip())
 
     def notify_capability_detection_failed(self) -> None:
-        self._encoder_capabilities_ready = False
-        self._runtime_capabilities_snapshot = None
-        self._pending_backend = None
-        self._pending_encoder_preset = None
-        self._rebuild_backend_controls()
-        self.refresh_encoder_preset_choices()
-        self._refresh_decode_acceleration_choices(log_reset=True, force_unavailable=True)
-        self._refresh_smart_mode_availability(force_unavailable=True)
+        with QSignalBlocker(self):
+            self._encoder_capabilities_ready = False
+            self._runtime_capabilities_snapshot = None
+            self._pending_backend = None
+            self._pending_encoder_preset = None
+            self._rebuild_backend_controls()
+            self.refresh_encoder_preset_choices()
+            self._refresh_decode_acceleration_choices(log_reset=True, force_unavailable=True)
+            self._refresh_smart_mode_availability(force_unavailable=True)
+        self.smart_unavailable.emit(self.compression_mode_combo.toolTip())
 
     def set_busy(self, busy: bool) -> None:
         self.options_tabs.setEnabled(not busy)
@@ -623,112 +652,119 @@ class EncodeOptionsPanel(QWidget):
             self.setTabOrder(first, second)
 
     def set_translator(self, translator: Translator) -> None:
-        self.translator = translator
-        self.codec_label.setText(self.translator.t("gui.label.codec"))
-        for codec in (CodecChoice.HEVC, CodecChoice.AV1):
-            index = self.codec_combo.findData(codec.value)
-            if index >= 0:
-                self.codec_combo.setItemText(index, self._codec_label(codec))
-        for container in (ContainerChoice.MKV, ContainerChoice.MP4):
-            index = self.container_combo.findData(container.value)
-            if index >= 0:
-                self.container_combo.setItemText(index, self._container_label(container))
-        for audio_mode in (AudioMode.COPY, AudioMode.AAC):
-            index = self.audio_mode_combo.findData(audio_mode.value)
-            if index >= 0:
-                self.audio_mode_combo.setItemText(index, self._audio_mode_label(audio_mode))
-        self.compression_mode_label.setText(self.translator.t("gui.label.compression_mode"))
-        self.smart_algorithm_label.setText(self.translator.t("gui.label.smart_algorithm"))
-        self.smart_algorithm_combo.setItemText(0, self.translator.t("gui.value.smart_v1"))
-        self.smart_algorithm_combo.setItemText(1, self.translator.t("gui.value.smart_v2"))
-        self.smart_algorithm_combo.setToolTip(self.translator.t("gui.tooltip.smart_v2"))
-        smart_mode_index = self.compression_mode_combo.findData(CompressionMode.SMART.value)
-        fixed_mode_index = self.compression_mode_combo.findData(CompressionMode.FIXED_BITRATE.value)
-        if smart_mode_index >= 0:
-            self.compression_mode_combo.setItemText(
-                smart_mode_index,
-                self.translator.t("gui.value.compression_smart"),
+        with QSignalBlocker(self):
+            self.translator = translator
+            self.codec_label.setText(self.translator.t("gui.label.codec"))
+            for codec in (CodecChoice.HEVC, CodecChoice.AV1):
+                index = self.codec_combo.findData(codec.value)
+                if index >= 0:
+                    self.codec_combo.setItemText(index, self._codec_label(codec))
+            for container in (ContainerChoice.MKV, ContainerChoice.MP4):
+                index = self.container_combo.findData(container.value)
+                if index >= 0:
+                    self.container_combo.setItemText(index, self._container_label(container))
+            for audio_mode in (AudioMode.COPY, AudioMode.AAC):
+                index = self.audio_mode_combo.findData(audio_mode.value)
+                if index >= 0:
+                    self.audio_mode_combo.setItemText(index, self._audio_mode_label(audio_mode))
+            self.compression_mode_label.setText(self.translator.t("gui.label.compression_mode"))
+            self.smart_algorithm_label.setText(self.translator.t("gui.label.smart_algorithm"))
+            self.smart_algorithm_combo.setItemText(0, self.translator.t("gui.value.smart_v1"))
+            self.smart_algorithm_combo.setItemText(1, self.translator.t("gui.value.smart_v2"))
+            self.smart_algorithm_combo.setToolTip(self.translator.t("gui.tooltip.smart_v2"))
+            smart_mode_index = self.compression_mode_combo.findData(CompressionMode.SMART.value)
+            fixed_mode_index = self.compression_mode_combo.findData(CompressionMode.FIXED_BITRATE.value)
+            if smart_mode_index >= 0:
+                self.compression_mode_combo.setItemText(
+                    smart_mode_index,
+                    self.translator.t("gui.value.compression_smart"),
+                )
+            if fixed_mode_index >= 0:
+                self.compression_mode_combo.setItemText(
+                    fixed_mode_index,
+                    self.translator.t("gui.value.compression_fixed"),
+                )
+            self.backend_label.setText(self.translator.t("gui.label.backend"))
+            self.container_label.setText(self.translator.t("gui.label.container"))
+            self.ratio_label.setText(self.translator.t("gui.label.ratio"))
+            ratio_tooltip = self.translator.t("gui.tooltip.ratio")
+            self.ratio_label.setToolTip(ratio_tooltip)
+            self.ratio_edit.setToolTip(ratio_tooltip)
+            self.min_vmaf_label.setText(self.translator.t("gui.label.min_vmaf"))
+            self.min_vmaf_label.setToolTip(self.translator.t("gui.tooltip.min_vmaf"))
+            self.min_vmaf_spin.setToolTip(self.translator.t("gui.tooltip.min_vmaf"))
+            self.max_output_ratio_label.setText(self.translator.t("gui.label.max_output_ratio"))
+            max_ratio_tooltip = self.translator.t("gui.tooltip.max_output_ratio")
+            self.max_output_ratio_label.setToolTip(max_ratio_tooltip)
+            self.max_output_ratio_spin.setToolTip(max_ratio_tooltip)
+            self.analysis_profile_label.setText(self.translator.t("gui.label.analysis_profile"))
+            self.analysis_profile_combo.setItemText(
+                self.analysis_profile_combo.findData(AnalysisProfileName.FAST.value),
+                self.translator.t("gui.value.analysis_fast"),
             )
-        if fixed_mode_index >= 0:
-            self.compression_mode_combo.setItemText(
-                fixed_mode_index,
-                self.translator.t("gui.value.compression_fixed"),
+            self.analysis_profile_combo.setItemText(
+                self.analysis_profile_combo.findData(AnalysisProfileName.BALANCE.value),
+                self.translator.t("gui.value.analysis_balance"),
             )
-        self.backend_label.setText(self.translator.t("gui.label.backend"))
-        self.container_label.setText(self.translator.t("gui.label.container"))
-        self.ratio_label.setText(self.translator.t("gui.label.ratio"))
-        ratio_tooltip = self.translator.t("gui.tooltip.ratio")
-        self.ratio_label.setToolTip(ratio_tooltip)
-        self.ratio_edit.setToolTip(ratio_tooltip)
-        self.min_vmaf_label.setText(self.translator.t("gui.label.min_vmaf"))
-        self.min_vmaf_label.setToolTip(self.translator.t("gui.tooltip.min_vmaf"))
-        self.min_vmaf_spin.setToolTip(self.translator.t("gui.tooltip.min_vmaf"))
-        self.max_output_ratio_label.setText(self.translator.t("gui.label.max_output_ratio"))
-        max_ratio_tooltip = self.translator.t("gui.tooltip.max_output_ratio")
-        self.max_output_ratio_label.setToolTip(max_ratio_tooltip)
-        self.max_output_ratio_spin.setToolTip(max_ratio_tooltip)
-        self.analysis_profile_label.setText(self.translator.t("gui.label.analysis_profile"))
-        self.analysis_profile_combo.setItemText(
-            self.analysis_profile_combo.findData(AnalysisProfileName.FAST.value),
-            self.translator.t("gui.value.analysis_fast"),
-        )
-        self.analysis_profile_combo.setItemText(
-            self.analysis_profile_combo.findData(AnalysisProfileName.BALANCE.value),
-            self.translator.t("gui.value.analysis_balance"),
-        )
-        self.analysis_profile_combo.setItemText(
-            self.analysis_profile_combo.findData(AnalysisProfileName.PRECISE.value),
-            self.translator.t("gui.value.analysis_precise"),
-        )
-        self.analysis_profile_combo.setToolTip(self.translator.t("gui.tooltip.analysis_profile"))
-        self.viewing_context_label.setText(self.translator.t("gui.label.viewing_context"))
-        self.viewing_context_combo.setItemText(
-            self.viewing_context_combo.findData(VmafViewingContext.HIGH_FIDELITY.value),
-            self.translator.t("gui.value.viewing_high_fidelity"),
-        )
-        self.viewing_context_combo.setItemText(
-            self.viewing_context_combo.findData(VmafViewingContext.STANDARD_DISPLAY.value),
-            self.translator.t("gui.value.viewing_standard_display"),
-        )
-        viewing_tooltip = self.translator.t("gui.tooltip.viewing_context")
-        self.viewing_context_label.setToolTip(viewing_tooltip)
-        self.viewing_context_combo.setToolTip(viewing_tooltip)
-        self.overwrite_check.setText(self.translator.t("gui.checkbox.overwrite"))
-        self.recursive_check.setText(self.translator.t("gui.checkbox.recursive"))
-        self.encoder_preset_label.setText(self.translator.t("gui.label.encoder_preset"))
-        self.decode_acceleration_label.setText(self.translator.t("gui.label.decode_acceleration"))
-        self.decode_acceleration_combo.setItemText(
-            self.decode_acceleration_combo.findData(DecodeAcceleration.SOFTWARE.value),
-            self.translator.t("gui.value.decode_software"),
-        )
-        self.decode_acceleration_combo.setItemText(
-            self.decode_acceleration_combo.findData(DecodeAcceleration.VIDEOTOOLBOX.value),
-            self.translator.t("gui.value.decode_videotoolbox"),
-        )
-        self.pix_fmt_label.setText(self.translator.t("gui.label.pix_fmt"))
-        self.min_bitrate_label.setText(self.translator.t("gui.label.min_video_kbps"))
-        self.max_bitrate_label.setText(self.translator.t("gui.label.max_video_kbps"))
-        self.maxrate_factor_label.setText(self.translator.t("gui.label.maxrate_factor"))
-        self.bufsize_factor_label.setText(self.translator.t("gui.label.bufsize_factor"))
-        self.two_pass_check.setText(self.translator.t("gui.checkbox.two_pass"))
-        self.audio_mode_label.setText(self.translator.t("gui.label.audio_mode"))
-        self.audio_bitrate_label.setText(self.translator.t("gui.label.audio_bitrate"))
-        self.copy_subtitles_check.setText(self.translator.t("gui.checkbox.copy_subtitles"))
-        self.copy_external_subtitles_check.setText(self.translator.t("gui.checkbox.copy_external_subtitles"))
-        self.ratio_edit.setPlaceholderText(self.translator.t("gui.placeholder.auto_ratio"))
-        self.pix_fmt_edit.setPlaceholderText("yuv420p")
-        self.audio_bitrate_edit.setPlaceholderText("128k")
+            self.analysis_profile_combo.setItemText(
+                self.analysis_profile_combo.findData(AnalysisProfileName.PRECISE.value),
+                self.translator.t("gui.value.analysis_precise"),
+            )
+            self.analysis_profile_combo.setToolTip(self.translator.t("gui.tooltip.analysis_profile"))
+            self.viewing_context_label.setText(self.translator.t("gui.label.viewing_context"))
+            self.viewing_context_combo.setItemText(
+                self.viewing_context_combo.findData(VmafViewingContext.HIGH_FIDELITY.value),
+                self.translator.t("gui.value.viewing_high_fidelity"),
+            )
+            self.viewing_context_combo.setItemText(
+                self.viewing_context_combo.findData(VmafViewingContext.STANDARD_DISPLAY.value),
+                self.translator.t("gui.value.viewing_standard_display"),
+            )
+            viewing_tooltip = self.translator.t("gui.tooltip.viewing_context")
+            self.viewing_context_label.setToolTip(viewing_tooltip)
+            self.viewing_context_combo.setToolTip(viewing_tooltip)
+            self.overwrite_check.setText(self.translator.t("gui.checkbox.overwrite"))
+            self.recursive_check.setText(self.translator.t("gui.checkbox.recursive"))
+            self.encoder_preset_label.setText(self.translator.t("gui.label.encoder_preset"))
+            self.decode_acceleration_label.setText(self.translator.t("gui.label.decode_acceleration"))
+            self.decode_acceleration_combo.setItemText(
+                self.decode_acceleration_combo.findData(DecodeAcceleration.SOFTWARE.value),
+                self.translator.t("gui.value.decode_software"),
+            )
+            self.decode_acceleration_combo.setItemText(
+                self.decode_acceleration_combo.findData(DecodeAcceleration.VIDEOTOOLBOX.value),
+                self.translator.t("gui.value.decode_videotoolbox"),
+            )
+            self.pix_fmt_label.setText(self.translator.t("gui.label.pix_fmt"))
+            self.min_bitrate_label.setText(self.translator.t("gui.label.min_video_kbps"))
+            self.max_bitrate_label.setText(self.translator.t("gui.label.max_video_kbps"))
+            self.max_bitrate_spin.setSpecialValueText(self.translator.t("gui.value.unlimited"))
+            self.maxrate_factor_label.setText(self.translator.t("gui.label.maxrate_factor"))
+            self.bufsize_factor_label.setText(self.translator.t("gui.label.bufsize_factor"))
+            self.two_pass_check.setText(self.translator.t("gui.checkbox.two_pass"))
+            self.audio_mode_label.setText(self.translator.t("gui.label.audio_mode"))
+            self.audio_bitrate_label.setText(self.translator.t("gui.label.audio_bitrate"))
+            self.copy_subtitles_check.setText(self.translator.t("gui.checkbox.copy_subtitles"))
+            self.copy_external_subtitles_check.setText(self.translator.t("gui.checkbox.copy_external_subtitles"))
+            self.ratio_edit.setPlaceholderText(self.translator.t("gui.placeholder.auto_ratio"))
+            self.pix_fmt_edit.setPlaceholderText("yuv420p")
+            self.audio_bitrate_edit.setPlaceholderText("128k")
 
-        self.options_tabs.setTabText(self.options_tabs.indexOf(self.basic_tab), self.translator.t("gui.tab.basic"))
-        self.options_tabs.setTabText(self.options_tabs.indexOf(self.video_tab), self.translator.t("gui.tab.video"))
-        self.options_tabs.setTabText(self.options_tabs.indexOf(self.audio_tab), self.translator.t("gui.tab.audio_subtitles"))
+            self.options_tabs.setTabText(self.options_tabs.indexOf(self.basic_tab), self.translator.t("gui.tab.basic"))
+            self.options_tabs.setTabText(self.options_tabs.indexOf(self.video_tab), self.translator.t("gui.tab.video"))
+            self.options_tabs.setTabText(self.options_tabs.indexOf(self.audio_tab), self.translator.t("gui.tab.audio_subtitles"))
 
-        self._bind_labels()
-        self.apply_tab_order()
-        self._rebuild_backend_controls()
-        self.refresh_encoder_preset_choices()
+            self._bind_labels()
+            self.apply_tab_order()
+            self._rebuild_backend_controls()
+            self.refresh_encoder_preset_choices()
 
     # ---------------------------------------------------- backend/preset logic
+
+    def _on_backend_changed(self, *_args: object) -> None:
+        self._pending_backend = None
+        self._pending_encoder_preset = None
+        self.refresh_encoder_preset_choices()
 
     def _on_codec_changed(self, *_args: object) -> None:
         current_codec = self._current_codec()
@@ -826,28 +862,20 @@ class EncodeOptionsPanel(QWidget):
             current_backend = BackendChoice(str(current_value)) if current_value else BackendChoice.AUTO
         except ValueError:
             current_backend = BackendChoice.AUTO
-        desired_backend = preferred_backend or current_backend
+        desired_backend = preferred_backend or self._pending_backend or current_backend
 
         choices = [BackendChoice.AUTO, *self._available_explicit_backends_for_current_codec()]
         if self._runtime_capabilities() is None and BackendChoice.CPU not in choices:
             choices.append(BackendChoice.CPU)
 
-        if desired_backend in choices:
-            selected_backend = desired_backend
-        else:
-            # ``choices`` always contains AUTO, so a desired backend that reaches this
-            # branch is never AUTO; the redundant identity checks were dropped.
-            selected_backend = BackendChoice.AUTO
-            if self._runtime_capabilities() is None:
-                self._pending_backend = desired_backend
+        if desired_backend not in choices:
+            self._pending_backend = desired_backend
+            choices.append(desired_backend)
             if log_reset and self._runtime_capabilities() is not None:
-                self._append_log(
-                    self.translator.t(
-                        "gui.log.backend_reset",
-                        backend=desired_backend.value,
-                        fallback=selected_backend.value,
-                    )
-                )
+                self._append_log(self.translator.t("gui.message.encoder_selection_pending"))
+        else:
+            self._pending_backend = None
+        selected_backend = desired_backend
 
         self.backend_combo.blockSignals(True)
         self.backend_combo.clear()
@@ -864,6 +892,7 @@ class EncodeOptionsPanel(QWidget):
 
     def sync_dependent_controls(self) -> None:
         self._validate_ratio()
+        self._validate_audio_bitrate()
         mode_value = self.compression_mode_combo.currentData() or self.compression_mode_combo.currentText()
         smart_mode = mode_value == CompressionMode.SMART.value
         self.smart_algorithm_label.setVisible(smart_mode)
@@ -991,39 +1020,40 @@ class EncodeOptionsPanel(QWidget):
         preset: str | None | _PresetUnset = _PRESET_UNSET,
         log_invalid: bool = False,
     ) -> None:
-        desired_preset = self._current_encoder_preset() if preset is _PRESET_UNSET else preset
-        if self.backend_combo.currentData() == BackendChoice.AUTO.value:
-            # ``apply_options`` may request an explicit backend before the
-            # worker has produced a snapshot.  Keep its preset alongside the
-            # pending backend; a true AUTO selection must discard it.
-            if desired_preset is not None and self._pending_backend is not None:
-                self._pending_encoder_preset = desired_preset
-            else:
-                self._pending_encoder_preset = None
-            self._set_encoder_preset_items([])
-            self.encoder_preset_combo.setEnabled(False)
-            self.encoder_preset_combo.setToolTip(self.translator.t("gui.tooltip.encoder_preset_auto"))
-            self._select_encoder_preset(None, log_invalid=False)
-            return
-        capabilities = self._runtime_capabilities()
-        if capabilities is None:
-            if desired_preset is not None:
-                self._pending_encoder_preset = desired_preset
-            else:
-                self._pending_encoder_preset = None
-            self._set_encoder_preset_items([])
-            self.encoder_preset_combo.setEnabled(False)
-            self.encoder_preset_combo.setToolTip(self.translator.t("gui.tooltip.encoder_preset_unavailable"))
-            self._select_encoder_preset(None, log_invalid=log_invalid and desired_preset is not None)
-            return
-        self._pending_encoder_preset = None
-        choices = preset_choices_from_capabilities(
-            capabilities,
-            self._current_codec(),
-            BackendChoice(str(self.backend_combo.currentData())),
-        )
-        self._set_encoder_preset_items(choices)
-        self.encoder_preset_combo.setEnabled(bool(choices))
-        tooltip_key = "gui.tooltip.encoder_preset_unavailable" if not choices else ""
-        self.encoder_preset_combo.setToolTip(self.translator.t(tooltip_key) if tooltip_key else "")
-        self._select_encoder_preset(desired_preset, log_invalid=log_invalid)
+        with QSignalBlocker(self):
+            desired_preset = (self._current_encoder_preset() or self._pending_encoder_preset) if preset is _PRESET_UNSET else preset
+            if self.backend_combo.currentData() == BackendChoice.AUTO.value:
+                # ``apply_options`` may request an explicit backend before the
+                # worker has produced a snapshot.  Keep its preset alongside the
+                # pending backend; a true AUTO selection must discard it.
+                if desired_preset is not None and self._pending_backend is not None:
+                    self._pending_encoder_preset = desired_preset
+                else:
+                    self._pending_encoder_preset = None
+                self._set_encoder_preset_items([])
+                self.encoder_preset_combo.setEnabled(False)
+                self.encoder_preset_combo.setToolTip(self.translator.t("gui.tooltip.encoder_preset_auto"))
+                self._select_encoder_preset(None, log_invalid=False)
+                return
+            capabilities = self._runtime_capabilities()
+            if capabilities is None:
+                if desired_preset is not None:
+                    self._pending_encoder_preset = desired_preset
+                else:
+                    self._pending_encoder_preset = None
+                self._set_encoder_preset_items([])
+                self.encoder_preset_combo.setEnabled(False)
+                self.encoder_preset_combo.setToolTip(self.translator.t("gui.tooltip.encoder_preset_unavailable"))
+                self._select_encoder_preset(None, log_invalid=log_invalid and desired_preset is not None)
+                return
+            self._pending_encoder_preset = None
+            choices = preset_choices_from_capabilities(
+                capabilities,
+                self._current_codec(),
+                BackendChoice(str(self.backend_combo.currentData())),
+            )
+            self._set_encoder_preset_items(choices)
+            self.encoder_preset_combo.setEnabled(bool(choices))
+            tooltip_key = "gui.tooltip.encoder_preset_unavailable" if not choices else ""
+            self.encoder_preset_combo.setToolTip(self.translator.t(tooltip_key) if tooltip_key else "")
+            self._select_encoder_preset(desired_preset, log_invalid=log_invalid)
