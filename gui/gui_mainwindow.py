@@ -808,6 +808,7 @@ class MainWindow(QMainWindow):
             selection_model.selectionChanged.connect(self._on_queue_selection_changed)
         self.queue_model.dataChanged.connect(self._update_details_panel)
         self.queue_model.modelReset.connect(self._clear_details_panel)
+        self.queue_model.layoutChanged.connect(self._update_details_panel)
 
         self.queue_model.metricsChanged.connect(self._update_queue_metrics)
         self.queue_manager.log.connect(self._append_log)
@@ -1563,6 +1564,7 @@ class MainWindow(QMainWindow):
         queue_busy = self.queue_busy or self.queue_manager.is_busy()
         any_busy = plan_busy or queue_busy
         self.details_panel.set_busy(any_busy)
+        self.queue_model.set_execution_locked(any_busy)
         self._update_decision_banner(self.queue_model.metrics())
         has_queued_items = bool(self.queue_model.draft_records() or self.queue_model.execution_records())
         has_pending_run = self.queue_manager.has_pending_run()
@@ -2161,6 +2163,8 @@ class MainWindow(QMainWindow):
                 self._append_log(self.translator.t("gui.log.cleared_completed", count=removed))
 
     def _remove_selected_queue_rows(self) -> None:
+        if self.active_worker is not None or self.queue_manager.is_busy():
+            return
         rows = self._selected_rows_from_view(self._active_queue_view())
         if not rows:
             return
@@ -2389,7 +2393,7 @@ class MainWindow(QMainWindow):
             if key == self._dismissed_banner_key:
                 self.notification_banner.hide_message()
                 return
-            self.notification_banner.show_message(text, severity="success", actions=actions)
+            self.notification_banner.show_message(text, severity="warning" if metrics.failed_items or metrics.cancelled_items else "success", actions=actions)
             return
         if self._runtime_banner is not None:
             text, severity, actions = self._runtime_banner()

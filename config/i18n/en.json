@@ -244,7 +244,7 @@
   "gui.summary.estimated_saved": "Estimated saved space",
   "gui.summary.saved_at_least": "at least {value}",
   "gui.summary.queue_states": "Ready {ready} / Running {running} / Needs decision {decision} / Failed {failed}",
-  "gui.summary.queue_progress": "Queue: {percent}% ({completed}/{total})    ETA: {eta}",
+  "gui.summary.queue_progress": "Queue: {percent}% ({completed}/{total})    ETA ≈ {eta}",
   "gui.summary.queue_window": "Items: {total}    {states}    Duration: {duration}",
   "gui.summary.plan_count": "Items: {total}, ready: {ready}, skipped: {skipped}",
   "gui.summary.output_root": "Output root: {path}",
@@ -548,5 +548,18 @@
   "gui.log.invalid_preset": "Cannot load preset {name}: {error}. Using default options.",
   "gui.log.intake_failed": "Cannot read {file}: {error}",
   "gui.log.intake_cancelled": "Source intake cancelled.",
-  "gui.state.scanning": "Scanning folders"
+  "gui.state.scanning": "Scanning folders",
+  "gui.state.analyzing": "Measuring candidates",
+  "gui.state.candidate_finished": "Candidate measured",
+  "gui.state.scouting": "Scanning scenes",
+  "gui.state.scout_finished": "Scene scan complete",
+  "gui.state.sample_plan_ready": "Samples selected",
+  "gui.state.boundary_alignment": "Aligning boundaries",
+  "gui.state.searching": "Searching candidates",
+  "gui.state.holdout_verification": "Validating holdouts",
+  "gui.state.refining": "Refining search",
+  "gui.state.receipt_loaded": "Reusing measurements",
+  "gui.state.receipt_write_failed": "Could not save measurements",
+  "gui.state.running": "Running",
+  "gui.state.failed": "Failed"
 }

@@ -11,6 +11,7 @@ from PySide6.QtCore import (
     QModelIndex,
     QPersistentModelIndex,
     QObject,
+    QTimer,
     Qt,
     Signal,
 )
@@ -139,14 +140,23 @@ def _transient_index(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
 
 class QueueTableModel(QAbstractTableModel):
     metricsChanged = Signal(object)
+    sortChanged = Signal(int, object)
 
     def __init__(self, tr: Translator, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self.translator = tr
         self._records: list[QueueItemRecord] = []
         self._metrics = QueueMetrics()
+        self._metrics_timer = QTimer(self)
+        self._metrics_timer.setSingleShot(True)
+        self._metrics_timer.setInterval(75)
+        self._metrics_timer.timeout.connect(self._emit_metrics_changed)
         self._preparing = False
+        self._execution_locked = False
         self._order_before_sort: list[str] | None = None
+
+    def set_execution_locked(self, locked: bool) -> None:
+        self._execution_locked = locked
 
     def set_preparing(self, preparing: bool) -> None:
         self._preparing = preparing
@@ -331,7 +341,7 @@ class QueueTableModel(QAbstractTableModel):
         destination_parent: QModelIndex | QPersistentModelIndex,
         destination_child: int,
     ) -> bool:
-        if self._preparing:
+        if self._preparing or self._execution_locked:
             return False
         source_parent = _transient_index(source_parent)
         destination_parent = _transient_index(destination_parent)
@@ -349,7 +359,7 @@ class QueueTableModel(QAbstractTableModel):
         if any(record.status in ACTIVE_ITEM_STATUSES for record in moving):
             return False
 
-        self._order_before_sort = None
+        self._clear_sort()
         self.beginMoveRows(source_parent, source_row, source_row + count - 1, destination_parent, destination_child)
         del self._records[source_row : source_row + count]
         if destination_child > source_row:
@@ -373,6 +383,8 @@ class QueueTableModel(QAbstractTableModel):
         return self._records
 
     def metrics(self) -> QueueMetrics:
+        if self._metrics_timer.isActive():
+            self._emit_metrics_changed()
         return self._metrics
 
     def record_for_row(self, row: int) -> QueueItemRecord | None:
@@ -396,7 +408,7 @@ class QueueTableModel(QAbstractTableModel):
         )
         start = len(self._records)
         end = start + len(records) - 1
-        self._order_before_sort = None
+        self._clear_sort()
         self.beginInsertRows(QModelIndex(), start, end)
         self._records.extend(records)
         self.endInsertRows()
@@ -410,7 +422,7 @@ class QueueTableModel(QAbstractTableModel):
         is active.
         """
 
-        return not self._preparing and not any(record.status in ACTIVE_ITEM_STATUSES for record in self._records)
+        return not self._preparing and not self._execution_locked and not any(record.status in ACTIVE_ITEM_STATUSES for record in self._records)
 
     def sort(self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder) -> None:
         if not self._records or not self.can_sort():
@@ -421,12 +433,21 @@ class QueueTableModel(QAbstractTableModel):
             return
         if self._order_before_sort is None:
             self._order_before_sort = [record.item_id for record in self._records]
-        self.beginResetModel()
-        self._records.sort(
-            key=self._sort_key(queue_column),
-            reverse=order == Qt.SortOrder.DescendingOrder,
-        )
-        self.endResetModel()
+        self._reorder(lambda: self._records.sort(key=self._sort_key(queue_column), reverse=order == Qt.SortOrder.DescendingOrder))
+        self.sortChanged.emit(column, order)
+
+    def _reorder(self, change: Callable[[], None]) -> None:
+        self.layoutAboutToBeChanged.emit()
+        previous = self.persistentIndexList()
+        identities = [(self._records[index.row()].item_id, index.column()) for index in previous]
+        change()
+        rows = {record.item_id: row for row, record in enumerate(self._records)}
+        self.changePersistentIndexList(previous, [self.index(rows[item_id], column) for item_id, column in identities])
+        self.layoutChanged.emit()
+
+    def _clear_sort(self) -> None:
+        self._order_before_sort = None
+        self.sortChanged.emit(-1, Qt.SortOrder.AscendingOrder)
 
     def has_sort_order(self) -> bool:
         return self._order_before_sort is not None
@@ -436,10 +457,8 @@ class QueueTableModel(QAbstractTableModel):
         if not self._order_before_sort or not self.can_sort():
             return False
         order = {item_id: index for index, item_id in enumerate(self._order_before_sort)}
-        self.beginResetModel()
-        self._records.sort(key=lambda record: order.get(record.item_id, len(order)))
-        self.endResetModel()
-        self._order_before_sort = None
+        self._reorder(lambda: self._records.sort(key=lambda record: order.get(record.item_id, len(order))))
+        self._clear_sort()
         self._emit_metrics_changed()
         return True
 
@@ -458,7 +477,7 @@ class QueueTableModel(QAbstractTableModel):
             return lambda record: (record.duration_sec,)
         if column == QueueColumn.SOURCE_BITRATE:
             return lambda record: (
-                record.media_info.format_bitrate_bps if record.media_info is not None else 0,
+                (record.media_info.video_bitrate_bps or 0) if record.media_info is not None else 0,
             )
         if column == QueueColumn.TARGET_BITRATE:
             return lambda record: (record.plan_item.target_video_bitrate_bps if record.plan_item is not None else 0,)
@@ -483,9 +502,7 @@ class QueueTableModel(QAbstractTableModel):
             return quality_key
         if column == QueueColumn.ENCODER:
             return lambda record: (
-                record.plan_item.encoder_info.encoder_name.casefold()
-                if record.plan_item is not None and record.plan_item.encoder_info is not None
-                else "",
+                (record.assigned_encoder or (record.plan_item.encoder_info.encoder_name if record.plan_item is not None and record.plan_item.encoder_info is not None else "")).casefold(),
             )
         if column == QueueColumn.OUTPUT:
             return lambda record: (record.output_path.name.casefold() if record.plan_item is not None else "",)
@@ -500,12 +517,12 @@ class QueueTableModel(QAbstractTableModel):
         return lambda record: (0,)
 
     def remove_rows_by_index(self, rows: list[int]) -> int:
-        if self._preparing:
+        if self._preparing or self._execution_locked:
             return 0
         targets = sorted({row for row in rows if 0 <= row < len(self._records)}, reverse=True)
         removed = 0
         if targets:
-            self._order_before_sort = None
+            self._clear_sort()
         for row in targets:
             if self._records[row].status in ACTIVE_ITEM_STATUSES:
                 continue
@@ -534,7 +551,7 @@ class QueueTableModel(QAbstractTableModel):
         return self.remove_rows_by_index(targets)
 
     def retry_rows(self, rows: list[int]) -> int:
-        if self._preparing:
+        if self._preparing or self._execution_locked:
             return 0
         retried = 0
         changed_rows: list[int] = []
@@ -696,7 +713,9 @@ class QueueTableModel(QAbstractTableModel):
         if row is None or record is None:
             return
         apply_record_progress_event(record, event)
-        self._emit_rows_changed([row])
+        self.dataChanged.emit(self.index(row, 0), self.index(row, self.columnCount() - 1))
+        if not self._metrics_timer.isActive():
+            self._metrics_timer.start()
 
     def apply_result(self, item_id: str, result: EncodeResult) -> None:
         row, record = self.record_for_id(item_id)
@@ -740,7 +759,7 @@ class QueueTableModel(QAbstractTableModel):
         rows: list[int],
         edit: Callable[[QueueItemRecord], bool],
     ) -> int:
-        if self._preparing:
+        if self._preparing or self._execution_locked:
             raise RuntimeError("Queue preparation owns these settings until it finishes.")
         targets = sorted(set(rows))
         if not targets or not self.can_edit_rows(targets):
@@ -810,5 +829,6 @@ class QueueTableModel(QAbstractTableModel):
             )
 
     def _emit_metrics_changed(self) -> None:
+        self._metrics_timer.stop()
         self._metrics = compute_metrics(self._records)
         self.metricsChanged.emit(self._metrics)

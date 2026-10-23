@@ -50,6 +50,21 @@ PROGRESS_STAGE_KEYS = {
 }
 
 PROGRESS_STATE_KEYS = {
+    "scanning": "gui.state.scanning",
+    "analyzing": "gui.state.analyzing",
+    "candidate_finished": "gui.state.candidate_finished",
+    "scouting": "gui.state.scouting",
+    "scout_finished": "gui.state.scout_finished",
+    "sample_plan_ready": "gui.state.sample_plan_ready",
+    "boundary_alignment": "gui.state.boundary_alignment",
+    "searching": "gui.state.searching",
+    "holdout_verification": "gui.state.holdout_verification",
+    "refining": "gui.state.refining",
+    "receipt_loaded": "gui.state.receipt_loaded",
+    "receipt_write_failed": "gui.state.receipt_write_failed",
+    "running": "gui.state.running",
+    "failed": "gui.state.failed",
+
     "probing": "gui.state.probing",
     "started": "gui.state.started",
     "starting_file": "gui.state.starting_file",
@@ -138,6 +153,9 @@ class QueueItemRecord:
     analysis_candidate_limit: int = 0
     analysis_measurement_budget: int = 0
     draft: QueueSourceDraft | None = None
+    # -1 means not inspected yet; zero also represents unavailable size.
+    source_size_bytes: int = -1
+    output_size_bytes: int = -1
 
     def __post_init__(self) -> None:
         if (self.plan_item is None) != (self.job_snapshot is None):
@@ -420,10 +438,9 @@ def estimate_saved_bytes(records: list[QueueItemRecord]) -> tuple[int | None, bo
         if media is None or media.duration <= 0 or record.bound_plan_item.skip_reason:
             continue
 
-        try:
-            source_bytes = record.source_path.stat().st_size
-        except OSError:
-            source_bytes = int(media.duration * max(int(media.format_bitrate_bps or 0), 0) / 8.0)
+        if record.status in no_output_statuses:
+            continue
+        source_bytes = _record_source_bytes(record) or 0
         if source_bytes <= 0:
             continue
 
@@ -483,24 +500,24 @@ def processed_weight(record: QueueItemRecord) -> float:
 
 
 def _record_source_bytes(record: QueueItemRecord) -> int | None:
-    try:
-        return record.source_path.stat().st_size
-    except OSError:
-        media = record.media_info
-        if media is not None and media.duration > 0 and media.format_bitrate_bps:
-            return int(media.duration * media.format_bitrate_bps / 8.0)
-    return None
+    if record.source_size_bytes < 0:
+        try:
+            record.source_size_bytes = record.source_path.stat().st_size
+        except OSError:
+            media = record.media_info
+            record.source_size_bytes = int(media.duration * (media.format_bitrate_bps or 0) / 8) if media else 0
+    return record.source_size_bytes or None
 
 
 def _record_output_bytes(record: QueueItemRecord) -> int | None:
     if record.result is not None and record.result.actual_output_bytes is not None:
         return record.result.actual_output_bytes
-    try:
-        if record.status == QueueItemStatus.DONE and record.output_path.exists():
-            return record.output_path.stat().st_size
-    except OSError:
-        return None
-    return None
+    if record.output_size_bytes < 0:
+        try:
+            record.output_size_bytes = record.output_path.stat().st_size if record.status == QueueItemStatus.DONE else 0
+        except OSError:
+            record.output_size_bytes = 0
+    return record.output_size_bytes or None
 
 
 def compute_metrics(records: list[QueueItemRecord]) -> QueueMetrics:
@@ -566,7 +583,7 @@ def compute_metrics(records: list[QueueItemRecord]) -> QueueMetrics:
         metrics.current_speed = running_record.last_speed or "-"
         metrics.current_elapsed_sec = running_record.elapsed_sec
         metrics.current_total_duration_sec = running_record.duration_sec or None
-        speed_factor = parse_speed_factor(running_record.last_speed or "")
+        speed_factor = sum(parse_speed_factor(record.last_speed or "") or 0 for record in records if record.status in ACTIVE_ITEM_STATUSES)
         if speed_factor:
             remaining_weight = max(0.0, total_weight - completed_weight)
             metrics.eta_sec = remaining_weight / speed_factor
@@ -598,6 +615,7 @@ def reset_for_retry(record: QueueItemRecord) -> None:
         if record.bound_plan_item.options.compression_mode == CompressionMode.SMART
         else QueueItemStatus.QUEUED
     )
+    record.source_size_bytes = record.output_size_bytes = -1
     record.current_pass_index = 0
     record.pass_percent = 0.0
     record.file_progress = 0.0

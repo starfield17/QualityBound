@@ -183,15 +183,20 @@ class QueueManager(QObject):
     def is_busy(self) -> bool:
         return self._worker is not None or self._postprocessing_pending or self._preparation_pending
 
+    def _publish_busy(self) -> None:
+        busy = self.is_busy()
+        self.model.set_execution_locked(busy)
+        self.busyChanged.emit(busy)
+
     def begin_preparation(self) -> None:
         self._preparation_pending = True
         self.model.set_preparing(True)
-        self.busyChanged.emit(True)
+        self._publish_busy()
 
     def finish_preparation(self) -> None:
         self._preparation_pending = False
         self.model.set_preparing(False)
-        self.busyChanged.emit(self.is_busy())
+        self._publish_busy()
 
     def add_plan(self, plan: EncodePlan, workdir: Path) -> int:
         records = create_queue_records(plan, workdir)
@@ -243,7 +248,7 @@ class QueueManager(QObject):
         self._worker.failed.connect(self._on_worker_failed)
         self._worker.queue_finished.connect(self._on_worker_queue_finished)
         self._worker.finished.connect(self._on_worker_thread_finished)
-        self.busyChanged.emit(True)
+        self._publish_busy()
         self.stateChanged.emit("running")
         self._worker.start()
         return True
@@ -263,6 +268,8 @@ class QueueManager(QObject):
         return True
 
     def remove_rows(self, rows: list[int]) -> int:
+        if self.is_busy():
+            return 0
         targets = [
             row
             for row in rows
@@ -280,20 +287,26 @@ class QueueManager(QObject):
         # preserved output that must be accepted, retried, or discarded first.
         if record.status in ACTIVE_ITEM_STATUSES:
             return False
-        if record.status == QueueItemStatus.NEEDS_DECISION and record.item_id in self._pending_item_ids():
+        if record.status == QueueItemStatus.NEEDS_DECISION and (record.item_id in self._pending_item_ids() or (record.result is not None and record.result.rejected_output_path is not None)):
             return False
         return True
 
     def can_remove_rows(self, rows: list[int]) -> bool:
+        if self.is_busy():
+            return False
         return any(
             (record := self.model.record_for_row(row)) is not None and self._is_removable(record)
             for row in rows
         )
 
     def retry_rows(self, rows: list[int]) -> int:
+        if self.is_busy():
+            return 0
         return self.model.retry_rows(rows)
 
     def clear_completed(self) -> int:
+        if self.is_busy():
+            return 0
         protected_decisions = {
             record.item_id
             for record in self._pending_records()
@@ -399,11 +412,11 @@ class QueueManager(QObject):
 
     def begin_postprocessing(self) -> None:
         self._postprocessing_pending = True
-        self.busyChanged.emit(True)
+        self._publish_busy()
 
     def finish_postprocessing(self) -> None:
         self._postprocessing_pending = False
-        self.busyChanged.emit(False)
+        self._publish_busy()
         self._reconcile_pending_run()
 
     def _reconcile_pending_run(self) -> None:
@@ -436,8 +449,8 @@ class QueueManager(QObject):
             if self._pending_run is not None:
                 self.executionStopped.emit(self._pending_run)
             if not self._postprocessing_pending:
-                self.busyChanged.emit(False)
+                self._publish_busy()
             self._reconcile_pending_run()
         else:
-            self.busyChanged.emit(False)
+            self._publish_busy()
         self.workerFinished.emit()

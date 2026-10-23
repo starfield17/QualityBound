@@ -4,10 +4,10 @@ import re
 import subprocess
 from functools import lru_cache
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 from core.models import BackendChoice, CodecChoice, EncoderInfo
-from core.ffmpeg.subprocess import noninteractive_run_kwargs
+from core.ffmpeg.subprocess import noninteractive_run_kwargs, run_cancellable
 
 
 # Ordered by preference: hardware encoders (NVENC, QSV, AMF, VideoToolbox) are
@@ -75,11 +75,12 @@ def parse_hwaccels(output: str) -> set[str]:
     return hwaccels
 
 
-def list_available_hwaccels(ffmpeg_path: Path) -> set[str]:
-    proc = subprocess.run(
+def list_available_hwaccels(ffmpeg_path: Path, *, cancel_check: Callable[[], bool] | None = None) -> set[str]:
+    proc = run_cancellable(
         [str(ffmpeg_path), "-hide_banner", "-hwaccels"],
         check=False,
         capture_output=True,
+        cancel_check=cancel_check,
         text=True,
         encoding="utf-8",
         errors="replace",
@@ -89,11 +90,12 @@ def list_available_hwaccels(ffmpeg_path: Path) -> set[str]:
     return parse_hwaccels(output)
 
 
-def list_available_encoders(ffmpeg_path: Path) -> set[str]:
-    proc = subprocess.run(
+def list_available_encoders(ffmpeg_path: Path, *, cancel_check: Callable[[], bool] | None = None) -> set[str]:
+    proc = run_cancellable(
         [str(ffmpeg_path), "-hide_banner", "-encoders"],
         check=True,
         capture_output=True,
+        cancel_check=cancel_check,
         text=True,
         encoding="utf-8",
         errors="replace",
@@ -122,11 +124,12 @@ def _fallback_preset_choices(encoder_name: str) -> list[str]:
     return list(FALLBACK_PRESET_CHOICES.get(encoder_name, ()))
 
 
-def _run_encoder_help(ffmpeg_path: Path, encoder_name: str) -> str:
-    proc = subprocess.run(
+def _run_encoder_help(ffmpeg_path: Path, encoder_name: str, *, cancel_check: Callable[[], bool] | None = None) -> str:
+    proc = run_cancellable(
         [str(ffmpeg_path), "-hide_banner", "-h", f"encoder={encoder_name}"],
         check=False,
         capture_output=True,
+        cancel_check=cancel_check,
         text=True,
         encoding="utf-8",
         errors="replace",
@@ -179,10 +182,12 @@ def _cached_runtime_preset_choices(
     return tuple(_extract_preset_choices(output))
 
 
-def preset_choices_for_encoder(ffmpeg_path: Path, encoder_name: str) -> list[str]:
+def preset_choices_for_encoder(ffmpeg_path: Path, encoder_name: str, *, cancel_check: Callable[[], bool] | None = None) -> list[str]:
     if encoder_name.endswith("_videotoolbox"):
         return []
     try:
+        if cancel_check is not None:
+            return _extract_preset_choices(_run_encoder_help(ffmpeg_path, encoder_name, cancel_check=cancel_check)) or _fallback_preset_choices(encoder_name)
         choices = list(
             _cached_runtime_preset_choices(
                 ffmpeg_path,

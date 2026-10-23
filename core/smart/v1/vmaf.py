@@ -5,12 +5,13 @@ import math
 import os
 import re
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
 from core.ffmpeg.filters import quote_filter_value
-from core.ffmpeg.subprocess import noninteractive_run_kwargs
+from core.ffmpeg.subprocess import noninteractive_run_kwargs, run_cancellable
 from core.media.metadata import infer_bit_depth_from_pix_fmt
 from core.models import MediaInfo, VmafBackend, VmafRuntimeSupport, VmafViewingContext
 
@@ -426,9 +427,10 @@ def parse_vmaf_json(
     return VmafWindowScore(mean=mean, p10=p10, worst_1s=worst_1s, gate_score=gate_score)
 
 
-def _run_capture(cmd: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+def _run_capture(cmd: list[str], cancel_check: Callable[[], bool] | None = None) -> subprocess.CompletedProcess[str]:
+    return run_cancellable(
         cmd,
+        cancel_check=cancel_check,
         check=False,
         capture_output=True,
         text=True,
@@ -446,11 +448,12 @@ def _probe_vmaf_runtime_cached(
     model_spec: VmafModelSpec,
     backend: VmafBackend,
     pipeline_version: int,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> VmafRuntimeSupport:
     del size, mtime_ns, pipeline_version
     try:
         command = build_vmaf_probe_command(Path(ffmpeg_path), model_spec, backend)
-        proc = _run_capture(command)
+        proc = _run_capture(command, cancel_check) if cancel_check is not None else _run_capture(command)
     except (OSError, ValueError) as exc:
         return VmafRuntimeSupport(backend, model_spec.name, False, str(exc))
     output = proc.stdout + "\n" + proc.stderr
@@ -473,6 +476,7 @@ def probe_vmaf_runtime(
     ffmpeg_path: Path,
     model_spec: VmafModelSpec,
     backend: VmafBackend,
+    *, cancel_check: Callable[[], bool] | None = None,
 ) -> VmafRuntimeSupport:
     try:
         resolved = ffmpeg_path.resolve()
@@ -481,6 +485,10 @@ def probe_vmaf_runtime(
     except OSError:
         resolved = ffmpeg_path
         size, mtime_ns = None, None
+    if cancel_check is not None:
+        return _probe_vmaf_runtime_cached.__wrapped__(
+            str(resolved), size, mtime_ns, model_spec, backend, VMAF_MEASUREMENT_PIPELINE_VERSION, cancel_check
+        )
     return _probe_vmaf_runtime_cached(
         str(resolved), size, mtime_ns, model_spec, backend, VMAF_MEASUREMENT_PIPELINE_VERSION
     )

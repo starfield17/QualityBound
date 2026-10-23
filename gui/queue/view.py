@@ -87,6 +87,14 @@ class QueueItemDelegate(QStyledItemDelegate):
             value = int(round(float(text.rstrip("%")) * 10))
         except ValueError:
             value = 0
+        background = QStyleOptionViewItem(option)
+        QApplication.style().drawPrimitive(QStyle.PrimitiveElement.PE_PanelItemViewItem, background, painter, option.widget)
+        if text in {"-", "—", ""}:
+            painter.save()
+            painter.setPen(option.palette.text().color())
+            painter.drawText(option.rect, Qt.AlignmentFlag.AlignCenter, text)
+            painter.restore()
+            return
         progress = QStyleOptionProgressBar()
         progress.initFrom(option.widget)
         progress.rect = option.rect.adjusted(4, 5, -4, -5)
@@ -240,9 +248,13 @@ class ResponsiveQueueTableView(QTableView):
         model.layoutChanged.connect(self.schedule_reflow)
         model.rowsInserted.connect(self._on_rows_changed)
         model.rowsRemoved.connect(self._on_rows_changed)
+        if isinstance(model, QueueTableModel):
+            model.sortChanged.connect(self._sync_sort_indicator)
         self._watched_model = model
 
     def _disconnect_model_signals(self, model: QAbstractItemModel) -> None:
+        if isinstance(model, QueueTableModel):
+            model.sortChanged.disconnect(self._sync_sort_indicator)
         for signal, slot in [
             (model.modelReset, self.schedule_reflow),
             (model.layoutChanged, self.schedule_reflow),
@@ -266,6 +278,11 @@ class ResponsiveQueueTableView(QTableView):
             self._manual_flex_widths[_logical_index] = max(_new_size, flex_minimum_width(_logical_index))
         self.schedule_reflow()
 
+    def _sync_sort_indicator(self, section: int, order: Qt.SortOrder) -> None:
+        header = self.horizontalHeader()
+        header.setSortIndicator(section, order)
+        header.setSortIndicatorShown(section >= 0)
+
     def _on_header_clicked(self, section: int) -> None:
         # Sorting is opt-in: the first click fixes an order, the second reverses
         # it, and the model refuses to reorder while a run is active.
@@ -277,7 +294,8 @@ class ResponsiveQueueTableView(QTableView):
             return
         order = Qt.SortOrder.AscendingOrder
         if (
-            header.sortIndicatorSection() == section
+            header.isSortIndicatorShown()
+            and header.sortIndicatorSection() == section
             and header.sortIndicatorOrder() == Qt.SortOrder.AscendingOrder
         ):
             order = Qt.SortOrder.DescendingOrder
@@ -411,6 +429,7 @@ def create_queue_view(parent: QWidget | None = None) -> ResponsiveQueueTableView
     view.setDropIndicatorShown(True)
     view.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
     view.setDefaultDropAction(Qt.DropAction.MoveAction)
+    view.setDragDropOverwriteMode(False)
 
     header = view.horizontalHeader()
     header.setStretchLastSection(False)

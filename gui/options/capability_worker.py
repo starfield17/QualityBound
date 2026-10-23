@@ -7,6 +7,7 @@ from PySide6.QtCore import QThread, Signal
 
 from core.ffmpeg import ensure_encoder_capabilities, find_binary
 from core.models import (
+    OperationCancelledError,
     VmafBackend,
     VmafRuntimeSupport,
 )
@@ -59,6 +60,7 @@ class EncoderCapabilityDetectWorker(QThread):
                 ffmpeg,
                 force_refresh=self.force_refresh,
                 progress_callback=self._emit_log,
+                cancel_check=self._cancelled,
             )
             if self._cancelled():
                 return
@@ -66,7 +68,7 @@ class EncoderCapabilityDetectWorker(QThread):
             for model in VMAF_PRODUCTION_MODELS:
                 if self._cancelled():
                     return
-                vmaf_models.append(probe_vmaf_runtime(ffmpeg, model, VmafBackend.CPU))
+                vmaf_models.append(probe_vmaf_runtime(ffmpeg, model, VmafBackend.CPU, cancel_check=self._cancelled))
             vmaf_errors = [
                 f"{support.model}: {support.error_message}"
                 for support in vmaf_models
@@ -88,5 +90,8 @@ class EncoderCapabilityDetectWorker(QThread):
                 "error_message": "; ".join(vmaf_errors) or None,
             }
             self.completed.emit(capabilities)
+        except OperationCancelledError:
+            return
         except Exception as exc:
-            self.failed.emit(str(exc))
+            if not self._cancelled():
+                self.failed.emit(str(exc))

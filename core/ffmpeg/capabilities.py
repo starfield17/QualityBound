@@ -13,9 +13,9 @@ from core.ffmpeg.encoders import (
     list_available_hwaccels,
     preset_choices_for_encoder,
 )
-from core.models import BackendChoice, CodecChoice
+from core.models import BackendChoice, CodecChoice, OperationCancelledError
 from core.config.store import load_app_config, update_app_config
-from core.ffmpeg.subprocess import noninteractive_run_kwargs
+from core.ffmpeg.subprocess import noninteractive_run_kwargs, run_cancellable
 
 
 # Preset choices are part of each usable encoder entry.  Bump the schema so
@@ -40,11 +40,12 @@ def _ffmpeg_mtime_ns(ffmpeg_path: Path) -> int:
     return int(ffmpeg_path.stat().st_mtime_ns)
 
 
-def _ffmpeg_version_line(ffmpeg_path: Path) -> str:
-    proc = subprocess.run(
+def _ffmpeg_version_line(ffmpeg_path: Path, *, cancel_check: Callable[[], bool] | None = None) -> str:
+    proc = run_cancellable(
         [str(ffmpeg_path), "-version"],
         check=True,
         capture_output=True,
+        cancel_check=cancel_check,
         text=True,
         encoding="utf-8",
         errors="replace",
@@ -147,6 +148,7 @@ def smoke_test_encoder(
     encoder_name: str,
     *,
     timeout_sec: float = SMOKE_TEST_TIMEOUT_SEC,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> bool:
     cmd = [
         str(ffmpeg_path),
@@ -168,10 +170,11 @@ def smoke_test_encoder(
         cmd += ["-allow_sw", "0"]
     cmd += ["-f", "null", "-"]
     try:
-        proc = subprocess.run(
+        proc = run_cancellable(
             cmd,
             check=False,
             capture_output=True,
+        cancel_check=cancel_check,
             text=True,
             encoding="utf-8",
             errors="replace",
@@ -189,14 +192,15 @@ def detect_encoder_capabilities(
     progress_callback: Callable[[str], None] | None = None,
     *,
     available_hwaccels: set[str] | None = None,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> dict:
     resolved = _resolved_ffmpeg_path(ffmpeg_path)
     if available_encoders is None:
         _emit(progress_callback, "Scanning FFmpeg encoder list...")
-        available_encoders = list_available_encoders(resolved)
+        available_encoders = list_available_encoders(resolved, cancel_check=cancel_check) if cancel_check is not None else list_available_encoders(resolved)
     if available_hwaccels is None:
         _emit(progress_callback, "Scanning FFmpeg hardware-accelerator list...")
-        available_hwaccels = list_available_hwaccels(resolved)
+        available_hwaccels = list_available_hwaccels(resolved, cancel_check=cancel_check) if cancel_check is not None else list_available_hwaccels(resolved)
     available_hwaccels = {
         item.strip().lower()
         for item in available_hwaccels
@@ -207,7 +211,7 @@ def detect_encoder_capabilities(
         "schema_version": ENCODER_CAPABILITIES_SCHEMA_VERSION,
         "ffmpeg_path": str(resolved),
         "ffmpeg_mtime_ns": _ffmpeg_mtime_ns(resolved),
-        "ffmpeg_version": _ffmpeg_version_line(resolved),
+        "ffmpeg_version": _ffmpeg_version_line(resolved, cancel_check=cancel_check) if cancel_check is not None else _ffmpeg_version_line(resolved),
         "detected_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "hwaccels": sorted(available_hwaccels),
         "codecs": {},
@@ -217,18 +221,21 @@ def detect_encoder_capabilities(
     for codec in CodecChoice:
         usable: list[dict[str, object]] = []
         for backend, encoder_name in iter_codec_candidates(codec):
+            if cancel_check is not None and cancel_check():
+                raise OperationCancelledError("Encoder detection cancelled.")
             if encoder_name not in available_encoders:
                 _emit(progress_callback, f"{codec.value}/{backend.value}: {encoder_name} is not in this FFmpeg build.")
                 continue
             _emit(progress_callback, f"{codec.value}/{backend.value}: testing {encoder_name}...")
-            if smoke_test_encoder(resolved, encoder_name):
+            if (smoke_test_encoder(resolved, encoder_name, cancel_check=cancel_check) if cancel_check is not None else smoke_test_encoder(resolved, encoder_name)):
                 _emit(progress_callback, f"{codec.value}/{backend.value}: reading preset choices...")
                 # Preset probing is deliberately part of capability detection.
                 # This function runs in the GUI worker, so the panel can render
                 # the resulting snapshot without starting FFmpeg on the UI
                 # thread.  ``preset_choices_for_encoder`` falls back to its
                 # static list when an encoder does not expose help output.
-                preset_choices = preset_choices_for_encoder(resolved, encoder_name)
+                preset_choices = (preset_choices_for_encoder(resolved, encoder_name, cancel_check=cancel_check)
+                                  if cancel_check is not None else preset_choices_for_encoder(resolved, encoder_name))
                 usable.append(
                     {
                         "backend": backend.value,
@@ -249,6 +256,7 @@ def ensure_encoder_capabilities(
     *,
     force_refresh: bool = False,
     progress_callback: Callable[[str], None] | None = None,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> dict:
     resolved = _resolved_ffmpeg_path(ffmpeg_path)
     with _CACHE_LOCK:
@@ -261,6 +269,8 @@ def ensure_encoder_capabilities(
             return cached
 
         _emit(progress_callback, "Detecting hardware encoders...")
-        capabilities = detect_encoder_capabilities(resolved, progress_callback=progress_callback)
+        capabilities = detect_encoder_capabilities(resolved, progress_callback=progress_callback, cancel_check=cancel_check)
+        if cancel_check is not None and cancel_check():
+            raise OperationCancelledError("Encoder detection cancelled.")
         save_encoder_capabilities(capabilities)
         return capabilities

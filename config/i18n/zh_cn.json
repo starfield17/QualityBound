@@ -244,7 +244,7 @@
   "gui.summary.estimated_saved": "预计节省空间",
   "gui.summary.saved_at_least": "至少 {value}",
   "gui.summary.queue_states": "就绪 {ready} / 运行 {running} / 待决定 {decision} / 失败 {failed}",
-  "gui.summary.queue_progress": "队列：{percent}%（{completed}/{total}）    ETA：{eta}",
+  "gui.summary.queue_progress": "队列：{percent}%（{completed}/{total}）    ETA ≈{eta}",
   "gui.summary.queue_window": "项目：{total}    {states}    时长：{duration}",
   "gui.summary.plan_count": "项目总数：{total}，可执行：{ready}，跳过：{skipped}",
   "gui.summary.output_root": "输出根目录：{path}",
@@ -548,5 +548,18 @@
   "gui.log.invalid_preset": "无法加载预设 {name}：{error}。已使用默认选项。",
   "gui.log.intake_failed": "无法读取 {file}：{error}",
   "gui.log.intake_cancelled": "已取消导入源文件。",
-  "gui.state.scanning": "正在扫描目录"
+  "gui.state.scanning": "正在扫描目录",
+  "gui.state.analyzing": "正在测量候选项",
+  "gui.state.candidate_finished": "候选项测量完成",
+  "gui.state.scouting": "正在扫描场景",
+  "gui.state.scout_finished": "场景扫描完成",
+  "gui.state.sample_plan_ready": "采样窗口已选定",
+  "gui.state.boundary_alignment": "正在对齐边界",
+  "gui.state.searching": "正在搜索候选项",
+  "gui.state.holdout_verification": "正在验证留出窗口",
+  "gui.state.refining": "正在细化搜索",
+  "gui.state.receipt_loaded": "正在复用测量结果",
+  "gui.state.receipt_write_failed": "无法保存测量结果",
+  "gui.state.running": "运行中",
+  "gui.state.failed": "失败"
 }
