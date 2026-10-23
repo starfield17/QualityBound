@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from qt_lifetime import dispose_window
+
 import os
 import tempfile
 import unittest
@@ -110,7 +112,7 @@ class GuiPresentationTestCase(unittest.TestCase):
             self.assertIn("Encoding", window.status_stage_label.text())
             self.assertIn("source.mkv", window.status_file_label.text())
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_empty_state_and_details_panel_follow_the_queue(self) -> None:
         window = MainWindow(ROOT, language="en")
@@ -126,7 +128,7 @@ class GuiPresentationTestCase(unittest.TestCase):
             window._clear_details_panel()
             self.assertTrue(window.details_panel.isHidden())
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_table_marks_estimated_quality_and_keeps_status_legible(self) -> None:
         model = QueueTableModel(Translator('en'))
@@ -161,7 +163,7 @@ class GuiPresentationTestCase(unittest.TestCase):
             log.follow_check.setChecked(False)
             self.assertFalse(log.follow_check.isChecked())
         finally:
-            log.close()
+            dispose_window(log)
 
     def test_preset_manager_uses_item_data_and_confirms_delete(self) -> None:
         dialog = PresetManagerDialog(
@@ -180,7 +182,7 @@ class GuiPresentationTestCase(unittest.TestCase):
                 dialog._request_delete()
             self.assertEqual(dialog.selected_action, {"action": "delete", "name": "anime"})
         finally:
-            dialog.close()
+            dispose_window(dialog)
 
     def test_settings_redetect_stays_open_and_validation_marks_missing_paths(self) -> None:
         dialog = SettingsDialog(Translator('en'), {"language": "en"})
@@ -193,7 +195,7 @@ class GuiPresentationTestCase(unittest.TestCase):
             self.assertIn("not a file", dialog.path_status_label.text().lower())
             self.assertTrue(dialog.path_status_label.property("invalid"))
         finally:
-            dialog.close()
+            dispose_window(dialog)
 
     def test_comparison_starts_with_placeholders_and_collapsed_help(self) -> None:
         window = ComparisonWindow(Translator('en'))
@@ -203,7 +205,7 @@ class GuiPresentationTestCase(unittest.TestCase):
             window.help_button.setChecked(True)
             self.assertFalse(window.help_label.isHidden())
         finally:
-            window.close()
+            dispose_window(window)
 
 
 if __name__ == "__main__":

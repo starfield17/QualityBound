@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from qt_lifetime import dispose_window
+
 import contextlib
 import io
 import os
@@ -123,7 +125,7 @@ class SmokeTestCase(unittest.TestCase):
             self.assertFalse(window.queue_busy)
             self.assertEqual(window.queue_progress_bar.value(), 0)
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_start_encoder_detection_uses_selected_paths(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -134,7 +136,7 @@ class SmokeTestCase(unittest.TestCase):
             worker_cls.return_value.start.assert_called_once()
         finally:
             window.encoder_detection_worker = None
-            window.close()
+            dispose_window(window)
 
     def test_runtime_selection_reads_paths_without_binding_a_plan(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -159,7 +161,7 @@ class SmokeTestCase(unittest.TestCase):
             self.assertIsNone(ffprobe_path)
             self.assertIsInstance(options, EncodeOptions)
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_main_window_applies_desktop_polish_contract(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -199,7 +201,7 @@ class SmokeTestCase(unittest.TestCase):
             ]:
                 self.assertEqual(label.objectName(), "summaryValue")
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_main_window_minimum_size_fits_low_resolution_contract(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -207,7 +209,7 @@ class SmokeTestCase(unittest.TestCase):
             self.assertLessEqual(window.minimumWidth(), 800)
             self.assertLessEqual(window.minimumHeight(), 600)
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_main_window_initial_size_is_clamped_to_available_screen(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -216,7 +218,7 @@ class SmokeTestCase(unittest.TestCase):
             self.assertLessEqual(window.width(), available.width())
             self.assertLessEqual(window.height(), available.height())
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_auxiliary_window_initial_sizes_are_clamped_to_available_screen(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -226,7 +228,7 @@ class SmokeTestCase(unittest.TestCase):
                 self.assertLessEqual(child_window.width(), available.width())
                 self.assertLessEqual(child_window.height(), available.height())
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_main_window_setup_scrolls_independently_of_queue(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -235,7 +237,7 @@ class SmokeTestCase(unittest.TestCase):
             self.assertIsInstance(window.main_scroll_area, QScrollArea)
             self.assertFalse(window.main_scroll_area.isAncestorOf(window.queue_stack))
         finally:
-            window.close()
+            dispose_window(window)
 
     def _raw_keys_displayed(self, window: MainWindow) -> list[str]:
         texts: list[str] = [window.windowTitle()]
@@ -256,21 +258,21 @@ class SmokeTestCase(unittest.TestCase):
         try:
             self.assertEqual([], self._raw_keys_displayed(window))
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_gui_zh_cn_shows_no_raw_keys(self) -> None:
         window = MainWindow(self.repo_root, language="zh_cn")
         try:
             self.assertEqual([], self._raw_keys_displayed(window))
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_gui_ja_shows_no_raw_keys(self) -> None:
         window = MainWindow(self.repo_root, language="ja")
         try:
             self.assertEqual([], self._raw_keys_displayed(window))
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_close_event_accepts_when_idle_without_prompt(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -281,7 +283,7 @@ class SmokeTestCase(unittest.TestCase):
             question.assert_not_called()
             self.assertTrue(event.isAccepted())
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_close_event_ignores_when_busy_close_is_cancelled(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -293,7 +295,7 @@ class SmokeTestCase(unittest.TestCase):
             self.assertFalse(event.isAccepted())
         finally:
             window.queue_busy = False
-            window.close()
+            dispose_window(window)
 
     def test_close_event_requests_stop_and_waits_when_busy_close_is_confirmed(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -310,7 +312,7 @@ class SmokeTestCase(unittest.TestCase):
         finally:
             window.queue_busy = False
             window._close_after_running_task_stops = False
-            window.close()
+            dispose_window(window)
 
     def test_responsive_queue_view_fills_viewport_when_space_is_available(self) -> None:
         model = QueueTableModel(Translator('en'))
@@ -330,7 +332,7 @@ class SmokeTestCase(unittest.TestCase):
             viewport_width = view.viewport().width()
             self.assertLessEqual(abs(actual_total - viewport_width), 1)
         finally:
-            view.close()
+            dispose_window(view)
 
     def test_flex_columns_are_user_resizable(self) -> None:
         view = create_queue_view()
@@ -342,7 +344,7 @@ class SmokeTestCase(unittest.TestCase):
             self.assertEqual(header.sectionResizeMode(int(QueueColumn.FOLDER)), QHeaderView.ResizeMode.Interactive)
             self.assertEqual(header.sectionResizeMode(int(QueueColumn.RESOLUTION)), QHeaderView.ResizeMode.Fixed)
         finally:
-            view.close()
+            dispose_window(view)
 
     def test_manual_resize_survives_reflow(self) -> None:
         model = QueueTableModel(Translator('en'))
@@ -359,7 +361,7 @@ class SmokeTestCase(unittest.TestCase):
             self.app.processEvents()
             self.assertGreaterEqual(header.sectionSize(int(QueueColumn.NAME)), target_width)
         finally:
-            view.close()
+            dispose_window(view)
 
 
 if __name__ == "__main__":

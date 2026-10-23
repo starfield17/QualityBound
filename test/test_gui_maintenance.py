@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from qt_lifetime import dispose_window
+
 import unittest
 import tempfile
 import json
@@ -106,7 +108,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                 finally:
                     window.queue_manager.abandon_run()
                     with patch("gui.gui_mainwindow.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
-                        window.close()
+                        dispose_window(window)
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -183,7 +185,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
             with patch("gui.gui_mainwindow.update_app_config", side_effect=update_config):
                 window._save_app_config_preserving_capabilities()
         finally:
-            window.close()
+            dispose_window(window)
 
         self.assertEqual(persisted["language"], "zh_cn")
         self.assertEqual(persisted["encoder_capabilities"], {"source": "worker"})
@@ -199,7 +201,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
             self.assertIsNotNone(window.jobs_box)
             self.assertIsNotNone(window.statusBar())
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_comparison_toolbar_opens_independent_manual_window(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -213,7 +215,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                 comparison.return_value.load_paths.assert_not_called()
                 comparison.return_value.show.assert_called_once()
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_queue_comparison_passes_source_output_and_bound_tools(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -231,7 +233,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                         record.source_path, record.output_path,
                     )
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_comparison_queue_action_is_only_enabled_for_done_item(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -254,7 +256,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                     self.assertEqual(action.isEnabled(), status == QueueItemStatus.DONE)
         finally:
             with patch("gui.gui_mainwindow.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
-                window.close()
+                dispose_window(window)
 
     def test_queue_progress_transition_is_qt_free(self) -> None:
         item = EncodePlanItem(
@@ -324,7 +326,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                 window.app_config["post_encode_action"], PostEncodeAction.SLEEP.value
             )
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_busy_queue_rejects_dropped_paths_before_planning(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -335,7 +337,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
             start_plan.assert_not_called()
         finally:
             window.queue_busy = False
-            window.close()
+            dispose_window(window)
 
     def test_run_completion_uses_only_the_current_run_records(self) -> None:
         import tempfile
@@ -353,7 +355,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
 
                 finish.assert_called_once_with([current], window.translator, window.app_config)
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_power_action_failure_is_logged_and_shown(self) -> None:
         import tempfile
@@ -388,7 +390,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                     any("permission denied" in str(call.args[0]) for call in append_log.call_args_list)
                 )
         finally:
-            window.close()
+            dispose_window(window)
 
 
     def test_source_persistence_skips_nonexistent_history_and_redundant_writes(self) -> None:
@@ -420,7 +422,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                     window._persist_runtime_state()
                 update.assert_not_called()
         finally:
-            window.close()
+            dispose_window(window)
 
 
     def test_queue_state_is_visible_and_translated(self) -> None:
@@ -440,7 +442,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                 '等待决定',
             )
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_stop_abandons_a_pending_run_when_no_worker_owns_it(self) -> None:
         import tempfile
@@ -457,7 +459,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
                 self.assertFalse(window._asked_analysis_decisions)
         finally:
             with patch("gui.gui_mainwindow.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
-                window.close()
+                dispose_window(window)
 
     def test_closing_after_execution_does_not_start_postprocessing(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -471,7 +473,7 @@ class MainWindowMaintenanceTestCase(unittest.TestCase):
             self.assertFalse(window.queue_manager.has_pending_run())
         finally:
             window._close_after_running_task_stops = False
-            window.close()
+            dispose_window(window)
 
 
 class GuiRegressionTestCase(unittest.TestCase):
@@ -493,7 +495,7 @@ class GuiRegressionTestCase(unittest.TestCase):
 
     def _close_window(self) -> None:
         with patch("gui.gui_mainwindow.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
-            self.window.close()
+            dispose_window(self.window)
 
     def _record(self, name: str, status: QueueItemStatus) -> QueueItemRecord:
         return MainWindowMaintenanceTestCase()._record(self.root, name, status)
@@ -640,7 +642,7 @@ class GuiRegressionTestCase(unittest.TestCase):
 
     def test_export_failure_is_visible_and_retains_log(self) -> None:
         log = ActivityLogWindow(self.window.translator)
-        self.addCleanup(log.close)
+        self.addCleanup(dispose_window, log)
         log.append_message("test message")
         with patch("gui.activity_log_window.QFileDialog.getSaveFileName", return_value=(str(self.root), "")), patch("gui.activity_log_window.QMessageBox.warning") as warning:
             log._export_logs()

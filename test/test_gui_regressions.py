@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from qt_lifetime import dispose_window
+
 import os
 import ntpath
 import posixpath
@@ -47,18 +49,18 @@ class GuiRegressionTests(unittest.TestCase):
         def close() -> None:
             window.queue_manager.abandon_run()
             with patch("gui.gui_mainwindow.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
-                window.close()
+                dispose_window(window)
         self.addCleanup(close)
         return window
 
     def test_settings_preserves_custom_profiles(self) -> None:
         dialog = SettingsDialog(self.tr, {"analysis_profiles": {"precise": {"candidate_limit": 42}}})
-        self.addCleanup(dialog.close)
+        self.addCleanup(dispose_window, dialog)
         self.assertNotIn("analysis_profiles", dialog.values())
 
     def test_preset_survives_translation_and_detection_without_dirty_signal(self) -> None:
         panel = EncodeOptionsPanel(self.tr, {})
-        self.addCleanup(panel.close)
+        self.addCleanup(dispose_window, panel)
         panel.apply_options(EncodeOptions(backend=BackendChoice.CPU, encoder_preset="slow"))
         changes: list[bool] = []
         panel.options_changed.connect(lambda: changes.append(True))
@@ -70,7 +72,7 @@ class GuiRegressionTests(unittest.TestCase):
 
     def test_pending_backend_is_not_read_as_auto(self) -> None:
         panel = EncodeOptionsPanel(self.tr, {})
-        self.addCleanup(panel.close)
+        self.addCleanup(dispose_window, panel)
         panel.apply_options(EncodeOptions(backend=BackendChoice.NVENC, encoder_preset="p5"))
         with self.assertRaises(ValueError):
             panel.read_options()
@@ -83,7 +85,7 @@ class GuiRegressionTests(unittest.TestCase):
 
     def test_new_workdir_is_valid_but_file_is_not(self) -> None:
         dialog = SettingsDialog(self.tr, {})
-        self.addCleanup(dialog.close)
+        self.addCleanup(dispose_window, dialog)
         self.assertIsNone(dialog._path_problem(str(self.root / "new"), expect_directory=True))
         file = self.root / "file"
         file.touch()
@@ -204,18 +206,18 @@ class GuiRegressionTests(unittest.TestCase):
                                      actual_output_bytes=3 * 1024**3, allowed_output_bytes=2 * 1024**3,
                                      rejected_output_path=self.root / "preserved.mp4")
         dialog = _DecisionDialog(self.tr, None)
-        self.addCleanup(dialog.close)
+        self.addCleanup(dispose_window, dialog)
         _size_metrics(dialog, record)
         self.assertTrue(dialog.findChildren(QProgressBar))
         quality = _DecisionDialog(self.tr, None)
-        self.addCleanup(quality.close)
+        self.addCleanup(dispose_window, quality)
         _quality_metrics(quality, record)
         text = " ".join(label.text() for label in quality.findChildren(QLabel))
         self.assertNotIn("Measured quality", text)
         self.assertIn("~91.2", text)
         from gui.queue.item_details_panel import ItemDetailsPanel
         panel = ItemDetailsPanel(self.tr)
-        self.addCleanup(panel.close)
+        self.addCleanup(dispose_window, panel)
         panel.set_record(record, self.tr)
         details = panel.details_view.toPlainText()
         self.assertIn("~91.2", details)
@@ -227,7 +229,7 @@ class GuiRegressionTests(unittest.TestCase):
         from gui.comparison.decode import ComparisonMedia
         from gui.comparison.state import VideoDetails, ComparisonPhase
         window = ComparisonWindow(self.tr)
-        self.addCleanup(window.close)
+        self.addCleanup(dispose_window, window)
         window.media = ComparisonMedia((Path("a"), Path("b")), (VideoDetails(10, 0, 25), VideoDetails(10, 0, 25)), Path("ffmpeg"), Path("ffprobe"))
         window.phase = ComparisonPhase.PAUSED
         window._update_controls()
@@ -239,7 +241,7 @@ class GuiRegressionTests(unittest.TestCase):
     def test_unfollow_retains_log_position_and_classification_is_not_substring_based(self) -> None:
         from gui.activity_log_window import ActivityLogWindow
         log = ActivityLogWindow(self.tr)
-        self.addCleanup(log.close)
+        self.addCleanup(dispose_window, log)
         log.show()
         for i in range(100):
             log.append_message(f"line {i}")
@@ -306,7 +308,6 @@ class GuiRegressionTests(unittest.TestCase):
                                 self.assertGreaterEqual(window.queue_stack.height(), 90)
 
     def test_options_tabs_fit_narrow_viewports_after_font_and_language_changes(self) -> None:
-        from PySide6.QtCore import QCoreApplication, QEvent
         from PySide6.QtWidgets import QScrollArea
         for language in ("en", "zh_cn", "ja"):
             with self.subTest(language=language):
@@ -338,9 +339,7 @@ class GuiRegressionTests(unittest.TestCase):
                             self.assertEqual(scroll.horizontalScrollBar().maximum(), 0, diagnostic)
                             self.assertLessEqual(page.minimumSizeHint().width(), page.width(), diagnostic)
                 finally:
-                    scroll.close()
-                    scroll.deleteLater()
-                    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+                    dispose_window(scroll)
 
     def test_small_setup_can_scroll_to_controls_and_recovers_on_resize(self) -> None:
         window = self.window()
@@ -573,7 +572,7 @@ class GuiRegressionTests(unittest.TestCase):
     def test_info_level_filters_debug_without_losing_records(self) -> None:
         from gui.activity_log_window import ActivityLogWindow
         log = ActivityLogWindow(self.tr)
-        self.addCleanup(log.close)
+        self.addCleanup(dispose_window, log)
         log.set_log_level("info")
         log.append_message("$ ffmpeg input")
         log.append_message("DEBUG: candidate details")
@@ -588,7 +587,7 @@ class GuiRegressionTests(unittest.TestCase):
 
     def test_unavailable_preset_can_be_changed_to_default(self) -> None:
         panel = EncodeOptionsPanel(self.tr, {})
-        self.addCleanup(panel.close)
+        self.addCleanup(dispose_window, panel)
         panel.set_runtime_capabilities({"codecs": {"hevc": [{"backend": "videotoolbox", "encoder": "hevc_videotoolbox", "preset_choices": []}]}, "vmaf": {"runnable": True}})
         panel.apply_options(EncodeOptions(backend=BackendChoice.VIDEOTOOLBOX, encoder_preset="slow"))
         with self.assertRaises(ValueError):
@@ -610,7 +609,7 @@ class GuiRegressionTests(unittest.TestCase):
         from PySide6.QtWidgets import QWidget
         from gui.comparison.window import FrameCanvas
         parent = QWidget()
-        self.addCleanup(parent.close)
+        self.addCleanup(dispose_window, parent)
         canvas = FrameCanvas(parent)
         canvas.resize(64, 64)
         source = QImage(128, 128, QImage.Format.Format_RGB32)
@@ -632,7 +631,7 @@ class GuiRegressionTests(unittest.TestCase):
     def test_comparison_shortcuts_leave_editing_and_tab_navigation_available(self) -> None:
         from gui.comparison.window import ComparisonWindow
         window = ComparisonWindow(self.tr)
-        self.addCleanup(window.close)
+        self.addCleanup(dispose_window, window)
         window.show()
         window.activateWindow()
         window.offset.setEnabled(True)

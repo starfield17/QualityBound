@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from qt_lifetime import dispose_window
+
 import contextlib
 import io
 import os
@@ -337,7 +339,7 @@ class ConcurrentCliAndGuiTestCase(unittest.TestCase):
             self.assertEqual(dialog.encode_workers_spin.value(), 6)
             self.assertEqual(dialog.values()["encode_workers"], 6)
         finally:
-            dialog.close()
+            dispose_window(dialog)
 
         default_dialog = SettingsDialog(
             Translator('en'),
@@ -346,7 +348,7 @@ class ConcurrentCliAndGuiTestCase(unittest.TestCase):
         try:
             self.assertEqual(default_dialog.values()["encode_workers"], 1)
         finally:
-            default_dialog.close()
+            dispose_window(default_dialog)
 
         window = MainWindow(self.repo_root, language="en")
         try:
@@ -360,7 +362,7 @@ class ConcurrentCliAndGuiTestCase(unittest.TestCase):
                 window._start_queue()
             start.assert_called_once_with(max_workers=1)
         finally:
-            window.close()
+            dispose_window(window)
 
 
 if __name__ == "__main__":

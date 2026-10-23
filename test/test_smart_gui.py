@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from qt_lifetime import dispose_window
+
 import os
 import tempfile
 import unittest
@@ -86,7 +88,7 @@ class SmartGuiTestCase(unittest.TestCase):
                 records = create_queue_records(plan, root)
                 self.assertEqual(records[0].status, QueueItemStatus.WAITING_ANALYSIS)
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_unavailable_vmaf_disables_smart_mode(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -111,7 +113,7 @@ class SmartGuiTestCase(unittest.TestCase):
                 CompressionMode.FIXED_BITRATE.value,
             )
         finally:
-            window.close()
+            dispose_window(window)
 
 
 if __name__ == "__main__":

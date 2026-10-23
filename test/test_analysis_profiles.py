@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from qt_lifetime import dispose_window
+
 import os
 import unittest
 from pathlib import Path
@@ -193,7 +195,7 @@ class AnalysisProfileGuiTestCase(unittest.TestCase):
             self.assertEqual(options.analysis_profile, AnalysisProfileName.FAST)
             self.assertEqual(options.analysis_settings.sample_duration_sec, 4.0)
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_initial_state_restores_profile_before_persistence_is_enabled(self) -> None:
         config = _default_app_config()
@@ -224,7 +226,7 @@ class AnalysisProfileGuiTestCase(unittest.TestCase):
             )
             update_config.assert_not_called()
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_settings_dialog_uses_profile_combo_without_overwriting_custom_values(self) -> None:
         tr = Translator('en')
@@ -246,7 +248,7 @@ class AnalysisProfileGuiTestCase(unittest.TestCase):
             settings.update(values)
             self.assertEqual(settings["analysis_profiles"], {"precise": {"sample_duration_sec": 9.0}})
         finally:
-            dialog.close()
+            dispose_window(dialog)
 
     def test_settings_dialog_distinguishes_analysis_policies_from_terminal_validation(self) -> None:
         tr = Translator('en')
@@ -259,7 +261,7 @@ class AnalysisProfileGuiTestCase(unittest.TestCase):
             self.assertIn("planning", dialog.skipped_output_policy_combo.toolTip())
             self.assertIn("before the full encode", dialog.size_blocked_policy_combo.toolTip())
         finally:
-            dialog.close()
+            dispose_window(dialog)
 
 
 if __name__ == "__main__":

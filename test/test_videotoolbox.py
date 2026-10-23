@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from qt_lifetime import dispose_window
+
 import contextlib
 import io
 import os
@@ -390,7 +392,7 @@ class VideoToolboxCliAndGuiTestCase(unittest.TestCase):
             panel.backend_combo.setCurrentIndex(panel.backend_combo.findData("auto"))
             self.assertEqual(panel.read_options().backend, BackendChoice.AUTO)
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_gui_resets_unsupported_decode_selection(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -403,7 +405,7 @@ class VideoToolboxCliAndGuiTestCase(unittest.TestCase):
             self.assertEqual(panel.decode_acceleration_combo.currentData(), "software")
             self.assertFalse(combo_item(panel.decode_acceleration_combo, 1).isEnabled())
         finally:
-            window.close()
+            dispose_window(window)
 
 
 if __name__ == "__main__":

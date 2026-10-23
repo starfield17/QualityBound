@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from qt_lifetime import dispose_window
+
 import contextlib
 import io
 import os
@@ -308,14 +310,14 @@ class GuiPresetSelectionTestCase(unittest.TestCase):
             panel.refresh_encoder_preset_choices()
             self.assertEqual(panel.encoder_preset_combo.itemText(1), "veryfast")
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_backend_combo_starts_with_safe_choices_until_detection_completes(self) -> None:
         window = MainWindow(self.repo_root, language="en")
         try:
             self.assertEqual(_backend_combo_items(window), ["auto", "cpu"])
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_encoder_detection_filters_backend_combo_to_usable_backends(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -330,7 +332,7 @@ class GuiPresetSelectionTestCase(unittest.TestCase):
             panel = window.options_panel
             self.assertFalse(hasattr(panel, "parallel_qsv_check"))
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_backend_filtering_is_codec_specific(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -348,7 +350,7 @@ class GuiPresetSelectionTestCase(unittest.TestCase):
             _select_combo_data(panel.codec_combo, "av1")
             self.assertEqual(_backend_combo_items(window), ["auto", "cpu"])
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_loaded_preset_refuses_to_hide_an_unavailable_backend(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -371,7 +373,7 @@ class GuiPresetSelectionTestCase(unittest.TestCase):
             panel.backend_combo.setCurrentIndex(panel.backend_combo.findData("auto"))
             self.assertEqual(panel.read_options().backend, BackendChoice.AUTO)
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_encoder_detection_failure_keeps_safe_backend_choices(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -382,7 +384,7 @@ class GuiPresetSelectionTestCase(unittest.TestCase):
             window._on_encoder_capability_detection_failed("boom")
             self.assertEqual(_backend_combo_items(window), ["auto", "cpu"])
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_gui_auto_backend_uses_default_only_and_disables_combo(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -393,7 +395,7 @@ class GuiPresetSelectionTestCase(unittest.TestCase):
             self.assertEqual(panel.encoder_preset_combo.count(), 1)
             self.assertFalse(panel.encoder_preset_combo.isEnabled())
         finally:
-            window.close()
+            dispose_window(window)
 
     def test_gui_invalid_loaded_preset_requires_explicit_replacement(self) -> None:
         window = MainWindow(self.repo_root, language="en")
@@ -411,7 +413,7 @@ class GuiPresetSelectionTestCase(unittest.TestCase):
             panel.encoder_preset_combo.setCurrentIndex(0)
             self.assertIsNone(panel.read_options().encoder_preset)
         finally:
-            window.close()
+            dispose_window(window)
 
 
 class CliPresetValidationTestCase(unittest.TestCase):
