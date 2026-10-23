@@ -41,8 +41,8 @@ class GuiRegressionTests(unittest.TestCase):
         config.start()
         self.addCleanup(config.stop)
 
-    def window(self) -> MainWindow:
-        window = MainWindow(ROOT, language="en")
+    def window(self, language: str = "en") -> MainWindow:
+        window = MainWindow(ROOT, language=language)
         window._startup_encoder_detection_started = True
         def close() -> None:
             window.queue_manager.abandon_run()
@@ -276,19 +276,69 @@ class GuiRegressionTests(unittest.TestCase):
     def test_expanded_setup_fits_its_content_in_a_large_window(self) -> None:
         for language in ("en", "zh_cn", "ja"):
             with self.subTest(language=language):
-                window = self.window()
-                window.translator = Translator(language)
-                window._apply_translations()
+                window = self.window(language)
+                self.assertEqual(window.translator.language, language)
+                self.assertEqual(window.options_panel.translator.language, language)
+                if language == "ja":
+                    self.assertEqual(window.options_panel.codec_label.text(), "コーデック")
                 window.show()
-                window.resize(1520, 960)
                 window._set_setup_collapsed(False)
-                for index in range(window.options_panel.options_tabs.count()):
-                    window.options_panel.options_tabs.setCurrentIndex(index)
-                    for _ in range(8):
-                        self.app.processEvents()
-                    self.assertEqual(window.main_scroll_area.verticalScrollBar().maximum(), 0)
-                    self.assertEqual(window.main_scroll_area.horizontalScrollBar().maximum(), 0)
-                    self.assertGreaterEqual(window.queue_stack.height(), 150)
+                for width, height in ((1520, 960), (760, 520), (1520, 960)):
+                    window.resize(width, height)
+                    for index in range(window.options_panel.options_tabs.count()):
+                        with self.subTest(size=(width, height), tab=index):
+                            window.options_panel.options_tabs.setCurrentIndex(index)
+                            for _ in range(8):
+                                self.app.processEvents()
+                            diagnostic = (
+                                f"language={language} size={width}x{height} tab={index} "
+                                f"viewport={window.main_scroll_area.viewport().size()} "
+                                f"content_minimum={window.main_scroll_area.widget().minimumSizeHint()}"
+                            )
+                            self.assertEqual(window.main_scroll_area.horizontalScrollBar().maximum(), 0, diagnostic)
+                            if height == 960:
+                                self.assertEqual(window.main_scroll_area.verticalScrollBar().maximum(), 0, diagnostic)
+                                self.assertGreaterEqual(window.queue_stack.height(), 150)
+                            else:
+                                self.assertGreater(window.main_scroll_area.verticalScrollBar().maximum(), 0)
+                                self.assertGreaterEqual(window.queue_stack.height(), 90)
+
+    def test_options_tabs_fit_narrow_viewports_after_font_and_language_changes(self) -> None:
+        from PySide6.QtCore import QCoreApplication, QEvent
+        from PySide6.QtWidgets import QScrollArea
+        for language in ("en", "zh_cn", "ja"):
+            with self.subTest(language=language):
+                scroll = QScrollArea()
+                scroll.setWidgetResizable(True)
+                panel = EncodeOptionsPanel(Translator(language), {})
+                scroll.setWidget(panel)
+                panel.set_translator(Translator(language))
+                panel.apply_options(EncodeOptions())
+                scroll.resize(440, 700)
+                scroll.show()
+                try:
+                    original_font = panel.font()
+                    for scale in (1.0, 1.4, 1.0):
+                        font = panel.font()
+                        font.setPointSizeF(original_font.pointSizeF() * scale)
+                        panel.setFont(font)
+                        for index in range(panel.options_tabs.count()):
+                            panel.options_tabs.setCurrentIndex(index)
+                            for _ in range(8):
+                                self.app.processEvents()
+                            page = panel.options_tabs.currentWidget()
+                            assert page is not None
+                            diagnostic = (
+                                f"language={language} font={font.pointSizeF()} tab={index} "
+                                f"viewport={scroll.viewport().size()} panel={panel.size()} "
+                                f"minimum={panel.minimumSizeHint()}"
+                            )
+                            self.assertEqual(scroll.horizontalScrollBar().maximum(), 0, diagnostic)
+                            self.assertLessEqual(page.minimumSizeHint().width(), page.width(), diagnostic)
+                finally:
+                    scroll.close()
+                    scroll.deleteLater()
+                    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
     def test_small_setup_can_scroll_to_controls_and_recovers_on_resize(self) -> None:
         window = self.window()
