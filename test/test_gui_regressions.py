@@ -286,3 +286,46 @@ class GuiRegressionTests(unittest.TestCase):
         log.set_log_level("debug")
         self.assertIn("ffmpeg input", log.log_output.toPlainText())
         self.assertIn("candidate details", log.log_output.toPlainText())
+
+    def test_unavailable_preset_can_be_changed_to_default(self) -> None:
+        panel = EncodeOptionsPanel(self.tr, {})
+        self.addCleanup(panel.close)
+        panel.set_runtime_capabilities({"codecs": {"hevc": [{"backend": "videotoolbox", "encoder": "hevc_videotoolbox", "preset_choices": []}]}, "vmaf": {"runnable": True}})
+        panel.apply_options(EncodeOptions(backend=BackendChoice.VIDEOTOOLBOX, encoder_preset="slow"))
+        with self.assertRaises(ValueError):
+            panel.read_options()
+        self.assertTrue(panel.encoder_preset_combo.isEnabled())
+        panel.encoder_preset_combo.setCurrentIndex(0)
+        self.assertIsNone(panel.read_options().encoder_preset)
+
+    def test_capability_errors_are_visible_in_errors_filter(self) -> None:
+        window = self.window()
+        window._on_encoder_capability_detection_failed("probe unavailable")
+        log = window.activity_log_window
+        log.filter_combo.setCurrentIndex(log.filter_combo.findData("error"))
+        self.assertIn("probe unavailable", log.log_output.toPlainText())
+
+    def test_canvas_preserves_physical_pixels_at_double_scale(self) -> None:
+        from PySide6.QtGui import QImage, QPainter, QColor
+        from PySide6.QtCore import Qt, QPoint
+        from PySide6.QtWidgets import QWidget
+        from gui.comparison.window import FrameCanvas
+        parent = QWidget()
+        self.addCleanup(parent.close)
+        canvas = FrameCanvas(parent)
+        canvas.resize(64, 64)
+        source = QImage(128, 128, QImage.Format.Format_RGB32)
+        painter = QPainter(source)
+        for x in range(128):
+            painter.setPen(QColor("white") if x % 2 else QColor("black"))
+            painter.drawLine(x, 0, x, 127)
+        painter.end()
+        canvas.image = source
+        target = QImage(128, 128, QImage.Format.Format_RGB32)
+        target.setDevicePixelRatio(2)
+        target.fill(Qt.GlobalColor.red)
+        painter = QPainter(target)
+        canvas.render(painter, QPoint())
+        painter.end()
+        values = [target.pixelColor(x, 64).red() for x in range(128)]
+        self.assertGreater(sum(a != b for a, b in zip(values, values[1:])), 100)
