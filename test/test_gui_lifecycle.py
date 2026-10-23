@@ -12,6 +12,24 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class GuiLifecycleTests(unittest.TestCase):
+    def test_gui_help_uses_the_selected_language_without_starting_qt(self) -> None:
+        self.run_child('''
+            import contextlib
+            import io
+            from unittest.mock import patch
+            from gui.gui_entry import run_gui
+
+            with patch('gui.gui_entry.ensure_runtime_layout'), patch('gui.gui_entry.QApplication') as app:
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    try:
+                        run_gui(['--lang', 'ja', '--help'])
+                    except SystemExit as exc:
+                        assert exc.code == 0
+                assert '表示言語' in output.getvalue(), output.getvalue()
+                app.assert_not_called()
+        ''')
+
     def run_child(self, source: str) -> None:
         result = subprocess.run(
             [sys.executable, "-c", textwrap.dedent(source)],
