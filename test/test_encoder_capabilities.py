@@ -168,15 +168,17 @@ class EncoderCapabilityCacheTestCase(unittest.TestCase):
                 available_hwaccels=set(),
             )
 
+        codecs = capabilities["codecs"]
+        assert isinstance(codecs, dict)
         self.assertEqual(
-            capabilities["codecs"]["hevc"],
+            codecs["hevc"],
             [
                 {"backend": "qsv", "encoder": "hevc_qsv", "preset_choices": ["test-preset"]},
                 {"backend": "cpu", "encoder": "libx265", "preset_choices": ["test-preset"]},
             ],
         )
         self.assertEqual(
-            capabilities["codecs"]["av1"],
+            codecs["av1"],
             [{"backend": "cpu", "encoder": "libsvtav1", "preset_choices": ["test-preset"]}],
         )
 

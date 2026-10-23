@@ -259,7 +259,9 @@ class GuiRegressionTests(unittest.TestCase):
         from PySide6.QtCore import QPoint
         top = window.table_view.mapTo(window, QPoint(0, 0)).y()
         self.assertLess(top + 80, window.height())
-        self.assertGreaterEqual(window.table_view.height(), 80)
+        self.assertGreaterEqual(window.table_view.height(), 150)
+        gap = window.jobs_box.y() - window.main_scroll_area.geometry().bottom() - 1
+        self.assertLessEqual(gap, window.workspace_splitter.handleWidth())
 
     def test_native_window_gc_keeps_parent_before_child_ownership(self) -> None:
         import gc

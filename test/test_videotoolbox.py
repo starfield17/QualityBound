@@ -236,15 +236,17 @@ class VideoToolboxHardwareCapabilityTestCase(unittest.TestCase):
                 available_encoders={"hevc_videotoolbox", "libx265", "libsvtav1"},
                 available_hwaccels={"VULKAN", "videotoolbox"},
             )
+        codecs = capabilities["codecs"]
+        assert isinstance(codecs, dict)
         self.assertTrue(
             any(
                 item["backend"] == "videotoolbox"
                 and item["encoder"] == "hevc_videotoolbox"
                 and item["preset_choices"] == []
-                for item in capabilities["codecs"]["hevc"]
+                for item in codecs["hevc"]
             )
         )
-        self.assertNotIn("videotoolbox", {item["backend"] for item in capabilities["codecs"]["av1"]})
+        self.assertNotIn("videotoolbox", {item["backend"] for item in codecs["av1"]})
         self.assertEqual(capabilities["hwaccels"], ["videotoolbox", "vulkan"])
 
     def test_video_toolbox_is_omitted_when_its_smoke_test_fails(self) -> None:
@@ -258,7 +260,9 @@ class VideoToolboxHardwareCapabilityTestCase(unittest.TestCase):
                 available_encoders={"hevc_videotoolbox"},
                 available_hwaccels={"videotoolbox"},
             )
-        self.assertEqual(capabilities["codecs"]["hevc"], [])
+        codecs = capabilities["codecs"]
+        assert isinstance(codecs, dict)
+        self.assertEqual(codecs["hevc"], [])
 
     def test_videotoolbox_smoke_test_forces_hardware(self) -> None:
         captured: dict[str, object] = {}
