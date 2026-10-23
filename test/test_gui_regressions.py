@@ -400,12 +400,17 @@ class GuiRegressionTests(unittest.TestCase):
 
     def test_toolbar_overflow_uses_application_icon_and_keeps_hidden_actions(self) -> None:
         from PySide6.QtGui import QIcon
+        from PySide6.QtTest import QTest
         from PySide6.QtWidgets import QToolButton
         from gui.icons import action_icon
         from gui.theme import current_tokens, theme_manager
         window = self.window()
         window.show()
         window.resize(760, 520)
+        # The detached toolbar normally has only three widget actions. Add real
+        # actions so it also overflows at its minimum width.
+        for action in (window.add_files_action, window.add_folder_action, window.settings_action):
+            window.queue_window.action_toolbar.addAction(action)
         window.queue_window.show()
         window.queue_window.resize(260, 420)
         manager = theme_manager()
@@ -427,9 +432,16 @@ class GuiRegressionTests(unittest.TestCase):
                         self.assertFalse(extension.icon().pixmap(18, 18, mode).isNull())
                 extension = window.toolbar.findChild(QToolButton, "qt_toolbar_ext_button")
                 assert extension is not None
-                menu = extension.menu()
-                assert menu is not None
-                self.assertIn(window.settings_action, menu.actions())
+                settings_button = window.toolbar.widgetForAction(window.settings_action)
+                assert settings_button is not None
+                self.assertFalse(settings_button.isVisible())
+                extension.click()
+                QTest.qWait(300)  # Allow Qt's toolbar expansion animation to finish.
+                self.assertTrue(settings_button.isVisible())
+                self.assertTrue(window.toolbar.rect().contains(settings_button.geometry()))
+                extension.click()
+                QTest.qWait(300)
+                self.assertFalse(settings_button.isVisible())
         window.queue_window.close()
 
     def test_native_window_gc_keeps_parent_before_child_ownership(self) -> None:
