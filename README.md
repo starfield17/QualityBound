@@ -86,6 +86,14 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
+The interface supports English, 简体中文, and 日本語. Choose **Settings → Language**
+to change the GUI language, or select Japanese when launching:
+
+```bash
+python main.py --gui --lang ja
+python main.py --cli plan input.mp4 --lang ja
+```
+
 In the GUI, add or drop files first, adjust encoding settings and the output
 directory, then click **Start Queue**. The queue is the primary workspace: the
 source and encoding card collapses to a compact constraint summary, and selecting

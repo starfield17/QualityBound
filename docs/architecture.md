@@ -27,8 +27,8 @@ main.py
   acyclic.
 
 `core.i18n` defines immutable multilingual `Text` values (`en`, `zh_cn`, `ja`), the
-supported language names and the per-consumer `Translator`. CLI and GUI declarations live
-beside their presentation code. Existing functional owners export shared text when
+supported language names and the per-consumer `Translator`. CLI and GUI
+declarations live beside their presentation code. Existing functional owners export shared text when
 both consumers express the same concept; there is no catalog or registration.
 
 The recursive architecture test enforces the root allowlist, capability-package
@@ -43,6 +43,7 @@ have empty initializers and callers import the concrete owner.
 
 | Task | Entry and implementation | Contract to inspect | Focused tests under `test/` |
 | --- | --- | --- | --- |
+| Stop the application and release Qt objects | `gui/gui_entry.py:run_gui`; `MainWindow.shutdown`; queue manager and completion handler `shutdown` | Cancel and join workers before destroying their Qt owners; repeated shutdown is safe | `test_gui_lifecycle.py` |
 | Start or resume a queue | MainWindow `_start_queue`; `gui/queue/workers.py:QueuePrepareWorker`; `gui/queue/manager.py:QueueManager.start` | `gui/queue/state.py:QueueItemRecord`, `core.models.EncodeRequest` | `test_queue_deferred_binding.py`, `test_queue_run_completion.py` |
 | Resolve a quality/size decision | MainWindow `Constraint decisions` section; `gui/queue/model.py` delegates to `gui/queue/actions.py` | `core.models.DecisionOption`, `core.smart` decision operations | `test_constraint_decisions.py`, `test_smart_execution.py` |
 | Inspect or seek comparison playback | `gui/comparison/window.py:ComparisonWindow.seek`; follow `state.py`, `decode.py` or `playback.py` for the affected operation | `decode.py:ComparisonMedia`, `state.py:ComparisonTimeline`; SPEC N11 | `test_video_comparison.py` |
@@ -77,6 +78,13 @@ widgets that display queue state and emit user actions. `MainWindow` remains the
 composition root: it owns the menu, shortcuts, tray menu, window geometry and the
 collapsible queue-first layout. Presentation widgets never mutate queue records
 or start encoding work.
+
+`run_gui` owns final application cleanup even when the event loop returns early
+or raises. MainWindow coordinates cancellation and waits for its workers and the
+queue owners to finish before the entrypoint schedules window deletion and
+processes deferred Qt deletion. Setup containers are constructed before their
+children so Python garbage collection does not reverse their native ownership
+order.
 
 ## Encoding ownership
 

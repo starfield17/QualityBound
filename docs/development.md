@@ -194,8 +194,10 @@ Each translator holds its own language; existing GUI refresh methods re-render
 visible controls when the language changes. Already emitted log lines retain
 the text recorded at the time of the event.
 
-Supported locale codes remain `en`, `zh_cn`, and `ja`. Saved unknown locale codes fall
-back to English. External JSON language packs and overrides are no longer
+Supported locale codes are `en`, `zh_cn`, and `ja`. Saved unknown locale codes fall
+back to English. Explicit `--lang` overrides the saved choice. CLI help and
+application-owned diagnostics use the selected language; original FFmpeg and
+FFprobe diagnostics retain their source text. External JSON language packs and overrides are no longer
 supported; legacy files are left on disk but are neither read nor created.
 Adding a language requires extending `Text`, the language list and declarations
 in their owning modules. The QualityBound product name is not translated.
@@ -214,6 +216,20 @@ Architecture checks can be run separately:
 ```bash
 python -m unittest discover -s test -p "test_architecture.py" -v
 ```
+
+GUI lifecycle regressions run in child processes so a native abort or
+segmentation fault fails the test rather than terminating discovery. They cover
+early event-loop exit, an exception leaving the event loop, cancellation and
+joining of background workers, repeated shutdown, and collective window garbage
+collection. Cleanup cancels and joins workers before `deleteLater()` and Qt
+`DeferredDelete` processing; the full suite retains its final garbage-collection
+and asynchronous-exception checks.
+
+Layout tests construct windows with each actual language (`en`, `zh_cn`, `ja`),
+assert the selected language and translated text, and exercise every options tab
+at `760×520` and `1520×960`. They check horizontal fit, vertical access to controls,
+queue space, and recovery after resizing. Native Windows CI remains required
+because its font and widget metrics differ from the other platforms.
 
 ## Smart analysis and queue completion
 
