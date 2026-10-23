@@ -130,6 +130,32 @@ class GuiLifecycleTests(unittest.TestCase):
                 QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         ''')
 
+    def test_pending_finished_callback_cannot_restart_detection_after_shutdown(self) -> None:
+        self.run_child('''
+            import tempfile
+            from pathlib import Path
+            from unittest.mock import patch
+            from PySide6.QtCore import QCoreApplication, QEvent, QTimer
+            from PySide6.QtWidgets import QApplication
+            from gui.gui_mainwindow import MainWindow
+
+            app = QApplication([])
+            with tempfile.TemporaryDirectory() as directory, patch(
+                'core.config.store.app_config_path', return_value=Path(directory) / 'app.json'
+            ):
+                window = MainWindow(Path.cwd(), language='ja')
+                # A finished callback already queued before shutdown must not
+                # undo its terminal state when pending Qt work is delivered.
+                QTimer.singleShot(0, window, window._on_encoder_capability_detection_finished)
+                window.shutdown()
+                app.processEvents()
+                with patch('gui.gui_mainwindow.EncoderCapabilityDetectWorker') as detector:
+                    window._start_encoder_capability_detection(force_refresh=True)
+                    assert not detector.called, 'pending finished callback restarted detection after shutdown'
+                window.deleteLater()
+                QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        ''')
+
     def test_closed_windows_can_be_collected_together(self) -> None:
         self.run_child('''
             import gc
