@@ -228,7 +228,9 @@ class ResponsiveQueueTableView(QTableView):
         if self._reflow_scheduled:
             return
         self._reflow_scheduled = True
-        QTimer.singleShot(0, self._apply_reflow)
+        # Cancel the queued callback when Qt destroys the view, even if its
+        # Python wrapper remains alive until a later event-loop turn.
+        QTimer.singleShot(0, self, self._apply_reflow)
 
     def reflow_columns(self) -> None:
         self.schedule_reflow()
