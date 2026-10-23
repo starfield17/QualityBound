@@ -216,7 +216,14 @@ def preview_pair(media: ComparisonMedia, position: float, offset: float, runner:
             "-f", "image2pipe", "-c:v", "png", "pipe:1",
         ])
         match = re.search(rb"\bpts_time:([-+\d.eE]+)", runner.stderr)
-        if not png or match is None:
+        if not png:
+            # A forward seek inside the final frame's display interval reaches
+            # EOF even though a frame still covers the target (including VFR).
+            # Only recover a successful empty decode; tool failures propagate.
+            timestamp = frame_time(media, side, target, 0, runner)
+            frames.append(decode_frame(media, side, timestamp, runner))
+            continue
+        if match is None:
             raise ValueError("No timestamped preview frame")
         frames.append(DecodedFrame(float(match.group(1)), png))
     return FramePair(frames[0], frames[1], offset, position)
