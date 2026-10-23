@@ -677,8 +677,8 @@ class GuiRegressionTestCase(unittest.TestCase):
         from PySide6.QtWidgets import QGridLayout
         panel = self.window.options_panel
         before = panel.read_options()
-        panel.resize(760, 500)
-        panel._reflow_basic_tab()
+        panel.resize(440, 500)
+        panel._reflow_tabs()
         layout = panel.basic_tab.layout()
         self.assertIsInstance(layout, QGridLayout)
         assert isinstance(layout, QGridLayout)
@@ -687,7 +687,7 @@ class GuiRegressionTestCase(unittest.TestCase):
         assert isinstance(codec_position, tuple) and isinstance(backend_position, tuple)
         self.assertGreater(backend_position[0], codec_position[0])
         panel.resize(1100, 500)
-        panel._reflow_basic_tab()
+        panel._reflow_tabs()
         backend_position = layout.getItemPosition(layout.indexOf(panel.backend_combo))
         assert isinstance(backend_position, tuple)
         self.assertEqual(backend_position[0], codec_position[0])
