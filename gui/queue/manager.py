@@ -183,6 +183,20 @@ class QueueManager(QObject):
     def is_busy(self) -> bool:
         return self._worker is not None or self._postprocessing_pending or self._preparation_pending
 
+    def shutdown(self) -> None:
+        """Cancel and join the execution thread without GUI event delivery."""
+        worker = self._worker
+        if worker is not None:
+            worker.blockSignals(True)
+            worker.cancel()
+            worker.wait()
+            worker.deleteLater()
+            self._worker = None
+        self._pending_run = None
+        self._active_item_ids.clear()
+        self._postprocessing_pending = False
+        self._preparation_pending = False
+
     def _publish_busy(self) -> None:
         busy = self.is_busy()
         self.model.set_execution_locked(busy)

@@ -103,6 +103,18 @@ class QueueCompletionHandler(QObject):
         if self._copy_worker is not None:
             self._copy_worker.cancel()
 
+    def shutdown(self) -> None:
+        """Stop source publication before its owner is destroyed."""
+        self.cancel()
+        worker = self._copy_worker
+        if worker is not None:
+            worker.blockSignals(True)
+            worker.wait()
+            worker.deleteLater()
+            self._copy_worker = None
+        self._copy_records = {}
+        self._copy_translator = self._copy_done = self._apply_copy_result = None
+
     def process_stopped(
         self, records: list[QueueItemRecord], tr: Translator,
         apply_result: Callable[[str, EncodeResult], None], finished: Callable[[bool], None],
@@ -147,7 +159,11 @@ class QueueCompletionHandler(QObject):
 
     @Slot(str, object)
     def _on_source_copied(self, item_id: str, result: EncodeResult) -> None:
-        record = self._copy_records[item_id]
+        record = self._copy_records.get(item_id)
+        if record is None:
+            # A queued signal may arrive after terminal shutdown has joined the
+            # worker and discarded its UI callbacks.
+            return
         if self._apply_copy_result is not None:
             self._apply_copy_result(item_id, result)
         if self._copy_translator is not None:

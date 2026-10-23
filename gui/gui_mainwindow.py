@@ -44,6 +44,7 @@ from PySide6.QtWidgets import (
     QToolBar,
     QVBoxLayout,
     QWidget,
+    QWidgetItem,
 )
 
 from core.i18n import Text, Translator
@@ -426,6 +427,36 @@ class MainWindow(QMainWindow):
         self._update_queue_metrics(self.queue_model.metrics())
         self._refresh_action_state()
 
+    def shutdown(self) -> None:
+        """Finish owned work before Qt destruction, even without an event loop.
+
+        This is terminal cleanup, not the cancellable close-window prompt.
+        Keep the existing close latch set so pending detection/preparation
+        callbacks cannot start another task. Repeated calls are harmless.
+        """
+        self._close_after_running_task_stops = True
+        self._startup_encoder_detection_started = True
+        self._pending_encoder_detection_force_refresh = False
+        self._workspace_fit_timer.stop()
+        workers = [worker for worker in (self.encoder_detection_worker, self.active_worker) if worker is not None]
+        for worker in workers:
+            worker.blockSignals(True)
+            worker.cancel()
+        # Cancel every owner before joining any of them. No worker needs a GUI
+        # callback in order to acknowledge cancellation and finish its run().
+        self.queue_manager.stop()
+        self.queue_completion_handler.cancel()
+        for comparison in list(self.comparison_windows):
+            comparison.close()
+        for worker in workers:
+            worker.wait()
+            worker.deleteLater()
+        self.encoder_detection_worker = None
+        self.active_worker = None
+        self.queue_manager.shutdown()
+        self.queue_completion_handler.shutdown()
+        self.tray_icon.hide()
+
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._only_encoder_detection_running():
             self._close_after_running_task_stops = True
@@ -521,7 +552,8 @@ class MainWindow(QMainWindow):
             return
         if self._has_running_task():
             return
-        self._close_after_running_task_stops = False
+        # Closing is terminal once requested. A queued finished callback must
+        # not clear this latch and let a later startup/refresh launch a thread.
         QTimer.singleShot(0, self, self.close)
 
     def _restore_window_geometry(self) -> None:
@@ -582,6 +614,10 @@ class MainWindow(QMainWindow):
         self._build_toolbar()
         self._build_menu_bar()
         root_layout = self._build_central_content()
+        # Construct the scroll content before its child wrappers. Reparenting
+        # later-created native owners over older wrappers can crash Shiboken
+        # when several closed windows are collected together.
+        setup_content = QWidget(self.main_scroll_area.viewport())
         self.source_box = self._build_source_box()
         self.options_panel = EncodeOptionsPanel(
             self.translator,
@@ -592,7 +628,6 @@ class MainWindow(QMainWindow):
         self.jobs_box = self._build_jobs_box()
         self.setup_bar = self._build_setup_bar()
         root_layout.addWidget(self.setup_bar)
-        setup_content = QWidget()
         setup_layout = QVBoxLayout(setup_content)
         setup_layout.setContentsMargins(0, 0, 0, 0)
         setup_layout.addWidget(self.source_box)
@@ -800,7 +835,7 @@ class MainWindow(QMainWindow):
         source_layout.addWidget(self.post_encode_label, 3, 3)
         source_layout.addWidget(self.post_encode_combo, 3, 4, 1, 2)
         source_layout.setColumnStretch(1, 1)
-        self._source_actions_inline = False
+        self._source_actions_inline = None
         return source_box
 
     def _build_setup_bar(self) -> QWidget:
@@ -1548,6 +1583,8 @@ class MainWindow(QMainWindow):
         return "; ".join(parts)
 
     def _start_encoder_capability_detection(self, *, force_refresh: bool) -> None:
+        if self._close_after_running_task_stops:
+            return
         if self.encoder_detection_worker is not None:
             if force_refresh:
                 self._pending_encoder_detection_force_refresh = True
@@ -2176,47 +2213,61 @@ class MainWindow(QMainWindow):
             self._setup_preferred_height = self.workspace_splitter.sizes()[0]
 
     def _reflow_source_actions(self) -> None:
-        inline = self.source_box.width() >= 1100
-        if inline == self._source_actions_inline:
-            return
-        self._source_actions_inline = inline
         layout = self.source_box.layout()
         if not isinstance(layout, QGridLayout):
             return
-        layout.removeWidget(self.preset_combo)
-        layout.removeWidget(self.manage_presets_button)
-        layout.removeWidget(self.post_encode_label)
-        layout.removeWidget(self.post_encode_combo)
-        layout.removeWidget(self.source_add_button)
-        if inline:
-            layout.addWidget(self.preset_combo, 2, 1)
-            layout.addWidget(self.manage_presets_button, 2, 2)
-            layout.addWidget(self.post_encode_label, 2, 3)
-            layout.addWidget(self.post_encode_combo, 2, 4)
-            layout.addWidget(self.source_add_button, 2, 5)
-        else:
+        available = self.main_scroll_area.viewport().contentsRect().width()
+        controls = (
+            self.source_label, self.source_combo, self.source_file_button, self.source_dir_button,
+            self.output_label, self.output_edit, self.output_button, self.preset_label,
+            self.preset_combo, self.manage_presets_button, self.post_encode_label,
+            self.post_encode_combo, self.source_add_button,
+        )
+        margins = layout.contentsMargins()
+        signature = (
+            available, self.source_box.title(), self.source_box.font().toString(),
+            margins.left(), margins.top(), margins.right(), margins.bottom(),
+            layout.horizontalSpacing(), layout.verticalSpacing(),
+            tuple((QWidgetItem(widget).minimumSize(), widget.sizeHint()) for widget in controls),
+        )
+        if getattr(self, "_source_actions_measurement_signature", None) == signature:
+            return
+        self._source_actions_measurement_signature = signature
+        moving = (
+            self.preset_combo, self.manage_presets_button, self.post_encode_label,
+            self.post_encode_combo, self.source_add_button,
+        )
+        for widget in moving:
+            layout.removeWidget(widget)
+        layout.addWidget(self.preset_combo, 2, 1)
+        layout.addWidget(self.manage_presets_button, 2, 2)
+        layout.addWidget(self.post_encode_label, 2, 3)
+        layout.addWidget(self.post_encode_combo, 2, 4)
+        layout.addWidget(self.source_add_button, 2, 5)
+        layout.invalidate()
+        # Every row contributes to a shared grid column's minimum. Summing
+        # only the action row misses wider source/output labels and buttons.
+        # Use the viewport because the old layout may already stretch content.
+        inline = self.source_box.minimumSizeHint().width() <= available
+        self._source_actions_inline = inline
+        if not inline:
+            for widget in moving:
+                layout.removeWidget(widget)
             layout.addWidget(self.preset_combo, 2, 1, 1, 3)
             layout.addWidget(self.manage_presets_button, 2, 4, 1, 2)
-            layout.addWidget(self.source_add_button, 3, 1, 1, 2)
-            layout.addWidget(self.post_encode_label, 3, 3)
-            layout.addWidget(self.post_encode_combo, 3, 4, 1, 2)
+            layout.addWidget(self.post_encode_label, 3, 0)
+            layout.addWidget(self.post_encode_combo, 3, 1, 1, 5)
+            layout.addWidget(self.source_add_button, 4, 1, 1, 5)
 
     def _fit_workspace(self) -> None:
         compact = self.height() < 900
         self.summary_widget.setVisible(not compact)
         self.compact_summary_label.setVisible(compact)
-        # The empty card's illustration and instructions are optional in short
-        # windows; its title and intake buttons must never overlap.
-        for label in (self.empty_icon_label, self.empty_body_label, self.empty_drop_label):
-            label.setVisible(not compact)
         total = self.workspace_splitter.height() - self.workspace_splitter.handleWidth()
         minimum_list_height = 150 if total >= 600 else 90
-        if self.queue_stack.currentWidget() is self.empty_state:
-            minimum_list_height = max(minimum_list_height, self.empty_state.minimumSizeHint().height())
-        self.queue_stack.setMinimumHeight(minimum_list_height)
-        if not self.main_scroll_area.isVisible():
-            return
-        self._reflow_source_actions()
+        setup_visible = self.main_scroll_area.isVisible()
+        if setup_visible:
+            self._reflow_source_actions()
         content = self.main_scroll_area.widget()
         if content is None:
             return
@@ -2228,10 +2279,37 @@ class MainWindow(QMainWindow):
         layout = content.layout()
         if layout is not None:
             layout.activate()
-        available = max(64, total - self.jobs_box.minimumSizeHint().height())
         desired = self._setup_preferred_height
         if desired is None:
             desired = max(content.sizeHint().height(), content.minimumSizeHint().height())
+
+        # Give the setup and usable queue space priority over the empty card's
+        # illustration and instructions. Recover the full card's minimum even
+        # when these labels are currently hidden, so the choice cannot oscillate
+        # between showing them and needing to hide them on the next event turn.
+        optional_labels = (self.empty_icon_label, self.empty_body_label, self.empty_drop_label)
+        show_optional = not compact
+        if setup_visible and self.queue_stack.currentWidget() is self.empty_state and self._setup_preferred_height is None:
+            empty_layout = self.empty_state.layout()
+            full_card_minimum = self.empty_state.minimumSizeHint().height()
+            if empty_layout is not None:
+                for label in optional_labels:
+                    if label.isHidden():
+                        full_card_minimum += max(0, label.minimumSizeHint().height()) + empty_layout.spacing()
+            current_list_minimum = max(self.queue_stack.minimumHeight(), self.queue_stack.minimumSizeHint().height())
+            full_jobs_minimum = self.jobs_box.minimumSizeHint().height() - current_list_minimum
+            full_jobs_minimum += max(minimum_list_height, full_card_minimum)
+            show_optional = show_optional and desired + full_jobs_minimum <= total
+        for label in optional_labels:
+            label.setVisible(show_optional)
+        if self.queue_stack.currentWidget() is self.empty_state:
+            minimum_list_height = max(minimum_list_height, self.empty_state.minimumSizeHint().height())
+        self.queue_stack.setMinimumHeight(minimum_list_height)
+        if not setup_visible:
+            return
+        if jobs_layout is not None:
+            jobs_layout.activate()
+        available = max(64, total - self.jobs_box.minimumSizeHint().height())
         height = max(64, min(desired, available))
         if self.workspace_splitter.sizes()[0] != height:
             self.workspace_splitter.setSizes([height, max(0, total - height)])
