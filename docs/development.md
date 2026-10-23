@@ -89,7 +89,9 @@ construction; no window keeps a private light-only stylesheet.
 
 The queue is the primary workspace. `MainWindow` builds a collapsible source and
 encoding card, a compact stat row, a stacked empty/table area and a
-selection-driven details panel. The setup card collapses to a one-line summary
+selection-driven details panel. Setup scrolls independently above the queue in a
+vertical splitter; short windows use compact statistics, and selected-item details
+have their own bounded viewport. The setup card collapses to a one-line summary
 that names the current codec, compression mode, quality floor, size ceiling and
 container. The empty state offers Add Files/Add Folder and explains the three
 steps. The status bar always keeps Stage, File, Speed, Elapsed and Current progress
@@ -110,8 +112,11 @@ drag-and-drop loading and a clamped size.
 Accessibility is part of the presentation contract: form labels set buddies and
 accessible names, inputs/buttons/checkboxes have visible focus states, the menu
 bar exposes keyboard shortcuts, and the tray menu can show, pause, stop or quit.
-Window geometry is persisted for the main, queue and activity-log windows, with
-clamped initial sizes for Settings and Comparison.
+Window geometry is persisted for the main, queue, activity-log and comparison
+windows, with clamped initial sizes for Settings and Comparison. Comparison uses
+T to switch the active single pane; Tab retains normal focus navigation. Comma
+and period step A by one frame; Shift steps B. Playback shortcuts yield while
+editing an input or using the seek slider.
 
 `test/test_gui_presentation.py` protects the theme tokens, live status bar,
 empty state, details panel, estimate markers, localized log levels, preset
@@ -292,8 +297,10 @@ for `test/` and `scripts/` — is recorded with its reason in the same section.
 `pyproject.toml` turns off six strict rules: `reportMissingTypeArgument`,
 `reportUnknownArgumentType`, `reportUnknownLambdaType`, `reportUnknownMemberType`,
 `reportUnknownParameterType`, `reportUnknownVariableType`. Measured over the current
-scope (`core`, `cli`, `gui`, `main.py`) they hold back 588 diagnostics: 483 in
-`core`, 94 in `gui`, 11 in `cli`. The dominant pattern is capability snapshots,
+scope (`core`, `cli`, `gui`, `main.py`) they hold back 568 diagnostics: 468 in
+`core`, 89 in `gui`, 11 in `cli`. The v3.6.2 GUI maintenance pass narrowed the
+capability-cache boundary and reduced the previous 588-diagnostic baseline;
+the six disabled rules and their checked scopes remain unchanged. The dominant pattern is capability snapshots,
 preset documents and analysis receipts travelling as `dict[str, object]` or
 JSON-decoded mappings, so the checker cannot name the types that flow through them.
 

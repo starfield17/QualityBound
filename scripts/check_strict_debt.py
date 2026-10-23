@@ -36,9 +36,9 @@ RULES = (
 # Measured with this script on the commit that introduced it. A count above any
 # of these fails; a count below is an improvement and should be re-recorded.
 BASELINE: dict[str, int] = {
-    "total": 588,
-    "core": 483,
-    "gui": 94,
+    "total": 568,
+    "core": 468,
+    "gui": 89,
     "cli": 11,
     "main.py": 0,
 }
