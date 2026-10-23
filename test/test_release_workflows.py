@@ -303,7 +303,7 @@ class TestWorkflowTestCase(unittest.TestCase):
         self.assertNotIn("build_setup", self.workflow)
 
     def test_test_workflow_runs_full_unit_suite(self) -> None:
-        self.assertIn("python -m unittest discover -s test -p \"test_*.py\" -v", self.workflow)
+        self.assertIn("python -m scripts.run_tests discover -s test -p \"test_*.py\" -v", self.workflow)
         self.assertIn("python main.py --cli --help", self.workflow)
 
 
