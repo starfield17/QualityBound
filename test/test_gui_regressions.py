@@ -225,3 +225,38 @@ class GuiRegressionTests(unittest.TestCase):
             window.slider.setValue(5000)
             self.assertEqual(window.position, 5)
             decode.assert_called_once()
+
+    def test_unfollow_retains_log_position_and_classification_is_not_substring_based(self) -> None:
+        from gui.activity_log_window import ActivityLogWindow
+        log = ActivityLogWindow(self.tr)
+        self.addCleanup(log.close)
+        log.show()
+        for i in range(100):
+            log.append_message(f"line {i}")
+        log._flush_pending_logs()
+        self.app.processEvents()
+        log.follow_check.setChecked(False)
+        scrollbar = log.log_output.verticalScrollBar()
+        before = scrollbar.value()
+        log.append_message("failed=0; read error_in_filename.mkv")
+        log._flush_pending_logs()
+        self.assertEqual(scrollbar.value(), before)
+        self.assertEqual(log.entries[-1].category, "process")
+        log._refresh_log_view()
+        self.assertEqual(scrollbar.value(), before)
+
+    def test_queue_stays_in_view_with_expanded_setup(self) -> None:
+        from gui.queue.state import QueueItemStatus
+        from test_gui_presentation import _record
+        window = self.window()
+        window.queue_model.add_records([_record(self.root, QueueItemStatus.NEEDS_DECISION)])
+        window.show()
+        window.resize(1280, 800)
+        window._set_setup_collapsed(False)
+        window.table_view.selectRow(0)
+        for _ in range(4):
+            self.app.processEvents()
+        from PySide6.QtCore import QPoint
+        top = window.table_view.mapTo(window, QPoint(0, 0)).y()
+        self.assertLess(top + 80, window.height())
+        self.assertGreaterEqual(window.table_view.height(), 80)

@@ -303,14 +303,16 @@ class ComparisonWindowTests(unittest.TestCase):
             self.window._scrub_started()
             self.assertTrue(self.window._resume_after_scrub)
 
-    def test_mode_and_tab_switch_keep_time_and_playback(self) -> None:
+    def test_mode_and_switch_shortcut_keep_time_and_playback(self) -> None:
         self.window.position = 4
         self.window.mode.setCurrentIndex(1)
         self.assertFalse(self.window.panes[0].isHidden())
         self.assertTrue(self.window.panes[1].isHidden())
         self.window.activateWindow()
         self.app.processEvents()
-        QTest.keyClick(self.window, Qt.Key.Key_Tab)
+        self.window.play_button.setFocus()
+        self.app.processEvents()
+        QTest.keyClick(self.window, Qt.Key.Key_T)
         self.assertTrue(self.window.panes[0].isHidden())
         self.assertFalse(self.window.panes[1].isHidden())
         self.assertEqual(self.window.position, 4)
