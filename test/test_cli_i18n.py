@@ -65,6 +65,23 @@ class CliTranslationTestCase(unittest.TestCase):
         self.assertIn('最大同時エンコード数', output)
         self.assertIn('--no-copy-subtitles', output)
 
+    def test_language_abbreviation_and_last_explicit_choice_match_argparse(self) -> None:
+        status, output, _ = self._run(['plan', '--la', 'ja', '--help'])
+        self.assertEqual(status, 0)
+        self.assertIn('使い方:', output)
+        status, output, _ = self._run(['--lang', 'ja', 'plan', '--lang', 'en', '--help'])
+        self.assertEqual(status, 0)
+        self.assertIn('Input file or directory', output)
+        self.assertNotIn('使い方:', output)
+
+    def test_language_option_after_delimiter_is_an_input_filename(self) -> None:
+        with patch('cli.cli_entry.build_encode_plan', return_value=_plan()) as build:
+            status, output, errors = self._run(['plan', '--lang', 'en', '--', '--lang=ja'], saved_language='zh_cn')
+        self.assertEqual(status, 0)
+        self.assertEqual(build.call_args.kwargs['input_path'], Path('--lang=ja'))
+        self.assertIn('Plan items:', output)
+        self.assertEqual(errors, '')
+
     def test_saved_language_and_unknown_locale_help_fallback(self) -> None:
         for locale, expected in (('ja', 'エンコード計画を確認'), ('zh_cn', '检查编码计划'), ('removed', 'Inspect the encode plan')):
             with self.subTest(locale=locale):
