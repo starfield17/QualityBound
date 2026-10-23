@@ -273,6 +273,83 @@ class GuiRegressionTests(unittest.TestCase):
         gap = window.jobs_box.y() - window.main_scroll_area.geometry().bottom() - 1
         self.assertLessEqual(gap, window.workspace_splitter.handleWidth())
 
+    def test_expanded_setup_fits_its_content_in_a_large_window(self) -> None:
+        for language in ("en", "zh_cn"):
+            with self.subTest(language=language):
+                window = self.window()
+                window.translator = Translator(language)
+                window._apply_translations()
+                window.show()
+                window.resize(1520, 960)
+                window._set_setup_collapsed(False)
+                for index in range(window.options_panel.options_tabs.count()):
+                    window.options_panel.options_tabs.setCurrentIndex(index)
+                    for _ in range(8):
+                        self.app.processEvents()
+                    self.assertEqual(window.main_scroll_area.verticalScrollBar().maximum(), 0)
+                    self.assertEqual(window.main_scroll_area.horizontalScrollBar().maximum(), 0)
+                    self.assertGreaterEqual(window.queue_stack.height(), 150)
+
+    def test_small_setup_can_scroll_to_controls_and_recovers_on_resize(self) -> None:
+        window = self.window()
+        window.show()
+        window.resize(760, 520)
+        window._set_setup_collapsed(False)
+        for _ in range(8):
+            self.app.processEvents()
+        scrollbar = window.main_scroll_area.verticalScrollBar()
+        self.assertGreater(scrollbar.maximum(), 0)
+        control = window.options_panel.recursive_check
+        window.main_scroll_area.ensureWidgetVisible(control)
+        for _ in range(4):
+            self.app.processEvents()
+        from PySide6.QtCore import QPoint
+        viewport = window.main_scroll_area.viewport()
+        position = control.mapTo(viewport, QPoint(0, 0))
+        self.assertGreaterEqual(position.y(), 0)
+        self.assertLessEqual(position.y() + control.height(), viewport.height())
+        self.assertGreaterEqual(window.queue_stack.height(), 90)
+        self.assertEqual(window.main_scroll_area.horizontalScrollBar().maximum(), 0)
+        window.resize(1520, 960)
+        for _ in range(8):
+            self.app.processEvents()
+        self.assertEqual(scrollbar.maximum(), 0)
+
+    def test_setup_drag_preference_survives_resize_and_collapse(self) -> None:
+        window = self.window()
+        window.show()
+        window.resize(1520, 960)
+        window._set_setup_collapsed(False)
+        for _ in range(8):
+            self.app.processEvents()
+        window.workspace_splitter.moveSplitter(340, 1)
+        preferred = window.workspace_splitter.sizes()[0]
+        self.assertGreaterEqual(preferred, 330)
+        window._set_setup_collapsed(True)
+        for _ in range(4):
+            self.app.processEvents()
+        window._set_setup_collapsed(False)
+        window.resize(1600, 1040)
+        for _ in range(8):
+            self.app.processEvents()
+        self.assertEqual(window.workspace_splitter.sizes()[0], preferred)
+
+    def test_source_actions_share_a_row_only_when_there_is_room(self) -> None:
+        from PySide6.QtWidgets import QGridLayout
+        window = self.window()
+        window.show()
+        window._set_setup_collapsed(False)
+        for width, height, same_row in ((1520, 960, True), (760, 520, False)):
+            window.resize(width, height)
+            for _ in range(8):
+                self.app.processEvents()
+            layout = window.source_box.layout()
+            self.assertIsInstance(layout, QGridLayout)
+            assert isinstance(layout, QGridLayout)
+            preset_row = layout.getItemPosition(layout.indexOf(window.preset_combo))[0]
+            action_row = layout.getItemPosition(layout.indexOf(window.source_add_button))[0]
+            self.assertEqual(action_row == preset_row, same_row)
+
     def test_native_window_gc_keeps_parent_before_child_ownership(self) -> None:
         import gc
         for _ in range(5):
