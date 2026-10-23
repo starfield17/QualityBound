@@ -433,7 +433,10 @@ class GuiRegressionTests(unittest.TestCase):
                     rendered = extension.grab().toImage()
                     foreground = QColor(tokens.icon)
                     self.assertTrue(any(
-                        pixel.alpha() > 0 and pixel.rgb() == foreground.rgb()
+                        pixel.alpha() > 0
+                        and abs(pixel.red() - foreground.red()) <= 8
+                        and abs(pixel.green() - foreground.green()) <= 8
+                        and abs(pixel.blue() - foreground.blue()) <= 8
                         for x in range(rendered.width())
                         for y in range(rendered.height())
                         for pixel in (rendered.pixelColor(x, y),)

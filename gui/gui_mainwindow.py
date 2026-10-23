@@ -792,12 +792,13 @@ class MainWindow(QMainWindow):
         source_layout.addWidget(self.output_edit, 1, 1, 1, 4)
         source_layout.addWidget(self.output_button, 1, 5)
         source_layout.addWidget(self.preset_label, 2, 0)
-        source_layout.addWidget(self.preset_combo, 2, 1)
-        source_layout.addWidget(self.manage_presets_button, 2, 2)
-        source_layout.addWidget(self.post_encode_label, 2, 3)
-        source_layout.addWidget(self.post_encode_combo, 2, 4, 1, 2)
+        source_layout.addWidget(self.preset_combo, 2, 1, 1, 3)
+        source_layout.addWidget(self.manage_presets_button, 2, 4, 1, 2)
         source_layout.addWidget(self.source_add_button, 3, 1, 1, 2)
+        source_layout.addWidget(self.post_encode_label, 3, 3)
+        source_layout.addWidget(self.post_encode_combo, 3, 4, 1, 2)
         source_layout.setColumnStretch(1, 1)
+        self._source_actions_inline = False
         return source_box
 
     def _build_setup_bar(self) -> QWidget:
@@ -2180,14 +2181,23 @@ class MainWindow(QMainWindow):
         layout = self.source_box.layout()
         if not isinstance(layout, QGridLayout):
             return
-        layout.removeWidget(self.source_add_button)
+        layout.removeWidget(self.preset_combo)
+        layout.removeWidget(self.manage_presets_button)
+        layout.removeWidget(self.post_encode_label)
         layout.removeWidget(self.post_encode_combo)
+        layout.removeWidget(self.source_add_button)
         if inline:
+            layout.addWidget(self.preset_combo, 2, 1)
+            layout.addWidget(self.manage_presets_button, 2, 2)
+            layout.addWidget(self.post_encode_label, 2, 3)
             layout.addWidget(self.post_encode_combo, 2, 4)
             layout.addWidget(self.source_add_button, 2, 5)
         else:
-            layout.addWidget(self.post_encode_combo, 2, 4, 1, 2)
+            layout.addWidget(self.preset_combo, 2, 1, 1, 3)
+            layout.addWidget(self.manage_presets_button, 2, 4, 1, 2)
             layout.addWidget(self.source_add_button, 3, 1, 1, 2)
+            layout.addWidget(self.post_encode_label, 3, 3)
+            layout.addWidget(self.post_encode_combo, 3, 4, 1, 2)
 
     def _fit_workspace(self) -> None:
         compact = self.height() < 900
