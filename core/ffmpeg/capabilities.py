@@ -118,7 +118,9 @@ def save_encoder_capabilities(capabilities: dict) -> Path:
     return update_app_config(lambda data: {**data, "encoder_capabilities": capabilities})
 
 
-def is_encoder_capability_cache_valid(capabilities: dict | None, ffmpeg_path: Path) -> bool:
+def is_encoder_capability_cache_valid(
+    capabilities: dict[str, object] | None, ffmpeg_path: Path, *, cancel_check: Callable[[], bool] | None = None,
+) -> bool:
     if not isinstance(capabilities, dict):
         return False
     if capabilities.get("schema_version") != ENCODER_CAPABILITIES_SCHEMA_VERSION:
@@ -126,9 +128,13 @@ def is_encoder_capability_cache_valid(capabilities: dict | None, ffmpeg_path: Pa
 
     try:
         resolved = _resolved_ffmpeg_path(ffmpeg_path)
-        cached_mtime = int(capabilities.get("ffmpeg_mtime_ns", -1))
+        raw_mtime = capabilities.get("ffmpeg_mtime_ns", -1)
+        if not isinstance(raw_mtime, (int, str)):
+            return False
+        cached_mtime = int(raw_mtime)
         current_mtime = _ffmpeg_mtime_ns(resolved)
-        current_version = _ffmpeg_version_line(resolved)
+        current_version = (_ffmpeg_version_line(resolved, cancel_check=cancel_check)
+                           if cancel_check is not None else _ffmpeg_version_line(resolved))
     except (OSError, ValueError, subprocess.SubprocessError):
         return False
 
@@ -174,7 +180,7 @@ def smoke_test_encoder(
             cmd,
             check=False,
             capture_output=True,
-        cancel_check=cancel_check,
+            cancel_check=cancel_check,
             text=True,
             encoding="utf-8",
             errors="replace",
@@ -259,12 +265,18 @@ def ensure_encoder_capabilities(
     cancel_check: Callable[[], bool] | None = None,
 ) -> dict:
     resolved = _resolved_ffmpeg_path(ffmpeg_path)
-    with _CACHE_LOCK:
+    while not _CACHE_LOCK.acquire(timeout=0.1):
+        if cancel_check is not None and cancel_check():
+            raise OperationCancelledError("Encoder detection cancelled.")
+    try:
+        if cancel_check is not None and cancel_check():
+            raise OperationCancelledError("Encoder detection cancelled.")
         cached = load_cached_encoder_capabilities()
         if (
             not force_refresh
             and isinstance(cached, dict)
-            and is_encoder_capability_cache_valid(cached, resolved)
+            and (is_encoder_capability_cache_valid(cached, resolved, cancel_check=cancel_check)
+                 if cancel_check is not None else is_encoder_capability_cache_valid(cached, resolved))
         ):
             return cached
 
@@ -274,3 +286,5 @@ def ensure_encoder_capabilities(
             raise OperationCancelledError("Encoder detection cancelled.")
         save_encoder_capabilities(capabilities)
         return capabilities
+    finally:
+        _CACHE_LOCK.release()

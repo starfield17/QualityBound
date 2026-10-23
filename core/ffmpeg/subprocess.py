@@ -4,7 +4,7 @@ import os
 import subprocess
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from core.models import OperationCancelledError
 
@@ -52,7 +52,7 @@ def run_cancellable(command: list[str], *, cancel_check: Callable[[], bool] | No
                     **kwargs: Any) -> subprocess.CompletedProcess[str]:
     """Keep subprocess.run semantics while allowing a caller to stop its child."""
     if cancel_check is None:
-        return subprocess.run(command, **kwargs)
+        return cast(subprocess.CompletedProcess[str], subprocess.run(command, **kwargs))
     if cancel_check():
         raise OperationCancelledError("Tool inspection cancelled.")
     check = bool(kwargs.pop("check", False))

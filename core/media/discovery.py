@@ -52,7 +52,11 @@ def _iter_video_paths(
         directory = pending.pop()
         try:
             with os.scandir(directory) as handle:
-                entries = list(handle)
+                entries = []
+                for entry in handle:
+                    if cancel_check is not None and cancel_check():
+                        raise OperationCancelledError("Source intake cancelled.")
+                    entries.append(entry)
         except OSError as exc:
             _report_skip(on_error, f"Skipping unreadable folder: {directory} | {exc}")
             continue
