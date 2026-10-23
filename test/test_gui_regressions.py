@@ -401,6 +401,33 @@ class GuiRegressionTests(unittest.TestCase):
             assert isinstance(preset_position, tuple) and isinstance(action_position, tuple)
             self.assertEqual(action_position[0] == preset_position[0], same_row)
 
+    def test_source_setup_fits_narrow_windows_with_larger_fonts_in_every_language(self) -> None:
+        from PySide6.QtCore import QPoint, QRect
+        for language in ("en", "zh_cn", "ja"):
+            with self.subTest(language=language):
+                window = self.window(language)
+                font = window.font()
+                font.setPointSizeF(18.0)
+                window.setFont(font)
+                window.show()
+                window.resize(760, 520)
+                window._set_setup_collapsed(False)
+                for _ in range(12):
+                    self.app.processEvents()
+                diagnostic = (
+                    f"language={language} font={font.pointSizeF()} "
+                    f"viewport={window.main_scroll_area.viewport().size()} "
+                    f"source_minimum={window.source_box.minimumSizeHint()}"
+                )
+                self.assertEqual(window.main_scroll_area.horizontalScrollBar().maximum(), 0, diagnostic)
+                for widget in (
+                    window.preset_combo, window.manage_presets_button,
+                    window.post_encode_label, window.post_encode_combo, window.source_add_button,
+                ):
+                    rect = QRect(widget.mapTo(window.source_box, QPoint()), widget.size())
+                    self.assertTrue(window.source_box.rect().contains(rect), diagnostic)
+                self.assertGreaterEqual(window.queue_stack.height(), 90)
+
     def test_setup_refits_after_mode_and_theme_changes(self) -> None:
         from core.models import CompressionMode
         from gui.theme import theme_manager
