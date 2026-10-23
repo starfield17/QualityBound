@@ -399,7 +399,7 @@ class GuiRegressionTests(unittest.TestCase):
                             self.assertFalse(rect.intersects(label_rect))
 
     def test_toolbar_overflow_uses_application_icon_and_keeps_hidden_actions(self) -> None:
-        from PySide6.QtGui import QIcon
+        from PySide6.QtGui import QColor, QIcon
         from PySide6.QtTest import QTest
         from PySide6.QtWidgets import QToolButton
         from gui.icons import action_icon
@@ -430,6 +430,14 @@ class GuiRegressionTests(unittest.TestCase):
                     self.assertEqual(extension.icon().cacheKey(), expected.cacheKey())
                     for mode in (QIcon.Mode.Normal, QIcon.Mode.Disabled):
                         self.assertFalse(extension.icon().pixmap(18, 18, mode).isNull())
+                    rendered = extension.grab().toImage()
+                    foreground = QColor(tokens.icon)
+                    self.assertTrue(any(
+                        pixel.alpha() > 0 and pixel.rgb() == foreground.rgb()
+                        for x in range(rendered.width())
+                        for y in range(rendered.height())
+                        for pixel in (rendered.pixelColor(x, y),)
+                    ))
                 extension = window.toolbar.findChild(QToolButton, "qt_toolbar_ext_button")
                 assert extension is not None
                 settings_button = window.toolbar.widgetForAction(window.settings_action)
