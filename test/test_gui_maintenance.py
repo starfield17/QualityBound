@@ -626,10 +626,12 @@ class GuiRegressionTestCase(unittest.TestCase):
         b = second / "b.mp4"
         a.touch()
         b.touch()
-        with patch.object(self.window, "_start_plan_for_files") as intake:
+        with patch.object(self.window, "_start_worker") as intake:
             self.window._handle_dropped_paths([first, second])
         intake.assert_called_once()
-        self.assertEqual({item.path for item in intake.call_args.args[0]}, {a.resolve(), b.resolve()})
+        worker = intake.call_args.args[0]
+        self.assertEqual(worker.paths, [first.resolve(), second.resolve()])
+        self.assertTrue(worker.recursive)
 
     def test_export_failure_is_visible_and_retains_log(self) -> None:
         log = ActivityLogWindow(self.window.translator)
