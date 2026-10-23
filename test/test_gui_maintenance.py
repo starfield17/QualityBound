@@ -554,6 +554,10 @@ class GuiRegressionTestCase(unittest.TestCase):
         self.assertIn("Failed", self.window.details_panel.details_view.toPlainText())
         self.window.queue_model.sort(0)
         self.assertIs(self.window.details_panel.record, record)
+        self.assertFalse(self.window.details_panel.isHidden())
+        self.window.queue_model.beginResetModel()
+        self.window.queue_model.endResetModel()
+        self.assertIsNone(self.window.details_panel.record)
         self.assertTrue(self.window.details_panel.isHidden())
 
     def test_comparison_prefers_preserved_file_over_old_output(self) -> None:
