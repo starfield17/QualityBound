@@ -109,3 +109,77 @@ class GuiRegressionTests(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual([record.draft.input_root for record in results[0]], folders)
         self.assertEqual([record.draft.file_item.relative_path for record in results[0]], [Path("nested/clip.mp4")] * 2)
+
+    def test_busy_queue_rejects_keyboard_remove_and_reorder(self) -> None:
+        from unittest.mock import MagicMock
+        from PySide6.QtCore import Qt
+        from test_gui_presentation import _record
+        window = self.window()
+        record = _record(self.root)
+        from gui.queue.state import QueueItemStatus
+        record.status = QueueItemStatus.QUEUED
+        window.queue_model.add_records([record])
+        window.table_view.selectRow(0)
+        window.queue_manager._worker = MagicMock()
+        try:
+            window._refresh_action_state()
+            window._remove_selected_queue_rows()
+            self.assertEqual(window.queue_model.rowCount(), 1)
+            self.assertFalse(window.queue_model.can_sort())
+            self.assertFalse(window.queue_manager.can_remove_rows([0]))
+        finally:
+            window.queue_manager._worker = None
+            window._refresh_action_state()
+
+    def test_sort_preserves_selection_details_and_both_indicators(self) -> None:
+        from PySide6.QtCore import Qt
+        from test_gui_presentation import _record
+        from gui.queue.model import QueueColumn
+        window = self.window()
+        a = _record(self.root)
+        b = _record(self.root)
+        b.item_id = "other"
+        b.bound_plan_item.source_path = self.root / "z.mkv"
+        b.bound_plan_item.output_path = self.root / "z.mp4"
+        window.queue_model.add_records([b, a])
+        window.table_view.selectRow(0)
+        window.queue_model.sort(int(QueueColumn.NAME), Qt.SortOrder.AscendingOrder)
+        self.assertIs(window._selected_record(), b)
+        self.assertIs(window.details_panel.record, b)
+        for view in (window.table_view, window.queue_window.table_view):
+            self.assertTrue(view.horizontalHeader().isSortIndicatorShown())
+        window.queue_model.reset_order()
+        self.assertIs(window._selected_record(), b)
+        for view in (window.table_view, window.queue_window.table_view):
+            self.assertFalse(view.horizontalHeader().isSortIndicatorShown())
+
+    def test_stopped_size_miss_remains_protected(self) -> None:
+        from core.models import EncodeResult
+        from gui.queue.state import QueueItemStatus
+        from test_gui_presentation import _record
+        window = self.window()
+        record = _record(self.root, QueueItemStatus.NEEDS_DECISION)
+        record.result = EncodeResult(record.source_path, record.output_path, False, needs_decision=True,
+                                     rejected_output_path=self.root / "preserved.mp4")
+        window.queue_model.add_records([record])
+        window.queue_manager.include_prepared_items([record.item_id])
+        window.queue_manager.abandon_run()
+        self.assertEqual(window.queue_manager.remove_rows([0]), 0)
+
+    def test_cancel_interrupts_tool_process(self) -> None:
+        import sys
+        import threading
+        import time
+        from core.ffmpeg.subprocess import run_cancellable
+        from core.models import OperationCancelledError
+        cancelled = threading.Event()
+        timer = threading.Timer(0.1, cancelled.set)
+        timer.start()
+        started = time.monotonic()
+        try:
+            with self.assertRaises(OperationCancelledError):
+                run_cancellable([sys.executable, "-c", "import time; time.sleep(30)"],
+                                cancel_check=cancelled.is_set, capture_output=True, text=True)
+        finally:
+            timer.join()
+        self.assertLess(time.monotonic() - started, 3)
