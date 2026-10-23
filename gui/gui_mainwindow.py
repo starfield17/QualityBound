@@ -774,6 +774,8 @@ class MainWindow(QMainWindow):
         self.post_encode_combo.setMaximumWidth(300)
         for action in PostEncodeAction:
             self.post_encode_combo.addItem("", action.value)
+        for combo in (self.source_combo, self.preset_combo, self.post_encode_combo):
+            combo.setMinimumWidth(80)
 
         self.output_label = QLabel()
         self.output_edit = QLineEdit()

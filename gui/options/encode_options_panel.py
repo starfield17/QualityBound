@@ -410,6 +410,16 @@ class EncodeOptionsPanel(QWidget):
         self.analysis_profile_combo.setMaximumWidth(180)
         self.viewing_context_combo.setMaximumWidth(250)
         self.smart_algorithm_combo.setMaximumWidth(260)
+        for combo in (
+            self.codec_combo,
+            self.compression_mode_combo,
+            self.backend_combo,
+            self.container_combo,
+            self.analysis_profile_combo,
+            self.viewing_context_combo,
+            self.smart_algorithm_combo,
+        ):
+            combo.setMinimumWidth(80)
 
         self.options_tabs.addTab(page, "")
         self.basic_tab = page
@@ -483,6 +493,8 @@ class EncodeOptionsPanel(QWidget):
         self.max_bitrate_spin.setMaximumWidth(140)
         self.maxrate_factor_spin.setMaximumWidth(120)
         self.bufsize_factor_spin.setMaximumWidth(120)
+        for combo in (self.encoder_preset_combo, self.decode_acceleration_combo):
+            combo.setMinimumWidth(80)
 
         self.options_tabs.addTab(page, "")
         self.video_tab = page
@@ -514,6 +526,7 @@ class EncodeOptionsPanel(QWidget):
         layout.setColumnStretch(4, 1)
         self.audio_mode_combo.setMaximumWidth(220)
         self.audio_bitrate_edit.setMaximumWidth(140)
+        self.audio_mode_combo.setMinimumWidth(80)
 
         self.options_tabs.addTab(page, "")
         self.audio_tab = page
