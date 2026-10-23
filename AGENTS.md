@@ -55,8 +55,12 @@ ruff check .
 pyright
 pyright -p pyright.tests.json
 pyright -p pyright.scripts.json
-python -m unittest discover -s test -p "test_*.py" -v
+python -m scripts.run_tests discover -s test -p "test_*.py" -v
 ```
+
+The full-suite entrypoint also fails on unhandled Python/Qt callback, thread,
+and finalizer exceptions, including pending Qt work at the end of the suite.
+Plain unittest discovery does not enforce that asynchronous exception gate.
 
 `pyright` runs in `strict` mode over `core`, `cli`, `main.py` and `gui`; `pyright
 -p pyright.tests.json` covers `test/` and `pyright -p pyright.scripts.json` covers

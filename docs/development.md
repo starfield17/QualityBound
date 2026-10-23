@@ -72,6 +72,13 @@ Verify profiles.
 
 ## GUI presentation
 
+Queue reflow callbacks use the table as their Qt context, so destroying the
+table cancels pending layout work even while its Python wrapper remains alive.
+Run the full suite through `python -m scripts.run_tests` to include unhandled
+Qt callback, thread and finalizer exceptions in the test result. The entrypoint
+accepts the usual unittest discovery arguments and checks pending Qt work
+before reporting success; plain `python -m unittest` lacks this extra gate.
+
 The GUI follows the system light/dark colour scheme. `gui/theme.py` owns semantic
 colour tokens (window, surface, border, text, accent, danger, success, warning)
 and generates one application-wide stylesheet plus a matching `QPalette`; it
@@ -179,7 +186,7 @@ for `app.title`.
 ```bash
 ruff check .
 pyright
-python -m unittest discover -s test -p "test_*.py" -v
+python -m scripts.run_tests discover -s test -p "test_*.py" -v
 python scripts/build_icons.py --check
 ```
 

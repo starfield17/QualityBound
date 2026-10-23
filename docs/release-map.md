@@ -68,7 +68,7 @@ Run the local contract checks with the repository's Python environment:
 ```text
 ruff check .
 pyright
-python -m unittest discover -s test -p "test_*.py" -v
+python -m scripts.run_tests discover -s test -p "test_*.py" -v
 ```
 
 CI first compiles the Inno manifest for x86_64 and ARM64 with a minimal dummy

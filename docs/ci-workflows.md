@@ -20,7 +20,7 @@ Reusable workflows:
 | Workflow | Responsibility |
 | --- | --- |
 | `_quality.yml` | Architecture contract, workflow contracts, planner contract, Windows Setup contract, ruff, pyright, compileall, generated icon check. Always runs on ubuntu-22.04 with Python 3.13. Never skippable. |
-| `_test.yml` | One native OS unit-test environment. |
+| `_test.yml` | One native OS unit-test environment, using `scripts.run_tests` to fail on unhandled asynchronous Python exceptions. |
 | `_windows-installer-contract.yml` | Pinned Inno Setup 7.1.0 portable, ISCC compile of `installer.iss` for x86_64 and ARM64 with a dummy payload. |
 | `_package.yml` | One native Nuitka package build in `smoke` / `candidate` / `release` mode. |
 
@@ -93,6 +93,18 @@ must keep matching
 
 ## Local acceptance
 
+The shared test workflow runs `python -m scripts.run_tests discover ...`.
+This retains unittest discovery and selection arguments, while installing
+Python callback, thread and unraisable-exception hooks before discovery.
+Before printing the result, it collects garbage and processes three bounded
+Qt event turns (including deferred deletion) if a Qt application exists.
+Captured exceptions are included as test errors and force a nonzero exit,
+even if all ordinary test assertions passed. Tracebacks remain visible;
+ordinary Qt diagnostic messages are not treated as Python exceptions.
+Tests must also finish any non-daemon Python threads they start; a worker
+still running at the final check is an error, since it could fail after the
+test result has been printed.
+
 Run the repository checks with the `Lab` environment:
 
 ```text
@@ -100,7 +112,7 @@ python -m unittest discover -s test -p "test_ci_plan.py" -v
 python -m unittest discover -s test -p "test_release_workflows.py" -v
 python -m unittest discover -s test -p "test_windows_setup.py" -v
 python -m unittest discover -s test -p "test_architecture.py" -v
-python -m unittest discover -s test -p "test_*.py" -v
+python -m scripts.run_tests discover -s test -p "test_*.py" -v
 ruff check .
 pyright
 python -m compileall -q main.py cli core gui scripts test
