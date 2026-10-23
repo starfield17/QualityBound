@@ -1966,7 +1966,13 @@ class MainWindow(QMainWindow):
         compact = self.height() < 900
         self.summary_widget.setVisible(not compact)
         self.compact_summary_label.setVisible(compact)
-        self.main_scroll_area.setMaximumHeight(max(64, int(self.main_content_widget.height() * (0.20 if compact else 0.30))))
+        maximum = max(64, int(self.main_content_widget.height() * (0.20 if compact else 0.30)))
+        self.main_scroll_area.setMaximumHeight(maximum)
+        sizes = self.workspace_splitter.sizes()
+        # Changing a child's maximum size does not resize its splitter slot.
+        # Return the unused part of that slot to the queue immediately.
+        if sizes[0] > maximum:
+            self.workspace_splitter.setSizes([maximum, sum(sizes) - maximum])
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if self.active_worker is not None or self.queue_busy or self.queue_manager.is_busy():
