@@ -1,163 +1,90 @@
+from __future__ import annotations
+
 import ast
-import json
+import string
 import unittest
 from pathlib import Path
 
-from core.i18n import LANGUAGE_NAME_KEY, _placeholders
-from core.media import POST_ENCODE_ACTION_KEYS
-from gui.queue.state import STATUS_KEY_BY_VALUE
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
-I18N_DIR = REPO_ROOT / "config" / "i18n"
-APP_PACKAGE_ROOTS = (REPO_ROOT / "core", REPO_ROOT / "cli", REPO_ROOT / "gui")
-
-# Dynamic translation keys are not string literals at the call site and cannot be
-# verified directly. They must be introduced through one of these explicit
-# variables/functions, whose resolved key set is checked separately.
-TOOLTIP_KEY_ALLOWLIST = {
-    "",
-    "gui.tooltip.backend_filtered",
-    "gui.tooltip.backend_detecting",
-    "gui.tooltip.encoder_preset_unavailable",
-}
 
 
-def _load(locale: str) -> dict[str, str]:
-    with (I18N_DIR / f"{locale}.json").open(encoding="utf-8") as f:
-        return json.load(f)
+def _fields(template: str) -> frozenset[str]:
+    fields: set[str] = set()
+    for _, field, spec, _ in string.Formatter().parse(template):
+        if field is not None:
+            if not field or field.isdecimal():
+                raise ValueError('use named format fields')
+            fields.add(field)
+            fields.update(_fields(spec))
+    return frozenset(fields)
 
 
-def _builtin_locales() -> list[str]:
-    return sorted(
-        path.stem for path in I18N_DIR.glob("*.json") if path.name != "en.json"
-    )
+def _validate_text(node: ast.Call) -> None:
+    if node.args or {kw.arg for kw in node.keywords} != {'en', 'zh_cn'} or len(node.keywords) != 2:
+        raise ValueError('Text requires exactly en= and zh_cn=')
+    values: dict[str, str] = {}
+    for kw in node.keywords:
+        if not isinstance(kw.value, ast.Constant) or not isinstance(kw.value.value, str):
+            raise ValueError('translations must be literal strings; format after selecting the language')
+        if not kw.value.value.strip():
+            raise ValueError('translation must not be empty')
+        assert kw.arg is not None
+        values[kw.arg] = kw.value.value
+    if _fields(values['en']) != _fields(values['zh_cn']):
+        raise ValueError('translation placeholder mismatch')
 
 
-def _app_python_files() -> list[Path]:
-    files = [REPO_ROOT / "main.py"]
-    for root in APP_PACKAGE_ROOTS:
-        files.extend(sorted(root.rglob("*.py")))
-    return files
-
-
-def _root_name(expr: ast.expr) -> str | None:
-    while isinstance(expr, ast.Attribute):
-        expr = expr.value
-    if isinstance(expr, ast.Name):
-        return expr.id
-    return None
-
-
-def _translator_t_first_args(tree: ast.AST) -> list[ast.expr]:
-    """First positional arg of every translator ``t(...)`` call in the tree."""
-    args: list[ast.expr] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call) or not node.args:
-            continue
-        func = node.func
-        if isinstance(func, ast.Attribute) and func.attr == "t":
-            if _root_name(func.value) in {"tr", "self", "translator"}:
-                args.append(node.args[0])
-        elif isinstance(func, ast.Name) and func.id == "t":
-            args.append(node.args[0])
-    return args
-
-
-class BuiltinLanguageConsistencyTestCase(unittest.TestCase):
-    def test_all_builtins_have_language_name(self) -> None:
-        en = _load("en")
-        self.assertIsInstance(en.get(LANGUAGE_NAME_KEY), str)
-        self.assertTrue(en[LANGUAGE_NAME_KEY])
-        for locale in _builtin_locales():
-            messages = _load(locale)
-            self.assertIsInstance(messages.get(LANGUAGE_NAME_KEY), str)
-            self.assertTrue(messages[LANGUAGE_NAME_KEY], msg=locale)
-
-    def test_builtin_key_sets_match_english(self) -> None:
-        en = _load("en")
-        for locale in _builtin_locales():
-            messages = _load(locale)
-            self.assertEqual(set(en), set(messages), msg=locale)
-
-    def test_builtin_placeholder_sets_match_english_per_key(self) -> None:
-        en = _load("en")
-        for locale in _builtin_locales():
-            messages = _load(locale)
-            for key in en:
-                self.assertEqual(
-                    _placeholders(en[key]),
-                    _placeholders(messages[key]),
-                    msg=f"{locale}:{key}",
-                )
-
-
-class SourceLiteralKeyTestCase(unittest.TestCase):
-    def test_source_literal_keys_exist_in_english(self) -> None:
-        en = _load("en")
-        missing: list[tuple[Path, str]] = []
-        for file in _app_python_files():
-            tree = ast.parse(file.read_text(encoding="utf-8"))
-            for arg in _translator_t_first_args(tree):
-                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                    if arg.value not in en:
-                        missing.append((file, arg.value))
-        self.assertEqual([], missing)
-
-    def test_dynamic_keys_only_via_allowlisted_patterns(self) -> None:
-        unlisted: list[tuple[Path, str]] = []
-        for file in _app_python_files():
-            tree = ast.parse(file.read_text(encoding="utf-8"))
-            for arg in _translator_t_first_args(tree):
-                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                    continue
-                if isinstance(arg, ast.Name) and arg.id == "tooltip_key":
-                    continue
-                if (
-                    isinstance(arg, ast.Call)
-                    and isinstance(arg.func, ast.Name)
-                    and arg.func.id in {
-                        "status_key",
-                        "post_encode_action_key",
-                        "progress_stage_key",
-                        "progress_state_key",
-                    }
-                ):
-                    continue
-                unlisted.append((file, ast.unparse(arg)))
-        self.assertEqual([], unlisted)
-
-    def test_status_key_values_exist_in_english(self) -> None:
-        en = _load("en")
-        for value in STATUS_KEY_BY_VALUE.values():
-            self.assertIn(value, en)
-
-    def test_post_encode_action_key_values_exist_in_english(self) -> None:
-        en = _load("en")
-        for value in POST_ENCODE_ACTION_KEYS.values():
-            self.assertIn(value, en)
-
-    def test_tooltip_key_literals_match_allowlist(self) -> None:
-        en = _load("en")
-        literals: set[str] = set()
-        for file in _app_python_files():
-            tree = ast.parse(file.read_text(encoding="utf-8"))
+class InlineTranslationValidationTestCase(unittest.TestCase):
+    def test_every_application_text_is_complete_and_has_matching_placeholders(self) -> None:
+        errors: list[str] = []
+        count = 0
+        paths = [REPO_ROOT / 'main.py']
+        for package in ('core', 'cli', 'gui'):
+            paths.extend(sorted((REPO_ROOT / package).rglob('*.py')))
+        for path in paths:
+            tree = ast.parse(path.read_text(encoding='utf-8'))
             for node in ast.walk(tree):
-                if not isinstance(node, ast.Assign):
-                    continue
-                if not any(
-                    isinstance(target, ast.Name) and target.id == "tooltip_key"
-                    for target in node.targets
-                ):
-                    continue
-                for sub in ast.walk(node.value):
-                    if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
-                        literals.add(sub.value)
-        self.assertTrue(literals)
-        self.assertLessEqual(literals, TOOLTIP_KEY_ALLOWLIST)
-        for literal in literals:
-            if literal:
-                self.assertIn(literal, en)
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'Text':
+                    count += 1
+                    try:
+                        _validate_text(node)
+                    except ValueError as exc:
+                        errors.append(f'{path.relative_to(REPO_ROOT)}:{node.lineno}: {exc}')
+        self.assertGreater(count, 0)
+        self.assertEqual(errors, [])
+
+    def test_validation_rejects_missing_language_mismatched_fields_and_invalid_templates(self) -> None:
+        for source in (
+            'Text(en="Ready")',
+            'Text(en="Ready", zh_cn="")',
+            'Text(en="{count}", zh_cn="{total}")',
+            'Text(en="{count", zh_cn="{count}")',
+            'Text(en="{}", zh_cn="{}")',
+            'Text(en="Ready", zh_cn=translated_value)',
+            'Text(en=f"{count}", zh_cn="{count}")',
+        ):
+            with self.subTest(source=source), self.assertRaises(ValueError):
+                node = ast.parse(source, mode='eval').body
+                assert isinstance(node, ast.Call)
+                _validate_text(node)
+
+    def test_validation_handles_literal_braces_repeated_fields_and_nested_specs(self) -> None:
+        node = ast.parse('Text(en="{{{value:{width}.1f}}} {value}", zh_cn="{value:{width}.1f}")', mode='eval').body
+        assert isinstance(node, ast.Call)
+        _validate_text(node)
+        self.assertEqual(_fields('{{literal}} {value:{width}.1f} {value}'), frozenset({'value', 'width'}))
+
+    def test_key_lookup_and_resource_loading_are_removed(self) -> None:
+        self.assertFalse((REPO_ROOT / 'config/i18n').exists())
+        for package in ('core', 'cli', 'gui'):
+            for path in (REPO_ROOT / package).rglob('*.py'):
+                source = path.read_text(encoding='utf-8')
+                self.assertNotIn('TranslationCatalog', source, str(path))
+                self.assertNotIn('get_translator', source, str(path))
+                for node in ast.walk(ast.parse(source)):
+                    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == 't' and node.args:
+                        self.assertNotIsInstance(node.args[0], ast.Constant, f'{path}:{node.lineno}')
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
+if __name__ == '__main__':
+    unittest.main()
