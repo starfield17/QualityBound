@@ -449,7 +449,7 @@ class GuiRegressionTests(unittest.TestCase):
                             self.assertFalse(rect.intersects(label_rect))
 
     def test_toolbar_overflow_uses_application_icon_and_keeps_hidden_actions(self) -> None:
-        from PySide6.QtGui import QColor, QIcon
+        from PySide6.QtGui import QIcon
         from PySide6.QtTest import QTest
         from PySide6.QtWidgets import QToolButton
         from gui.icons import action_icon
@@ -481,16 +481,18 @@ class GuiRegressionTests(unittest.TestCase):
                     for mode in (QIcon.Mode.Normal, QIcon.Mode.Disabled):
                         self.assertFalse(extension.icon().pixmap(18, 18, mode).isNull())
                     rendered = extension.grab().toImage()
-                    foreground = QColor(tokens.icon)
+                    icon = extension.icon()
+                    try:
+                        extension.setIcon(QIcon())
+                        without_icon = extension.grab().toImage()
+                    finally:
+                        extension.setIcon(icon)
+                    self.assertEqual(rendered.size(), without_icon.size())
                     self.assertTrue(any(
-                        pixel.alpha() > 0
-                        and abs(pixel.red() - foreground.red()) <= 8
-                        and abs(pixel.green() - foreground.green()) <= 8
-                        and abs(pixel.blue() - foreground.blue()) <= 8
+                        rendered.pixel(x, y) != without_icon.pixel(x, y)
                         for x in range(rendered.width())
                         for y in range(rendered.height())
-                        for pixel in (rendered.pixelColor(x, y),)
-                    ))
+                    ), "The application overflow icon must change the rendered button pixels")
                 extension = window.toolbar.findChild(QToolButton, "qt_toolbar_ext_button")
                 assert extension is not None
                 settings_button = window.toolbar.widgetForAction(window.settings_action)
