@@ -329,3 +329,16 @@ class GuiRegressionTests(unittest.TestCase):
         painter.end()
         values = [target.pixelColor(x, 64).red() for x in range(128)]
         self.assertGreater(sum(a != b for a, b in zip(values, values[1:])), 100)
+
+    def test_comparison_shortcuts_leave_editing_and_tab_navigation_available(self) -> None:
+        from gui.comparison.window import ComparisonWindow
+        window = ComparisonWindow(self.tr)
+        self.addCleanup(window.close)
+        window.show()
+        window.activateWindow()
+        window.offset.setFocus()
+        self.app.processEvents()
+        window._update_shortcuts()
+        self.assertTrue(window.offset.hasFocus() or window.offset.lineEdit().hasFocus())
+        self.assertTrue(all(not shortcut.isEnabled() for shortcut in window._shortcuts))
+        self.assertNotIn("Tab", [shortcut.key().toString() for shortcut in window._shortcuts])

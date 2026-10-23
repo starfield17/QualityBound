@@ -18,7 +18,7 @@ from core.ffmpeg.encoders import (
     list_available_encoders,
     resolve_encoder,
 )
-from core.models import BackendChoice, CodecChoice
+from core.models import BackendChoice, CodecChoice, OperationCancelledError
 
 
 def _capabilities(hevc: list[tuple[BackendChoice, str]], av1: list[tuple[BackendChoice, str]] | None = None) -> dict:
@@ -87,6 +87,13 @@ class RuntimeCapabilityResolveTestCase(unittest.TestCase):
 
 
 class EncoderCapabilityCacheTestCase(unittest.TestCase):
+    def test_cache_fingerprint_can_be_cancelled(self) -> None:
+        ffmpeg_path = Path("ffmpeg")
+        cancelled = lambda: True
+        with patch("core.ffmpeg.capabilities._ffmpeg_mtime_ns", return_value=123):
+            with self.assertRaises(OperationCancelledError):
+                is_encoder_capability_cache_valid(_cache_payload(ffmpeg_path), ffmpeg_path, cancel_check=cancelled)
+
     def test_legacy_schema_version_is_invalidated(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             ffmpeg_path = Path(temp_dir) / "ffmpeg"
