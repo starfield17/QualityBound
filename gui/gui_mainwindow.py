@@ -458,7 +458,21 @@ class MainWindow(QMainWindow):
         self.tray_icon.hide()
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        if self._only_encoder_detection_running():
+        only_detection = self._only_encoder_detection_running()
+        if (not self._close_after_running_task_stops
+                and (only_detection or not self._has_running_task())
+                and self._has_unsaved_queue_work()):
+            result = QMessageBox.question(
+                self,
+                self.translator.t(Text(en='Queue has unfinished items', zh_cn='队列中仍有未完成项目', ja='キューに未完了の項目があります')),
+                self.translator.t(MESSAGE_CLOSE_PENDING_TEXT),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if result != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
+        if only_detection:
             self._close_after_running_task_stops = True
             detection_worker = self.encoder_detection_worker
             if detection_worker is not None:
@@ -467,17 +481,6 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
         if not self._has_running_task():
-            if not self._close_after_running_task_stops and self._has_unsaved_queue_work():
-                result = QMessageBox.question(
-                    self,
-                    self.translator.t(Text(en='Queue has unfinished items', zh_cn='队列中仍有未完成项目', ja='キューに未完了の項目があります')),
-                    self.translator.t(MESSAGE_CLOSE_PENDING_TEXT),
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    QMessageBox.StandardButton.No,
-                )
-                if result != QMessageBox.StandardButton.Yes:
-                    event.ignore()
-                    return
             self._save_window_geometry()
             self._persist_runtime_state()
             for comparison in list(self.comparison_windows):
