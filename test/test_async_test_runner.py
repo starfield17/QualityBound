@@ -56,6 +56,14 @@ class AsyncTestRunnerTestCase(unittest.TestCase):
                 thread.start()
                 thread.join()
             """,
+            "late_thread": """
+                import threading
+                import time
+                def fail():
+                    time.sleep(0.5)
+                    raise RuntimeError('async-probe-late-thread')
+                threading.Thread(target=fail).start()
+            """,
             "destructor": """
                 class Broken:
                     def __del__(self):
