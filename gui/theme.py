@@ -308,6 +308,9 @@ _STYLESHEET = Template(
         color: $text;
         background: transparent;
     }
+    QToolButton#qt_toolbar_ext_button {
+        padding: 0;
+    }
     QToolButton:hover {
         background: $accent_soft;
         border-color: $border_strong;

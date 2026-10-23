@@ -6,7 +6,7 @@ from weakref import WeakKeyDictionary
 from PySide6.QtCore import QByteArray, QRectF, Qt
 from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
-from PySide6.QtWidgets import QAbstractButton
+from PySide6.QtWidgets import QAbstractButton, QToolBar, QToolButton
 
 from gui.theme import current_tokens
 
@@ -76,6 +76,7 @@ _ICONS: dict[str, str] = {
         <path d="m15 15 5 5"/>
     """,
     "close": '<path d="m6 6 12 12M18 6 6 18" stroke-width="2"/>',
+    "overflow": '<path d="m5 6 6 6-6 6m8-12 6 6-6 6"/>',
 }
 
 
@@ -118,6 +119,13 @@ def set_button_icon(button: QAbstractButton, name: str) -> None:
     _button_icons[button] = name
     tokens = current_tokens()
     button.setIcon(action_icon(name, tokens.icon, tokens.icon_disabled))
+
+
+def set_toolbar_overflow_icon(toolbar: QToolBar) -> None:
+    """Keep Qt's overflow actions, avoiding the native symbol-image icon engine."""
+    extension = toolbar.findChild(QToolButton, "qt_toolbar_ext_button")
+    if extension is not None:
+        set_button_icon(extension, "overflow")
 
 
 def refresh_button_icons() -> None:

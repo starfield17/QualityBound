@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.i18n import Text, Translator
+from gui.icons import set_toolbar_overflow_icon
 from gui.queue.model import QueueTableModel, format_duration
 from gui.queue.state import QueueMetrics
 from gui.queue.view import create_queue_view
@@ -66,6 +67,7 @@ class QueueWindow(QMainWindow):
         self.action_toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.action_toolbar.setIconSize(QSize(18, 18))
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.action_toolbar)
+        set_toolbar_overflow_icon(self.action_toolbar)
 
         self.summary_label = QLabel()
         self.queue_progress_label = QLabel()

@@ -108,7 +108,7 @@ from gui.options.settings_dialog import (
     MESSAGE_PATH_MISSING,
     MESSAGE_PATH_NOT_DIRECTORY,
 )
-from gui.icons import action_icon, refresh_button_icons
+from gui.icons import action_icon, refresh_button_icons, set_toolbar_overflow_icon
 from gui.queue.item_details_panel import ItemDetailsPanel
 from gui.notification_banner import NotificationBanner
 from gui.theme import apply_theme, current_tokens, theme_manager
@@ -612,6 +612,7 @@ class MainWindow(QMainWindow):
         toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         toolbar.setIconSize(QSize(18, 18))
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
+        set_toolbar_overflow_icon(toolbar)
         self.toolbar = toolbar
 
         self.add_files_action = QAction(self)
