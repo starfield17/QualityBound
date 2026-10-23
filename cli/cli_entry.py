@@ -443,7 +443,7 @@ def _run_preset(args: argparse.Namespace, config_dir: Path) -> int:
     if args.preset_command == "list":
         names = list_presets(config_dir)
         if not names:
-            print(tr.t(Text(en='No presets found.', zh_cn='没有可用预设。')))
+            print(tr.t(Text(en='No presets found.', zh_cn='没有可用预设。', ja='プリセットが見つかりません。')))
             return 0
         for name in names:
             print(name)
@@ -456,7 +456,7 @@ def _run_preset(args: argparse.Namespace, config_dir: Path) -> int:
 
     if args.preset_command == "delete":
         delete_preset(args.name, config_dir)
-        print(tr.t(Text(en="Preset '{name}' deleted", zh_cn="预设 '{name}' 已删除"), name=args.name))
+        print(tr.t(Text(en="Preset '{name}' deleted", zh_cn="预设 '{name}' 已删除", ja="プリセット '{name}' を削除しました"), name=args.name))
         return 0
 
     if args.preset_command == "save":
@@ -464,7 +464,7 @@ def _run_preset(args: argparse.Namespace, config_dir: Path) -> int:
         _validate_compression_options(options, args)
         _validate_encoder_preset(options, args)
         path = save_preset(args.name, options, config_dir)
-        print(tr.t(Text(en="Preset '{name}' saved to {path}", zh_cn="预设 '{name}' 已保存到 {path}"), name=args.name, path=path))
+        print(tr.t(Text(en="Preset '{name}' saved to {path}", zh_cn="预设 '{name}' 已保存到 {path}", ja="プリセット '{name}' を {path} に保存しました"), name=args.name, path=path))
         return 0
 
     raise ValueError(f"Unsupported preset command: {args.preset_command}")
@@ -485,7 +485,7 @@ def run_cli(argv: list[str] | None = None) -> int:
             return _run_preset(args, config_dir)
     except Exception as exc:
         tr = _translator_for_args(args)
-        print(f"{tr.t(Text(en='Error', zh_cn='错误'))}: {exc}", file=sys.stderr)
+        print(f"{tr.t(Text(en='Error', zh_cn='错误', ja='エラー'))}: {exc}", file=sys.stderr)
         return 2
 
     parser.print_help()

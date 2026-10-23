@@ -26,9 +26,9 @@ main.py
 - Shared behavior belongs in the lowest suitable layer and dependencies remain
   acyclic.
 
-`core.i18n` defines immutable bilingual `Text` values, the supported language
-names and the per-consumer `Translator`. CLI and GUI declarations live beside
-their presentation code. Existing functional owners export shared text when
+`core.i18n` defines immutable multilingual `Text` values (`en`, `zh_cn`, `ja`), the
+supported language names and the per-consumer `Translator`. CLI and GUI declarations live
+beside their presentation code. Existing functional owners export shared text when
 both consumers express the same concept; there is no catalog or registration.
 
 The recursive architecture test enforces the root allowlist, capability-package

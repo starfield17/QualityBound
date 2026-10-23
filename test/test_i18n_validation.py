@@ -20,8 +20,8 @@ def _fields(template: str) -> frozenset[str]:
 
 
 def _validate_text(node: ast.Call) -> None:
-    if node.args or {kw.arg for kw in node.keywords} != {'en', 'zh_cn'} or len(node.keywords) != 2:
-        raise ValueError('Text requires exactly en= and zh_cn=')
+    if node.args or {kw.arg for kw in node.keywords} != {'en', 'zh_cn', 'ja'} or len(node.keywords) != 3:
+        raise ValueError('Text requires exactly en=, zh_cn=, and ja=')
     values: dict[str, str] = {}
     for kw in node.keywords:
         if not isinstance(kw.value, ast.Constant) or not isinstance(kw.value.value, str):
@@ -30,7 +30,7 @@ def _validate_text(node: ast.Call) -> None:
             raise ValueError('translation must not be empty')
         assert kw.arg is not None
         values[kw.arg] = kw.value.value
-    if _fields(values['en']) != _fields(values['zh_cn']):
+    if _fields(values['en']) != _fields(values['zh_cn']) or _fields(values['en']) != _fields(values['ja']):
         raise ValueError('translation placeholder mismatch')
 
 
@@ -56,12 +56,15 @@ class InlineTranslationValidationTestCase(unittest.TestCase):
     def test_validation_rejects_missing_language_mismatched_fields_and_invalid_templates(self) -> None:
         for source in (
             'Text(en="Ready")',
-            'Text(en="Ready", zh_cn="")',
-            'Text(en="{count}", zh_cn="{total}")',
-            'Text(en="{count", zh_cn="{count}")',
-            'Text(en="{}", zh_cn="{}")',
-            'Text(en="Ready", zh_cn=translated_value)',
-            'Text(en=f"{count}", zh_cn="{count}")',
+            'Text(en="Ready", zh_cn="就绪")',
+            'Text(en="Ready", zh_cn="就绪", ja="")',
+            'Text(en="{count}", zh_cn="{total}", ja="{count}")',
+            'Text(en="{count}", zh_cn="{count}", ja="{total}")',
+            'Text(en="{count", zh_cn="{count}", ja="{count}")',
+            'Text(en="{}", zh_cn="{}", ja="{}")',
+            'Text(en="Ready", zh_cn=translated_value, ja="準備完了")',
+            'Text(en="Ready", zh_cn="就绪", ja=translated_value)',
+            'Text(en=f"{count}", zh_cn="{count}", ja="{count}")',
         ):
             with self.subTest(source=source), self.assertRaises(ValueError):
                 node = ast.parse(source, mode='eval').body
@@ -69,7 +72,7 @@ class InlineTranslationValidationTestCase(unittest.TestCase):
                 _validate_text(node)
 
     def test_validation_handles_literal_braces_repeated_fields_and_nested_specs(self) -> None:
-        node = ast.parse('Text(en="{{{value:{width}.1f}}} {value}", zh_cn="{value:{width}.1f}")', mode='eval').body
+        node = ast.parse('Text(en="{{{value:{width}.1f}}} {value}", zh_cn="{value:{width}.1f}", ja="{value:{width}.1f}")', mode='eval').body
         assert isinstance(node, ast.Call)
         _validate_text(node)
         self.assertEqual(_fields('{{literal}} {value:{width}.1f} {value}'), frozenset({'value', 'width'}))

@@ -12,6 +12,7 @@ from gui.icons import set_button_icon
 BANNER_DISMISS = Text(
     en='Dismiss',
     zh_cn='忽略',
+    ja='閉じる',
 )
 
 

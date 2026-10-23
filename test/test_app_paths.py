@@ -147,15 +147,15 @@ class AppPathsCompiledEnvironmentTestCase(unittest.TestCase):
                 {"existing": "Customized"},
             )
 
-    def test_cli_selects_both_languages_without_bundle_resources(self) -> None:
+    def test_cli_selects_all_languages_without_bundle_resources(self) -> None:
         with patch("pathlib.Path.read_text", side_effect=AssertionError("must not read language packs")):
             parser = cli_entry._build_parser()
-            for language, expected in (("en", "Ready"), ("zh_cn", "就绪")):
+            for language, expected in (("en", "Ready"), ("zh_cn", "就绪"), ("ja", "準備完了")):
                 args = parser.parse_args(["plan", "input.mp4", "--lang", language])
                 with patch("cli.cli_entry.load_app_config", return_value={}):
                     tr = cli_entry._translator_for_args(args)
                 self.assertEqual(tr.language, language)
-                self.assertEqual(tr.t(Text(en="Ready", zh_cn="就绪")), expected)
+                self.assertEqual(tr.t(Text(en="Ready", zh_cn="就绪", ja="準備完了")), expected)
 
     def test_cli_uses_saved_language_and_falls_back_from_removed_locale(self) -> None:
         for language, expected in (("zh_cn", "zh_cn"), ("fr", "en")):

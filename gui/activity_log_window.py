@@ -31,6 +31,7 @@ from gui.window_geometry import clamped_window_size
 LOG_EXPORT_FAILED = Text(
     en='Could not export the log to {path}:\n{error}',
     zh_cn='无法将日志导出至 {path}：\n{error}',
+    ja='ログを {path} にエクスポートできませんでした:\n{error}',
 )
 
 
@@ -134,17 +135,17 @@ class ActivityLogWindow(QMainWindow):
 
     def apply_translations(self, tr: Translator) -> None:
         self.translator = tr
-        self.setWindowTitle(self.translator.t(Text(en='Activity Log', zh_cn='活动日志')))
-        self.filter_label.setText(self.translator.t(Text(en='Log filter', zh_cn='日志过滤')))
-        self.filter_combo.setItemText(0, self.translator.t(Text(en='All', zh_cn='全部')))
-        self.filter_combo.setItemText(1, self.translator.t(Text(en='Command', zh_cn='命令')))
-        self.filter_combo.setItemText(2, self.translator.t(Text(en='Process', zh_cn='过程')))
-        self.filter_combo.setItemText(3, self.translator.t(Text(en='Error', zh_cn='错误')))
-        self.search_edit.setPlaceholderText(self.translator.t(Text(en='Search log…', zh_cn='搜索日志…')))
-        self.follow_check.setText(self.translator.t(Text(en='Follow output', zh_cn='跟随输出')))
-        self.export_button.setText(self.translator.t(Text(en='Export filtered log', zh_cn='导出筛选后的日志')))
-        self.clear_button.setText(self.translator.t(Text(en='Clear Log', zh_cn='清空日志')))
-        self.log_output.setPlaceholderText(self.translator.t(Text(en='No activity yet.', zh_cn='暂无活动。')))
+        self.setWindowTitle(self.translator.t(Text(en='Activity Log', zh_cn='活动日志', ja='アクティビティログ')))
+        self.filter_label.setText(self.translator.t(Text(en='Log filter', zh_cn='日志过滤', ja='ログフィルター')))
+        self.filter_combo.setItemText(0, self.translator.t(Text(en='All', zh_cn='全部', ja='すべて')))
+        self.filter_combo.setItemText(1, self.translator.t(Text(en='Command', zh_cn='命令', ja='コマンド')))
+        self.filter_combo.setItemText(2, self.translator.t(Text(en='Process', zh_cn='过程', ja='プロセス')))
+        self.filter_combo.setItemText(3, self.translator.t(Text(en='Error', zh_cn='错误', ja='エラー')))
+        self.search_edit.setPlaceholderText(self.translator.t(Text(en='Search log…', zh_cn='搜索日志…', ja='ログを検索…')))
+        self.follow_check.setText(self.translator.t(Text(en='Follow output', zh_cn='跟随输出', ja='出力を自動スクロール')))
+        self.export_button.setText(self.translator.t(Text(en='Export filtered log', zh_cn='导出筛选后的日志', ja='フィルター適用ログをエクスポート')))
+        self.clear_button.setText(self.translator.t(Text(en='Clear Log', zh_cn='清空日志', ja='ログを消去')))
+        self.log_output.setPlaceholderText(self.translator.t(Text(en='No activity yet.', zh_cn='暂无活动。', ja='アクティビティはまだありません。')))
         self._refresh_log_view()
 
     def refresh_icons(self) -> None:
@@ -164,7 +165,7 @@ class ActivityLogWindow(QMainWindow):
         # Only controlled severity prefixes count; filenames and counters do not.
         if re.match(r"^\s*(?:\[debug\]|debug:)", message, re.IGNORECASE):
             return "debug"
-        if re.match(r"^\s*(?:\[?(?:error|fatal|failed|traceback)\]?(?:[:：\s]|$)|(?:错误|失败|异常)[:：\s])", message, re.IGNORECASE):
+        if re.match(r"^\s*(?:\[?(?:error|fatal|failed|traceback)\]?(?:[:：\s]|$)|(?:错误|失败|异常|エラー|失敗|例外)[:：\s])", message, re.IGNORECASE):
             return "error"
         return "process"
 
@@ -244,9 +245,9 @@ class ActivityLogWindow(QMainWindow):
     def _export_logs(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self,
-            self.translator.t(Text(en='Export log', zh_cn='导出日志')),
+            self.translator.t(Text(en='Export log', zh_cn='导出日志', ja='ログのエクスポート')),
             str(Path.home() / "qualitybound.log"),
-            self.translator.t(Text(en='Log files (*.log *.txt);;All files (*)', zh_cn='日志文件 (*.log *.txt);;所有文件 (*)')),
+            self.translator.t(Text(en='Log files (*.log *.txt);;All files (*)', zh_cn='日志文件 (*.log *.txt);;所有文件 (*)', ja='ログファイル (*.log *.txt);;すべてのファイル (*)')),
         )
         if not path:
             return
@@ -261,6 +262,6 @@ class ActivityLogWindow(QMainWindow):
             Path(path).write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
         except OSError as exc:
             QMessageBox.warning(
-                self, self.translator.t(Text(en='Warning', zh_cn='警告')),
+                self, self.translator.t(Text(en='Warning', zh_cn='警告', ja='警告')),
                 self.translator.t(LOG_EXPORT_FAILED, path=path, error=str(exc)),
             )

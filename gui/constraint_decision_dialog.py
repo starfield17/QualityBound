@@ -30,36 +30,43 @@ from gui.queue.model import format_size
 DECISION_DECIDE_LATER = Text(
     en='Decide later',
     zh_cn='稍后决定',
+    ja='後で決定',
 )
 
 DECISION_NO_METRICS = Text(
     en='No metric details are available for this decision.',
     zh_cn='此决定没有可用的指标详情。',
+    ja='この決定に使用できるメトリクスの詳細がありません。',
 )
 
 DECISION_QUALITY_MISS_TITLE = Text(
     en='Quality target not reached',
     zh_cn='未达到画质目标',
+    ja='品質目標に未到達',
 )
 
 DECISION_REASON = Text(
     en='Reason',
     zh_cn='原因',
+    ja='理由',
 )
 
 DECISION_SIZE_CONFLICT_INTRO = Text(
     en='Tested candidates meet the quality target but exceed the size limit for {file}, or its media budget is too small.',
     zh_cn='{file} 已测试的候选达到画质目标，但超过体积上限，或其媒体预算不足。',
+    ja='{file} のテスト候補は品質目標を達成していますがサイズ上限を超えているか、メディア予算が不足しています。',
 )
 
 DECISION_SIZE_CONFLICT_TITLE = Text(
     en='Quality and size conflict',
     zh_cn='画质与体积冲突',
+    ja='品質とサイズの競合',
 )
 
 DECISION_SIZE_MISS_TITLE = Text(
     en='Encoded file exceeded the size limit',
     zh_cn='成片超过体积上限',
+    ja='エンコード後のファイルがサイズ上限を超過',
 )
 
 
@@ -85,26 +92,26 @@ class _LimitBar(QProgressBar):
 def _quality_action_text(tr: Translator, option: DecisionOption) -> str:
     value = option.suggested_value
     if option.action_code == DecisionActionCode.RELAX_SIZE and isinstance(value, (int, float)):
-        return tr.t(Text(en='Allow output up to {value}', zh_cn='允许成片最大到 {value}'), value=f"{float(value) * 100:.1f}%")
+        return tr.t(Text(en='Allow output up to {value}', zh_cn='允许成片最大到 {value}', ja='最大 {value} までの出力を許可'), value=f"{float(value) * 100:.1f}%")
     if option.action_code == DecisionActionCode.RELAX_QUALITY and isinstance(value, (int, float)):
-        return tr.t(Text(en='Lower sampled-window mean VMAF target to {value}', zh_cn='把采样窗口平均 VMAF 下限降到 {value}'), value=f"{float(value):.1f}")
+        return tr.t(Text(en='Lower sampled-window mean VMAF target to {value}', zh_cn='把采样窗口平均 VMAF 下限降到 {value}', ja='サンプルウィンドウの平均VMAF目標を {value} に引き下げ'), value=f"{float(value):.1f}")
     if option.action_code == DecisionActionCode.CHANGE_MEDIA_BUDGET:
-        return tr.t(Text(en='Encode audio as AAC and retry', zh_cn='音频改用 AAC 后重试'))
+        return tr.t(Text(en='Encode audio as AAC and retry', zh_cn='音频改用 AAC 后重试', ja='音声をAACでエンコードして再試行'))
     if option.action_code == DecisionActionCode.REANALYZE:
-        return tr.t(Text(en='Run Smart analysis again with the current encoder', zh_cn='使用当前编码器重新运行 Smart 分析'))
-    return tr.t(Text(en='Skip this file', zh_cn='跳过这个文件'))
+        return tr.t(Text(en='Run Smart analysis again with the current encoder', zh_cn='使用当前编码器重新运行 Smart 分析', ja='現在のエンコーダーでSmart分析を再実行'))
+    return tr.t(Text(en='Skip this file', zh_cn='跳过这个文件', ja='このファイルをスキップ'))
 
 
 def _quality_action_description(tr: Translator, option: DecisionOption) -> str:
     if option.action_code == DecisionActionCode.RELAX_SIZE:
-        return tr.t(Text(en='Keep the quality target and allow a larger output, up to the source size.', zh_cn='保持质量目标，允许更大的输出，最大到源文件体积。'))
+        return tr.t(Text(en='Keep the quality target and allow a larger output, up to the source size.', zh_cn='保持质量目标，允许更大的输出，最大到源文件体积。', ja='品質目標を維持し、ソースサイズを上限としてより大きな出力を許可します。'))
     if option.action_code == DecisionActionCode.RELAX_QUALITY:
-        return tr.t(Text(en='Keep the size ceiling and lower the quality target to the measured value.', zh_cn='保持体积上限，把质量目标降到测量值。'))
+        return tr.t(Text(en='Keep the size ceiling and lower the quality target to the measured value.', zh_cn='保持体积上限，把质量目标降到测量值。', ja='サイズ上限を維持し、品質目標を実測値まで引き下げます。'))
     if option.action_code == DecisionActionCode.CHANGE_MEDIA_BUDGET:
-        return tr.t(Text(en='Encode audio as AAC to free bitrate for video, then retry.', zh_cn='把音频编码为 AAC，为视频腾出码率后重试。'))
+        return tr.t(Text(en='Encode audio as AAC to free bitrate for video, then retry.', zh_cn='把音频编码为 AAC，为视频腾出码率后重试。', ja='音声をAACでエンコードして映像のビットレートを確保し、再試行します。'))
     if option.action_code == DecisionActionCode.REANALYZE:
-        return tr.t(Text(en='Run Smart analysis again with the current encoder.', zh_cn='使用当前编码器重新运行智能分析。'))
-    return tr.t(Text(en='Do not publish a file for this item.', zh_cn='不为该项目发布文件。'))
+        return tr.t(Text(en='Run Smart analysis again with the current encoder.', zh_cn='使用当前编码器重新运行智能分析。', ja='現在のエンコーダーでSmart分析を再実行します。'))
+    return tr.t(Text(en='Do not publish a file for this item.', zh_cn='不为该项目发布文件。', ja='この項目のファイルを出力しません。'))
 
 
 class _DecisionDialog(QDialog):
@@ -205,7 +212,7 @@ def _quality_metrics(dialog: _DecisionDialog, record: QueueItemRecord) -> None:
     row = 0
     dialog.add_metric(
         row,
-        tr.t(Text(en='Quality target', zh_cn='质量目标')),
+        tr.t(Text(en='Quality target', zh_cn='质量目标', ja='品質目標')),
         f"{item.options.min_vmaf:.1f}",
     )
     row += 1
@@ -216,20 +223,20 @@ def _quality_metrics(dialog: _DecisionDialog, record: QueueItemRecord) -> None:
         measured = segmented.final_mean_vmaf if segmented.final_mean_vmaf is not None else segmented.predicted_mean_vmaf
     if measured is not None:
         final = segmented is not None and segmented.final_mean_vmaf is not None
-        dialog.add_metric(row, tr.t(Text(en='Measured quality', zh_cn='测量质量')) if final else tr.t(Text(en='Estimated quality', zh_cn='预估画质')),
+        dialog.add_metric(row, tr.t(Text(en='Measured quality', zh_cn='测量质量', ja='測定品質')) if final else tr.t(Text(en='Estimated quality', zh_cn='预估画质', ja='推定品質')),
                           ("" if final else "~") + f"{measured:.1f}")
         row += 1
     if quality is not None and quality.predicted_output_ratio is not None:
         dialog.add_metric(
             row,
-            tr.t(Text(en='Predicted output', zh_cn='预测输出比例')),
+            tr.t(Text(en='Predicted output', zh_cn='预测输出比例', ja='予測出力比率')),
             f"~{quality.predicted_output_ratio * 100:.1f}%",
         )
         row += 1
     if quality is not None and quality.required_output_ratio is not None:
         dialog.add_metric(
             row,
-            tr.t(Text(en='Required output', zh_cn='所需输出比例')),
+            tr.t(Text(en='Required output', zh_cn='所需输出比例', ja='必要出力比率')),
             f"~{quality.required_output_ratio * 100:.1f}%",
         )
         row += 1
@@ -248,8 +255,8 @@ def _size_metrics(dialog: _DecisionDialog, record: QueueItemRecord) -> None:
     actual = int(result.actual_output_bytes or 0)
     allowed = int(result.allowed_output_bytes or 0)
     tr = dialog.translator
-    dialog.add_metric(0, tr.t(Text(en='Actual size', zh_cn='实际体积')), format_size(actual))
-    dialog.add_metric(1, tr.t(Text(en='Size limit', zh_cn='体积上限')), format_size(allowed))
+    dialog.add_metric(0, tr.t(Text(en='Actual size', zh_cn='实际体积', ja='実際のサイズ')), format_size(actual))
+    dialog.add_metric(1, tr.t(Text(en='Size limit', zh_cn='体积上限', ja='サイズ上限')), format_size(allowed))
     scale = max(actual, allowed, 1) * 1.1
     bar = _LimitBar(allowed / scale)
     bar.setRange(0, 1000)
@@ -257,11 +264,11 @@ def _size_metrics(dialog: _DecisionDialog, record: QueueItemRecord) -> None:
     bar.setTextVisible(True)
     ratio = actual / allowed * 100 if allowed > 0 else 0
     bar.setFormat(f"{format_size(actual)} / {format_size(allowed)} · {ratio:.1f}%")
-    bar.setToolTip(tr.t(Text(en='{value}% over the limit; the marker shows the limit.', zh_cn='超出限额 {value}%；竖线表示限额。'), value=f"{max(0.0, ratio - 100):.1f}"))
+    bar.setToolTip(tr.t(Text(en='{value}% over the limit; the marker shows the limit.', zh_cn='超出限额 {value}%；竖线表示限额。', ja='上限を {value}% 超過。マーカーは上限値を示します。'), value=f"{max(0.0, ratio - 100):.1f}"))
     bar.setProperty("over", actual > allowed)
     dialog.metrics_layout.addWidget(bar, 2, 0, 1, 2)
     if result.rejected_output_path is not None:
-        dialog.add_metric(3, tr.t(Text(en='Preserved file', zh_cn='保留文件')), str(result.rejected_output_path))
+        dialog.add_metric(3, tr.t(Text(en='Preserved file', zh_cn='保留文件', ja='保持されたファイル')), str(result.rejected_output_path))
 
 
 def choose_quality_decision(
@@ -276,7 +283,7 @@ def choose_quality_decision(
     if quality_miss:
         dialog.setWindowTitle(tr.t(DECISION_QUALITY_MISS_TITLE))
         dialog.title_label.setText(tr.t(DECISION_QUALITY_MISS_TITLE))
-        dialog.intro_label.setText(tr.t(Text(en='Tested candidates did not meet the VMAF target for {file}.', zh_cn='{file} 已测试的候选未达到 VMAF 目标。'), file=record.source_path.name))
+        dialog.intro_label.setText(tr.t(Text(en='Tested candidates did not meet the VMAF target for {file}.', zh_cn='{file} 已测试的候选未达到 VMAF 目标。', ja='{file} のテスト候補はVMAF目標を満たしませんでした。'), file=record.source_path.name))
     else:
         dialog.setWindowTitle(tr.t(DECISION_SIZE_CONFLICT_TITLE))
         dialog.title_label.setText(tr.t(DECISION_SIZE_CONFLICT_TITLE))
@@ -308,38 +315,38 @@ def choose_size_miss_decision(
     dialog = _DecisionDialog(tr, parent)
     dialog.setWindowTitle(tr.t(DECISION_SIZE_MISS_TITLE))
     dialog.title_label.setText(tr.t(DECISION_SIZE_MISS_TITLE))
-    dialog.intro_label.setText(tr.t(Text(en='The complete encode for {file} was kept instead of deleted.', zh_cn='{file} 已经编码完成，程序没有删除它。'), file=record.source_path.name))
+    dialog.intro_label.setText(tr.t(Text(en='The complete encode for {file} was kept instead of deleted.', zh_cn='{file} 已经编码完成，程序没有删除它。', ja='{file} の完全なエンコード結果は削除されずに保持されました。'), file=record.source_path.name))
     dialog.file_label.setText(str(record.source_path))
     _size_metrics(dialog, record)
     dialog.reason_label.setText(
         f"{tr.t(DECISION_REASON)}: {result.error_message or tr.t(DECISION_NO_METRICS)}"
     )
     dialog.add_action(
-        tr.t(Text(en='Accept this encoded file', zh_cn='接受这个成片')),
-        tr.t(Text(en='Publish the preserved file even though it exceeds the size limit.', zh_cn='即使超过体积上限，也发布保留的文件。')),
+        tr.t(Text(en='Accept this encoded file', zh_cn='接受这个成片', ja='このエンコードファイルを採用')),
+        tr.t(Text(en='Publish the preserved file even though it exceeds the size limit.', zh_cn='即使超过体积上限，也发布保留的文件。', ja='サイズ上限を超過していますが、保持されたファイルを公開します。')),
         SizeMissDecision.ACCEPT,
     )
     dialog.add_action(
-        tr.t(Text(en='Retry with a corrected bitrate', zh_cn='按实测体积修正码率后重试')),
-        tr.t(Text(en='Encode again with a corrected bitrate.', zh_cn='用修正后的码率重新编码。')),
+        tr.t(Text(en='Retry with a corrected bitrate', zh_cn='按实测体积修正码率后重试', ja='補正したビットレートで再試行')),
+        tr.t(Text(en='Encode again with a corrected bitrate.', zh_cn='用修正后的码率重新编码。', ja='補正したビットレートで再エンコードします。')),
         SizeMissDecision.RETRY,
     )
     dialog.add_action(
-        tr.t(Text(en='Delete it and skip', zh_cn='删除并跳过')),
-        tr.t(Text(en='Delete the preserved file and mark this item skipped.', zh_cn='删除保留文件，并把该项目标记为跳过。')),
+        tr.t(Text(en='Delete it and skip', zh_cn='删除并跳过', ja='削除してスキップ')),
+        tr.t(Text(en='Delete the preserved file and mark this item skipped.', zh_cn='删除保留文件，并把该项目标记为跳过。', ja='保持されたファイルを削除し、この項目をスキップ済みにします。')),
         SizeMissDecision.DISCARD,
         role="danger",
     )
     preserved_path = result.rejected_output_path
     preserved_folder = preserved_path.parent
     footer = QHBoxLayout()
-    open_button = QPushButton(tr.t(Text(en='Open preserved folder', zh_cn='打开保留文件目录')))
+    open_button = QPushButton(tr.t(Text(en='Open preserved folder', zh_cn='打开保留文件目录', ja='保持先フォルダーを開く')))
     open_button.clicked.connect(
         lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(preserved_folder)))
     )
     footer.addWidget(open_button)
     if compare is not None:
-        compare_button = QPushButton(tr.t(Text(en='Compare source and preserved file', zh_cn='对比源文件与保留文件')))
+        compare_button = QPushButton(tr.t(Text(en='Compare source and preserved file', zh_cn='对比源文件与保留文件', ja='ソースと保持ファイルを比較')))
         compare_button.clicked.connect(
             lambda: compare(preserved_path)
         )

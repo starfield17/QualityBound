@@ -274,7 +274,7 @@ class GuiRegressionTests(unittest.TestCase):
         self.assertLessEqual(gap, window.workspace_splitter.handleWidth())
 
     def test_expanded_setup_fits_its_content_in_a_large_window(self) -> None:
-        for language in ("en", "zh_cn"):
+        for language in ("en", "zh_cn", "ja"):
             with self.subTest(language=language):
                 window = self.window()
                 window.translator = Translator(language)

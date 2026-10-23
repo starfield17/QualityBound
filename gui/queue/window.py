@@ -23,26 +23,31 @@ from gui.window_geometry import clamped_window_size
 DROP_OVERLAY = Text(
     en='Drop to add videos',
     zh_cn='松开以添加视频',
+    ja='ドロップして動画を追加',
 )
 
 SUMMARY_QUEUE_PROGRESS = Text(
     en='Queue: {percent}% ({completed}/{total})    ETA ≈ {eta}',
     zh_cn='队列：{percent}%（{completed}/{total}）    ETA ≈{eta}',
+    ja='キュー: {percent}% ({completed}/{total})    残り時間 ≈ {eta}',
 )
 
 SUMMARY_QUEUE_STATES = Text(
     en='Ready {ready} / Running {running} / Needs decision {decision} / Failed {failed}',
     zh_cn='就绪 {ready} / 运行 {running} / 待决定 {decision} / 失败 {failed}',
+    ja='準備完了 {ready} / 実行中 {running} / 決定待ち {decision} / 失敗 {failed}',
 )
 
 TOOLTIP_TABLE_HEADER = Text(
     en="Click a header to sort the view. Sorting changes the queue's execution order; right-click the header to reset it.",
     zh_cn='点击表头可排序；排序会改变队列的执行顺序，右键表头可恢复原顺序。',
+    ja='ヘッダーをクリックして並べ替えます。並べ替えはキューの実行順序を変更します。ヘッダーを右クリックしてリセットできます。',
 )
 
 VALUE_UNKNOWN = Text(
     en='—',
     zh_cn='—',
+    ja='—',
 )
 
 
@@ -110,8 +115,8 @@ class QueueWindow(QMainWindow):
 
     def apply_translations(self, tr: Translator) -> None:
         self.translator = tr
-        self.setWindowTitle(self.translator.t(Text(en='Queue', zh_cn='队列')))
-        self.hint_label.setText(self.translator.t(Text(en='Right-click a row for actions; drag rows to reorder. Header sorting changes the execution order.', zh_cn='右键行可执行操作；拖动行可调整顺序。表头排序会改变执行顺序。')))
+        self.setWindowTitle(self.translator.t(Text(en='Queue', zh_cn='队列', ja='キュー')))
+        self.hint_label.setText(self.translator.t(Text(en='Right-click a row for actions; drag rows to reorder. Header sorting changes the execution order.', zh_cn='右键行可执行操作；拖动行可调整顺序。表头排序会改变执行顺序。', ja='行を右クリックしてアクションを実行、ドラッグして並べ替えます。ヘッダーの並べ替えは実行順序を変更します。')))
         self.model.set_translator(tr)
         self.table_view.horizontalHeader().setToolTip(self.translator.t(TOOLTIP_TABLE_HEADER))
 
@@ -126,7 +131,7 @@ class QueueWindow(QMainWindow):
         total_duration = format_duration(metrics.total_duration_sec)
         self.summary_label.setText(
             self.translator.t(
-                Text(en='Items: {total}    {states}    Duration: {duration}', zh_cn='项目：{total}    {states}    时长：{duration}'),
+                Text(en='Items: {total}    {states}    Duration: {duration}', zh_cn='项目：{total}    {states}    时长：{duration}', ja='項目: {total}    {states}    再生時間: {duration}'),
                 total=metrics.total_items,
                 states=states_text,
                 duration=total_duration,

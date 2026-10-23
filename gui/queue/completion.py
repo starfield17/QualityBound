@@ -31,16 +31,19 @@ from gui.queue.state import QueueItemRecord, QueueItemStatus
 TITLE = Text(
     en='QualityBound',
     zh_cn='QualityBound',
+    ja='QualityBound',
 )
 
 DIALOG_COPY_SKIPPED_TEXT = Text(
     en='Copy these sources skipped by Smart analysis to their planned output paths?\n\n{files}',
     zh_cn='要把这些被 Smart 分析跳过的片源复制到预定输出路径吗？\n\n{files}',
+    ja='Smart分析によってスキップされたこれらのソースを計画された出力パスにコピーしますか？\n\n{files}',
 )
 
 DIALOG_COPY_SKIPPED_TITLE = Text(
     en='Copy files skipped by Smart analysis?',
     zh_cn='复制被 Smart 分析跳过的文件？',
+    ja='Smart分析でスキップされたファイルをコピーしますか？',
 )
 
 
@@ -68,7 +71,7 @@ class SkippedSourceCopyWorker(QThread):
             except (OSError, ValueError, RuntimeError) as exc:
                 result.skipped_output_outcome = SkippedOutputOutcome.FAILED
                 result.success = result.skipped = result.needs_decision = False
-                result.error_message = self.translator.t(Text(en='Source copy failed: {error}', zh_cn='源文件复制失败：{error}'), error=str(exc))
+                result.error_message = self.translator.t(Text(en='Source copy failed: {error}', zh_cn='源文件复制失败：{error}', ja='ソースのコピーに失敗しました: {error}'), error=str(exc))
             self.copied.emit(item_id, result)
 
 
@@ -166,10 +169,10 @@ class QueueCompletionHandler(QObject):
 
     def _log_publication(self, item: EncodePlanItem, result: EncodeResult, tr: Translator) -> None:
         if result.skipped_output_outcome == SkippedOutputOutcome.COPIED:
-            self._append_log(tr.t(Text(en='Copied Smart-skipped source {source} -> {output}', zh_cn='已复制被 Smart 分析跳过的片源 {source} -> {output}'), source=item.source_path.name,
+            self._append_log(tr.t(Text(en='Copied Smart-skipped source {source} -> {output}', zh_cn='已复制被 Smart 分析跳过的片源 {source} -> {output}', ja='Smartスキップのソースをコピーしました: {source} -> {output}'), source=item.source_path.name,
                                   output=str(item.output_path)))
         else:
-            self._append_log(tr.t(Text(en='Did not copy Smart-skipped source {source}: {reason}', zh_cn='未复制被 Smart 分析跳过的片源 {source}：{reason}'), source=item.source_path.name,
+            self._append_log(tr.t(Text(en='Did not copy Smart-skipped source {source}: {reason}', zh_cn='未复制被 Smart 分析跳过的片源 {source}：{reason}', ja='Smartスキップのソースはコピーされませんでした: {source}: {reason}'), source=item.source_path.name,
                                   reason=result.error_message or ""))
         for warning in result.external_subtitle_warnings:
             self._append_log(warning)
@@ -181,7 +184,7 @@ class QueueCompletionHandler(QObject):
         config: Mapping[str, object],
     ) -> None:
         tr = translator
-        self._append_log(tr.t(Text(en='Encode jobs completed.', zh_cn='编码任务已完成。')))
+        self._append_log(tr.t(Text(en='Encode jobs completed.', zh_cn='编码任务已完成。', ja='エンコードタスクが完了しました。')))
         self._maybe_publish_skipped_sources(records, tr)
         self._handle_post_queue_finished(records, tr, config)
 
@@ -256,11 +259,11 @@ class QueueCompletionHandler(QObject):
         if savings.successful_files > 0:
             report_lines = [
                 "==================================================",
-                tr.t(Text(en='Batch Encoding Complete', zh_cn='批处理转码完成')),
-                f"- {tr.t(Text(en='Successful', zh_cn='成功文件'))}: {savings.successful_files}/{savings.total_files}",
-                f"- {tr.t(Text(en='Original total size', zh_cn='原始总体积'))}: {format_size(savings.original_total_bytes)}",
-                f"- {tr.t(Text(en='Compressed total size', zh_cn='压缩后总体积'))}: {format_size(savings.compressed_total_bytes)}",
-                f"- {tr.t(Text(en='Saved space', zh_cn='节省空间'))}: {format_size(savings.saved_bytes)} ({savings.saved_ratio * 100:.1f}%)",
+                tr.t(Text(en='Batch Encoding Complete', zh_cn='批处理转码完成', ja='バッチエンコード完了')),
+                f"- {tr.t(Text(en='Successful', zh_cn='成功文件', ja='成功'))}: {savings.successful_files}/{savings.total_files}",
+                f"- {tr.t(Text(en='Original total size', zh_cn='原始总体积', ja='元の合計サイズ'))}: {format_size(savings.original_total_bytes)}",
+                f"- {tr.t(Text(en='Compressed total size', zh_cn='压缩后总体积', ja='圧縮後の合計サイズ'))}: {format_size(savings.compressed_total_bytes)}",
+                f"- {tr.t(Text(en='Saved space', zh_cn='节省空间', ja='削減サイズ'))}: {format_size(savings.saved_bytes)} ({savings.saved_ratio * 100:.1f}%)",
                 "==================================================",
             ]
             self._append_log("\n".join(report_lines))
@@ -268,7 +271,7 @@ class QueueCompletionHandler(QObject):
                 self._notify(
                     tr.t(TITLE),
                     tr.t(
-                        Text(en='Batch finished: {count} videos compressed, saved {saved} ({ratio}) space.', zh_cn='批处理转码完成：共完成 {count} 个视频，节省 {saved} ({ratio}) 空间。'),
+                        Text(en='Batch finished: {count} videos compressed, saved {saved} ({ratio}) space.', zh_cn='批处理转码完成：共完成 {count} 个视频，节省 {saved} ({ratio}) 空间。', ja='バッチエンコード完了: {count} 本の動画を圧縮し、{saved} ({ratio}) の容量を節約しました。'),
                         count=savings.successful_files,
                         saved=format_size(savings.saved_bytes),
                         ratio=f"{savings.saved_ratio * 100:.1f}%",
@@ -278,9 +281,9 @@ class QueueCompletionHandler(QObject):
         if savings.failed_files > 0 or savings.cancelled_files > 0:
             failure_lines = [
                 "==================================================",
-                tr.t(Text(en='Batch incomplete', zh_cn='批处理未全部完成')),
-                f"- {tr.t(Text(en='Failed files', zh_cn='失败文件'))}: {savings.failed_files}",
-                f"- {tr.t(Text(en='Cancelled files', zh_cn='已取消文件'))}: {savings.cancelled_files}",
+                tr.t(Text(en='Batch incomplete', zh_cn='批处理未全部完成', ja='バッチ未完了')),
+                f"- {tr.t(Text(en='Failed files', zh_cn='失败文件', ja='失敗したファイル'))}: {savings.failed_files}",
+                f"- {tr.t(Text(en='Cancelled files', zh_cn='已取消文件', ja='キャンセルされたファイル'))}: {savings.cancelled_files}",
                 "==================================================",
             ]
             self._append_log("\n".join(failure_lines))
@@ -288,7 +291,7 @@ class QueueCompletionHandler(QObject):
                 self._notify(
                     tr.t(TITLE),
                     tr.t(
-                        Text(en='Batch finished with {failed} failed and {cancelled} cancelled items.', zh_cn='批处理结束：{failed} 个失败，{cancelled} 个已取消。'),
+                        Text(en='Batch finished with {failed} failed and {cancelled} cancelled items.', zh_cn='批处理结束：{failed} 个失败，{cancelled} 个已取消。', ja='バッチ終了: {failed} 件失敗、{cancelled} 件キャンセル。'),
                         failed=savings.failed_files,
                         cancelled=savings.cancelled_files,
                     ),
@@ -304,9 +307,9 @@ class QueueCompletionHandler(QObject):
                     result = execute_power_action(post_action)
                     if not result.success:
                         message = tr.t(
-                            Text(en='Could not {action}: {error}', zh_cn='无法执行【{action}】：{error}'),
+                            Text(en='Could not {action}: {error}', zh_cn='无法执行【{action}】：{error}', ja='{action} を実行できませんでした: {error}'),
                             action=tr.t(post_encode_action_text(post_action)),
                             error=result.error or "unknown error",
                         )
                         self._append_log(message)
-                        QMessageBox.critical(self._parent, tr.t(Text(en='Error', zh_cn='错误')), message)
+                        QMessageBox.critical(self._parent, tr.t(Text(en='Error', zh_cn='错误', ja='エラー')), message)

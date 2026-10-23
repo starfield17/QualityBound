@@ -18,11 +18,13 @@ from core.smart import resolve_max_output_ratio
 TOOLTIP_SMART_ANALYSIS = Text(
     en='Smart analysis: {reason}',
     zh_cn='Smart 分析：{reason}',
+    ja='Smart分析: {reason}',
 )
 
 TOOLTIP_START_BINDING = Text(
     en='Encoding settings and output are selected when Start Queue is clicked. Per-item overrides are preserved.',
     zh_cn='点击 Start Queue 时确定编码参数和输出路径；保留单项自定义设置。',
+    ja='「キューを開始」をクリックした時にエンコード設定と出力先が確定します。項目ごとの個別設定は保持されます。',
 )
 
 
@@ -41,66 +43,66 @@ class QueueItemStatus(str, Enum):
 
 
 STATUS_TEXT_BY_VALUE = {
-    QueueItemStatus.AWAITING_START: Text(en='Awaiting Start', zh_cn='待启动'),
-    QueueItemStatus.QUEUED: Text(en='Ready', zh_cn='就绪'),
-    QueueItemStatus.WAITING_ANALYSIS: Text(en='Waiting analysis', zh_cn='等待分析'),
-    QueueItemStatus.ANALYZING: Text(en='Analyzing', zh_cn='分析中'),
-    QueueItemStatus.ENCODING: Text(en='Encoding', zh_cn='编码中'),
-    QueueItemStatus.VALIDATING: Text(en='Validating', zh_cn='验收中'),
-    QueueItemStatus.DONE: Text(en='Done', zh_cn='完成'),
-    QueueItemStatus.FAILED: Text(en='Failed', zh_cn='失败'),
-    QueueItemStatus.NEEDS_DECISION: Text(en='Needs decision', zh_cn='等待决定'),
-    QueueItemStatus.SKIPPED: Text(en='Skipped', zh_cn='已跳过'),
-    QueueItemStatus.CANCELLED: Text(en='Cancelled', zh_cn='已取消'),
+    QueueItemStatus.AWAITING_START: Text(en='Awaiting Start', zh_cn='待启动', ja='開始待ち'),
+    QueueItemStatus.QUEUED: Text(en='Ready', zh_cn='就绪', ja='準備完了'),
+    QueueItemStatus.WAITING_ANALYSIS: Text(en='Waiting analysis', zh_cn='等待分析', ja='分析待ち'),
+    QueueItemStatus.ANALYZING: Text(en='Analyzing', zh_cn='分析中', ja='分析中'),
+    QueueItemStatus.ENCODING: Text(en='Encoding', zh_cn='编码中', ja='エンコード中'),
+    QueueItemStatus.VALIDATING: Text(en='Validating', zh_cn='验收中', ja='検証中'),
+    QueueItemStatus.DONE: Text(en='Done', zh_cn='完成', ja='完了'),
+    QueueItemStatus.FAILED: Text(en='Failed', zh_cn='失败', ja='失敗'),
+    QueueItemStatus.NEEDS_DECISION: Text(en='Needs decision', zh_cn='等待决定', ja='決定待ち'),
+    QueueItemStatus.SKIPPED: Text(en='Skipped', zh_cn='已跳过', ja='スキップ済み'),
+    QueueItemStatus.CANCELLED: Text(en='Cancelled', zh_cn='已取消', ja='キャンセル済み'),
 }
 
 PROGRESS_STAGE_TEXT = {
-    "planning": Text(en='Planning', zh_cn='规划'),
-    "analysis": Text(en='Analysis', zh_cn='分析'),
-    "encode": Text(en='Encoding', zh_cn='编码'),
+    "planning": Text(en='Planning', zh_cn='规划', ja='計画中'),
+    "analysis": Text(en='Analysis', zh_cn='分析', ja='分析'),
+    "encode": Text(en='Encoding', zh_cn='编码', ja='エンコード'),
 }
 
 PROGRESS_STATE_TEXT = {
-    "scanning": Text(en='Scanning folders', zh_cn='正在扫描目录'),
-    "analyzing": Text(en='Measuring candidates', zh_cn='正在测量候选项'),
-    "candidate_finished": Text(en='Candidate measured', zh_cn='候选项测量完成'),
-    "scouting": Text(en='Scanning scenes', zh_cn='正在扫描场景'),
-    "scout_finished": Text(en='Scene scan complete', zh_cn='场景扫描完成'),
-    "sample_plan_ready": Text(en='Samples selected', zh_cn='采样窗口已选定'),
-    "boundary_alignment": Text(en='Aligning boundaries', zh_cn='正在对齐边界'),
-    "searching": Text(en='Searching candidates', zh_cn='正在搜索候选项'),
-    "holdout_verification": Text(en='Validating holdouts', zh_cn='正在验证留出窗口'),
-    "refining": Text(en='Refining search', zh_cn='正在细化搜索'),
-    "receipt_loaded": Text(en='Reusing measurements', zh_cn='正在复用测量结果'),
-    "receipt_write_failed": Text(en='Could not save measurements', zh_cn='无法保存测量结果'),
-    "running": Text(en='Running', zh_cn='运行中'),
-    "failed": Text(en='Failed', zh_cn='失败'),
+    "scanning": Text(en='Scanning folders', zh_cn='正在扫描目录', ja='フォルダーをスキャン中'),
+    "analyzing": Text(en='Measuring candidates', zh_cn='正在测量候选项', ja='候補を測定中'),
+    "candidate_finished": Text(en='Candidate measured', zh_cn='候选项测量完成', ja='候補の測定完了'),
+    "scouting": Text(en='Scanning scenes', zh_cn='正在扫描场景', ja='シーンをスキャン中'),
+    "scout_finished": Text(en='Scene scan complete', zh_cn='场景扫描完成', ja='シーンスキャン完了'),
+    "sample_plan_ready": Text(en='Samples selected', zh_cn='采样窗口已选定', ja='サンプルが選択されました'),
+    "boundary_alignment": Text(en='Aligning boundaries', zh_cn='正在对齐边界', ja='境界を整列中'),
+    "searching": Text(en='Searching candidates', zh_cn='正在搜索候选项', ja='候補を検索中'),
+    "holdout_verification": Text(en='Validating holdouts', zh_cn='正在验证留出窗口', ja='ホールドアウトを検証中'),
+    "refining": Text(en='Refining search', zh_cn='正在细化搜索', ja='検索を絞り込み中'),
+    "receipt_loaded": Text(en='Reusing measurements', zh_cn='正在复用测量结果', ja='測定結果を再利用中'),
+    "receipt_write_failed": Text(en='Could not save measurements', zh_cn='无法保存测量结果', ja='測定結果を保存できませんでした'),
+    "running": Text(en='Running', zh_cn='运行中', ja='実行中'),
+    "failed": Text(en='Failed', zh_cn='失败', ja='失敗'),
 
-    "probing": Text(en='Probing', zh_cn='探测中'),
-    "started": Text(en='Started', zh_cn='已开始'),
-    "starting_file": Text(en='Starting file', zh_cn='开始处理文件'),
-    "running_pass": Text(en='Running pass', zh_cn='执行编码遍'),
-    "validating": Text(en='Validating', zh_cn='验证中'),
-    "needs_decision": Text(en='Needs decision', zh_cn='等待决定'),
-    "finished_file": Text(en='Finished file', zh_cn='文件完成'),
-    "cancelled_file": Text(en='Cancelled', zh_cn='已取消'),
-    "failed_file": Text(en='Failed', zh_cn='失败'),
-    "paused": Text(en='Paused', zh_cn='已暂停'),
-    "cancelled": Text(en='Cancelled', zh_cn='已取消'),
-    "cancelling": Text(en='Stopping', zh_cn='正在停止'),
-    "finished": Text(en='Finished', zh_cn='已完成'),
-    "skipped": Text(en='Skipped', zh_cn='已跳过'),
-    "waiting_analysis": Text(en='Waiting for analysis', zh_cn='等待分析'),
-    "analysis_finished": Text(en='Analysis finished', zh_cn='分析完成'),
+    "probing": Text(en='Probing', zh_cn='探测中', ja='プローブ中'),
+    "started": Text(en='Started', zh_cn='已开始', ja='開始済み'),
+    "starting_file": Text(en='Starting file', zh_cn='开始处理文件', ja='ファイルの処理を開始'),
+    "running_pass": Text(en='Running pass', zh_cn='执行编码遍', ja='パスを実行中'),
+    "validating": Text(en='Validating', zh_cn='验证中', ja='検証中'),
+    "needs_decision": Text(en='Needs decision', zh_cn='等待决定', ja='決定待ち'),
+    "finished_file": Text(en='Finished file', zh_cn='文件完成', ja='ファイル完了'),
+    "cancelled_file": Text(en='Cancelled', zh_cn='已取消', ja='キャンセル済み'),
+    "failed_file": Text(en='Failed', zh_cn='失败', ja='失敗'),
+    "paused": Text(en='Paused', zh_cn='已暂停', ja='一時停止中'),
+    "cancelled": Text(en='Cancelled', zh_cn='已取消', ja='キャンセル済み'),
+    "cancelling": Text(en='Stopping', zh_cn='正在停止', ja='停止中'),
+    "finished": Text(en='Finished', zh_cn='已完成', ja='完了'),
+    "skipped": Text(en='Skipped', zh_cn='已跳过', ja='スキップ済み'),
+    "waiting_analysis": Text(en='Waiting for analysis', zh_cn='等待分析', ja='分析を待機中'),
+    "analysis_finished": Text(en='Analysis finished', zh_cn='分析完成', ja='分析完了'),
 }
 
 
 def progress_stage_text(stage: str) -> Text:
-    return PROGRESS_STAGE_TEXT.get(stage, Text(en='Working', zh_cn='处理中'))
+    return PROGRESS_STAGE_TEXT.get(stage, Text(en='Working', zh_cn='处理中', ja='処理中'))
 
 
 def progress_state_text(state: str) -> Text:
-    return PROGRESS_STATE_TEXT.get(state, Text(en='Working', zh_cn='处理中'))
+    return PROGRESS_STATE_TEXT.get(state, Text(en='Working', zh_cn='处理中', ja='処理中'))
 
 
 ACTIVE_ITEM_STATUSES = {
@@ -322,18 +324,18 @@ def build_tags(record: QueueItemRecord, translator: Translator) -> list[str]:
     tags: list[str] = []
     if record.plan_item is None:
         if record.draft is not None and record.draft.options_override is not None:
-            tags.append(translator.t(Text(en='Custom options', zh_cn='自定义参数')))
+            tags.append(translator.t(Text(en='Custom options', zh_cn='自定义参数', ja='カスタム設定')))
         if record.draft is not None and record.draft.output_dir_override is not None:
-            tags.append(translator.t(Text(en='Custom output', zh_cn='自定义目录')))
+            tags.append(translator.t(Text(en='Custom output', zh_cn='自定义目录', ja='カスタム出力先')))
         return tags
     if record.total_passes > 1:
-        tags.append(translator.t(Text(en='2-pass', zh_cn='双遍')))
+        tags.append(translator.t(Text(en='2-pass', zh_cn='双遍', ja='2パス')))
     if record.bound_plan_item.options.overwrite:
-        tags.append(translator.t(Text(en='Overwrite', zh_cn='覆盖')))
+        tags.append(translator.t(Text(en='Overwrite', zh_cn='覆盖', ja='上書き')))
     if record.bound_plan_item.options.copy_external_subtitles:
-        tags.append(translator.t(Text(en='ExtSub', zh_cn='外挂字幕')))
+        tags.append(translator.t(Text(en='ExtSub', zh_cn='外挂字幕', ja='外部字幕')))
     if record.bound_plan_item.warnings:
-        tags.append(translator.t(Text(en='Warn', zh_cn='警告')))
+        tags.append(translator.t(Text(en='Warn', zh_cn='警告', ja='警告')))
     # Status is already shown in the dedicated Status column; repeating it in
     # Tags only steals width from the flags a user cannot see elsewhere.
     if record.error_summary and record.status not in {
@@ -341,7 +343,7 @@ def build_tags(record: QueueItemRecord, translator: Translator) -> list[str]:
         QueueItemStatus.FAILED,
         QueueItemStatus.NEEDS_DECISION,
     }:
-        tags.append(translator.t(Text(en='Note', zh_cn='备注')))
+        tags.append(translator.t(Text(en='Note', zh_cn='备注', ja='備考')))
     return tags
 
 
@@ -349,52 +351,52 @@ def build_tooltip(record: QueueItemRecord, translator: Translator) -> str:
     if record.plan_item is None:
         return "\n".join([str(record.source_path), translator.t(TOOLTIP_START_BINDING), record.error_summary or ""])
     lines = [
-        translator.t(Text(en='Source: {path}', zh_cn='源文件：{path}'), path=record.source_path),
-        translator.t(Text(en='Output: {path}', zh_cn='输出：{path}'), path=record.output_path),
+        translator.t(Text(en='Source: {path}', zh_cn='源文件：{path}', ja='ソース: {path}'), path=record.source_path),
+        translator.t(Text(en='Output: {path}', zh_cn='输出：{path}', ja='出力: {path}'), path=record.output_path),
     ]
     if record.bound_plan_item.warnings:
         lines.append(
-            translator.t(Text(en='Warnings: {warnings}', zh_cn='警告：{warnings}'), warnings="; ".join(record.bound_plan_item.warnings))
+            translator.t(Text(en='Warnings: {warnings}', zh_cn='警告：{warnings}', ja='警告: {warnings}'), warnings="; ".join(record.bound_plan_item.warnings))
         )
     if record.error_summary:
-        lines.append(translator.t(Text(en='Detail: {detail}', zh_cn='详情：{detail}'), detail=record.error_summary))
+        lines.append(translator.t(Text(en='Detail: {detail}', zh_cn='详情：{detail}', ja='詳細: {detail}'), detail=record.error_summary))
     quality = record.bound_plan_item.quality_search_result
     segmented = record.bound_plan_item.segmented_analysis_result
     if segmented is not None:
         mean = segmented.final_mean_vmaf if segmented.final_mean_vmaf is not None else segmented.predicted_mean_vmaf
-        lines.append(translator.t(Text(en='Smart v2 (experimental): {count} shots', zh_cn='Smart v2（实验性）：{count} 个镜头'), count=len(segmented.shots)))
+        lines.append(translator.t(Text(en='Smart v2 (experimental): {count} shots', zh_cn='Smart v2（实验性）：{count} 个镜头', ja='Smart v2 (実験的): {count} ショット'), count=len(segmented.shots)))
         if record.analysis_measurement_budget:
             lines.append(
                 translator.t(
-                    Text(en='Initial sample encode budget: {budget}; holdouts and repairs are additional.', zh_cn='初始样本编码预算：{budget}；留出验证与修复为额外开销。'),
+                    Text(en='Initial sample encode budget: {budget}; holdouts and repairs are additional.', zh_cn='初始样本编码预算：{budget}；留出验证与修复为额外开销。', ja='初期サンプルエンコード予算: {budget}。ホールドアウトと修復は追加となります。'),
                     budget=record.analysis_measurement_budget,
                 )
             )
         if mean is not None:
             if segmented.final_mean_vmaf is not None:
-                lines.append(translator.t(Text(en='Measured mean VMAF: {value}', zh_cn='实测平均 VMAF：{value}'), value=f"{mean:.2f}"))
+                lines.append(translator.t(Text(en='Measured mean VMAF: {value}', zh_cn='实测平均 VMAF：{value}', ja='測定平均VMAF: {value}'), value=f"{mean:.2f}"))
             else:
-                lines.append(translator.t(Text(en='Predicted mean VMAF: {value}', zh_cn='预测平均 VMAF：{value}'), value=f"{mean:.2f}"))
+                lines.append(translator.t(Text(en='Predicted mean VMAF: {value}', zh_cn='预测平均 VMAF：{value}', ja='予測平均VMAF: {value}'), value=f"{mean:.2f}"))
         if segmented.approximate:
-            lines.append(translator.t(Text(en='Allocation used bounded state compression.', zh_cn='码率分配使用了有界状态压缩。')))
+            lines.append(translator.t(Text(en='Allocation used bounded state compression.', zh_cn='码率分配使用了有界状态压缩。', ja='割り当てに有界状態圧縮を使用しました。')))
         if segmented.reason:
             lines.append(translator.t(TOOLTIP_SMART_ANALYSIS, reason=segmented.reason))
     if quality is not None:
         if quality.min_vmaf is not None:
             lines.append(
-                translator.t(Text(en='SMART quality score: {value}', zh_cn='SMART 质量分：{value}'), value=f"{quality.min_vmaf:.2f}")
+                translator.t(Text(en='SMART quality score: {value}', zh_cn='SMART 质量分：{value}', ja='SMART品質スコア: {value}'), value=f"{quality.min_vmaf:.2f}")
             )
         if quality.predicted_output_ratio is not None:
             lines.append(
                 translator.t(
-                    Text(en='Predicted output: {value}%', zh_cn='预测输出体积：{value}%'),
+                    Text(en='Predicted output: {value}%', zh_cn='预测输出体积：{value}%', ja='予測出力サイズ: {value}%'),
                     value=f"{quality.predicted_output_ratio * 100:.2f}",
                 )
             )
         if quality.required_output_ratio is not None:
             lines.append(
                 translator.t(
-                    Text(en='Estimated required output: {value}%', zh_cn='预计所需输出体积：{value}%'),
+                    Text(en='Estimated required output: {value}%', zh_cn='预计所需输出体积：{value}%', ja='推定必要出力サイズ: {value}%'),
                     value=f"{quality.required_output_ratio * 100:.2f}",
                 )
             )

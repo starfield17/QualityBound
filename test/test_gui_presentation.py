@@ -82,18 +82,19 @@ class GuiPresentationTestCase(unittest.TestCase):
         self.addCleanup(self.temp_dir.cleanup)
         self.root = Path(self.temp_dir.name)
 
-    def test_post_encode_action_text_covers_every_action_in_both_languages(self) -> None:
+    def test_post_encode_action_text_covers_every_action_in_all_languages(self) -> None:
         from core.media import PostEncodeAction
         from gui.power_action_dialog import POST_ENCODE_ACTION_TEXT, post_encode_action_text
         self.assertEqual(set(POST_ENCODE_ACTION_TEXT), set(PostEncodeAction))
-        for action, en, zh in (
-            (PostEncodeAction.DO_NOTHING, "Do nothing", "无操作"),
-            (PostEncodeAction.SLEEP, "Sleep system", "系统睡眠"),
-            (PostEncodeAction.SHUTDOWN, "Shut down system", "系统关机"),
-            (PostEncodeAction.QUIT, "Quit app", "退出程序"),
+        for action, en, zh, ja in (
+            (PostEncodeAction.DO_NOTHING, "Do nothing", "无操作", "何もしない"),
+            (PostEncodeAction.SLEEP, "Sleep system", "系统睡眠", "システムをスリープ"),
+            (PostEncodeAction.SHUTDOWN, "Shut down system", "系统关机", "システムをシャットダウン"),
+            (PostEncodeAction.QUIT, "Quit app", "退出程序", "アプリを終了"),
         ):
             self.assertEqual(Translator("en").t(post_encode_action_text(action)), en)
             self.assertEqual(Translator("zh_cn").t(post_encode_action_text(action)), zh)
+            self.assertEqual(Translator("ja").t(post_encode_action_text(action)), ja)
 
     def test_light_and_dark_stylesheets_use_distinct_surfaces(self) -> None:
         self.assertIn("#F6F8FB", build_stylesheet(LIGHT))
@@ -153,6 +154,10 @@ class GuiPresentationTestCase(unittest.TestCase):
             entry = log.entries[-1]
             self.assertEqual(entry.category, "error")
             self.assertRegex(entry.display_text(), r"^\d\d:\d\d:\d\d\s+ERROR")
+            log.append_message("エラー: エンコードに失敗しました")
+            ja_entry = log.entries[-1]
+            self.assertEqual(ja_entry.category, "error")
+            self.assertRegex(ja_entry.display_text(), r"^\d\d:\d\d:\d\d\s+ERROR")
             log.follow_check.setChecked(False)
             self.assertFalse(log.follow_check.isChecked())
         finally:

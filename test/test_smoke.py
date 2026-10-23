@@ -265,6 +265,13 @@ class SmokeTestCase(unittest.TestCase):
         finally:
             window.close()
 
+    def test_gui_ja_shows_no_raw_keys(self) -> None:
+        window = MainWindow(self.repo_root, language="ja")
+        try:
+            self.assertEqual([], self._raw_keys_displayed(window))
+        finally:
+            window.close()
+
     def test_close_event_accepts_when_idle_without_prompt(self) -> None:
         window = MainWindow(self.repo_root, language="en")
         try:

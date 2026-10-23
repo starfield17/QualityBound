@@ -33,7 +33,7 @@ GUI owners rather than loading unrelated panels through a facade.
   Log messages go to Activity Log, never `QStatusBar.showMessage()`. Stage/state
   labels use `progress_stage_text()`/`progress_state_text()`.
 - Search predictions carry `~` or `(est.)`; measured size/savings are separate.
-  New text uses `core.i18n.Text(en=..., zh_cn=...)` beside its presentation code;
+  New text uses `core.i18n.Text(en=..., zh_cn=..., ja=...)` beside its presentation code;
   long or reused text is a constant in its functional owner. `Translator.t()`
   selects and formats at display time. Translation also sets buddies and
   accessible names. There are no resource catalogs or external language packs.

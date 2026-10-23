@@ -42,66 +42,79 @@ from gui.power_action_dialog import post_encode_action_text, LABEL_POST_ENCODE_A
 BUTTON_BROWSE_EXE = Text(
     en='Pick File',
     zh_cn='选择文件',
+    ja='ファイルを選択',
 )
 
 LABEL_FFMPEG = Text(
     en='FFmpeg path',
     zh_cn='FFmpeg 路径',
+    ja='FFmpegのパス',
 )
 
 LABEL_FFPROBE = Text(
     en='FFprobe path',
     zh_cn='FFprobe 路径',
+    ja='FFprobeのパス',
 )
 
 LABEL_WORKDIR = Text(
     en='Temporary work folder',
     zh_cn='临时工作目录',
+    ja='一時作業フォルダー',
 )
 
 MESSAGE_PATH_MISSING = Text(
     en='Path does not exist.',
     zh_cn='路径不存在。',
+    ja='パスが存在しません。',
 )
 
 MESSAGE_PATH_NOT_DIRECTORY = Text(
     en='Path is not a directory.',
     zh_cn='路径不是目录。',
+    ja='パスがディレクトリではありません。',
 )
 
 PLACEHOLDER_FFMPEG = Text(
     en='Optional; blank uses project FFmpeg/ first.',
     zh_cn='可选；留空优先使用项目 FFmpeg/。',
+    ja='省略可能。空欄の場合はプロジェクトの FFmpeg/ を優先します。',
 )
 
 PLACEHOLDER_FFPROBE = Text(
     en='Optional; blank uses project FFprobe/ first.',
     zh_cn='可选；留空优先使用项目 FFprobe/。',
+    ja='省略可能。空欄の場合はプロジェクトの FFprobe/ を優先します。',
 )
 
 STATUS_RE_DETECT_PENDING = Text(
     en='Re-detection starts after you press OK.',
     zh_cn='按“确定”后开始重新检测。',
+    ja='「OK」をクリックすると再検出が開始されます。',
 )
 
 TOOLTIP_ENCODE_WORKERS = Text(
     en='Maximum full-file encodes running at once (1-8). Smart analysis still finishes before full encoding. Higher values may contend for CPU, GPU memory, and hardware encoder sessions.',
     zh_cn='最多同时运行 1–8 个完整文件编码。Smart 分析仍会在完整编码前全部完成；较高数值可能争用 CPU、GPU 显存和硬件编码会话。',
+    ja='同時に実行するフルエンコードの最大数 (1〜8)。Smart分析はフルエンコードの前に完了します。値を大きくするとCPU、GPUメモリ、ハードウェアエンコーダーセッションが競合する可能性があります。',
 )
 
 TOOLTIP_SIZE_BLOCKED_POLICY = Text(
     en='Applies to candidate selection before the full encode. If the chosen policy cannot resolve a conflict and the required output is larger than the source, Smart skips the file. Actual full-encode size misses are preserved for a separate decision.',
     zh_cn='用于完整编码前的候选选择。所选策略仍不能解决冲突且预测成片比片源大时，Smart 会跳过该文件。完整成片实际超限则保留文件并单独要求决定。',
+    ja='フルエンコード前の候補選択に適用されます。選択したポリシーで競合を解決できず、必要な出力がソースより大きい場合、Smartはそのファイルをスキップします。実際のフルエンコードでサイズ超過したファイルは保持され、個別に判断を求めます。',
 )
 
 TOOLTIP_SKIPPED_OUTPUT_POLICY = Text(
     en='Applies to Smart-analysis skips, including predicted oversize and manual Skip choices. Runs after executable files finish even when other items still need a decision. planning skips and discarded actual-size misses are excluded.',
     zh_cn='适用于 Smart 分析跳过，包括预测过大及人工选择跳过。可编码文件完成后处理，不受其他待决定项阻塞；不适用于 planning 跳过或丢弃实际体积超限成片。',
+    ja='予測超過や手動スキップを含むSmart分析のスキップに適用されます。他の項目が決定待ちの場合でも、エンコード可能なファイルが完了した後に実行されます。計画スキップや破棄された実サイズ超過は対象外です。',
 )
 
 TOOLTIP_WORKDIR = Text(
     en='Temporary files and logs are written here. Published videos go to the output folder.',
     zh_cn='临时文件和日志写入此处；发布视频写入输出目录。',
+    ja='一時ファイルとログがここに書き込まれます。公開された動画は出力フォルダーに保存されます。',
 )
 
 
@@ -304,7 +317,7 @@ class SettingsDialog(QDialog):
             if ffmpeg_problem:
                 problems.append(
                     f"{self.translator.t(LABEL_FFMPEG)}: "
-                    f"{self.translator.t(Text(en='FFmpeg path is not a file.', zh_cn='FFmpeg 路径不是文件。'))}"
+                    f"{self.translator.t(Text(en='FFmpeg path is not a file.', zh_cn='FFmpeg 路径不是文件。', ja='FFmpegのパスがファイルではありません。'))}"
                 )
         ffprobe_text = self.ffprobe_edit.text().strip()
         if ffprobe_text:
@@ -312,10 +325,10 @@ class SettingsDialog(QDialog):
             if ffprobe_problem:
                 problems.append(
                     f"{self.translator.t(LABEL_FFPROBE)}: "
-                    f"{self.translator.t(Text(en='FFprobe path is not a file.', zh_cn='FFprobe 路径不是文件。'))}"
+                    f"{self.translator.t(Text(en='FFprobe path is not a file.', zh_cn='FFprobe 路径不是文件。', ja='FFprobeのパスがファイルではありません。'))}"
                 )
         self.path_status_label.setText(
-            "\n".join(problems) if problems else self.translator.t(Text(en='Paths look usable.', zh_cn='路径可用。'))
+            "\n".join(problems) if problems else self.translator.t(Text(en='Paths look usable.', zh_cn='路径可用。', ja='パスは有効です。'))
         )
         self.path_status_label.setProperty("invalid", bool(problems))
         self.path_status_label.style().unpolish(self.path_status_label)
@@ -368,72 +381,72 @@ class SettingsDialog(QDialog):
 
     def apply_translations(self, tr: Translator) -> None:
         self.translator = tr
-        self.setWindowTitle(self.translator.t(Text(en='Settings', zh_cn='设置')))
-        self.queue_group.setTitle(self.translator.t(Text(en='Queue and output', zh_cn='队列与输出')))
-        self.toolchain_group.setTitle(self.translator.t(Text(en='FFmpeg toolchain', zh_cn='FFmpeg 工具链')))
-        self.language_label.setText(self.translator.t(Text(en='Language', zh_cn='语言')))
+        self.setWindowTitle(self.translator.t(Text(en='Settings', zh_cn='设置', ja='設定')))
+        self.queue_group.setTitle(self.translator.t(Text(en='Queue and output', zh_cn='队列与输出', ja='キューと出力')))
+        self.toolchain_group.setTitle(self.translator.t(Text(en='FFmpeg toolchain', zh_cn='FFmpeg 工具链', ja='FFmpeg ツールチェーン')))
+        self.language_label.setText(self.translator.t(Text(en='Language', zh_cn='语言', ja='言語')))
         self.workdir_label.setText(self.translator.t(LABEL_WORKDIR))
         self.workdir_label.setToolTip(self.translator.t(TOOLTIP_WORKDIR))
         self.workdir_edit.setToolTip(self.translator.t(TOOLTIP_WORKDIR))
         self.ffmpeg_label.setText(self.translator.t(LABEL_FFMPEG))
         self.ffprobe_label.setText(self.translator.t(LABEL_FFPROBE))
-        self.log_level_label.setText(self.translator.t(Text(en='Log level', zh_cn='日志级别')))
+        self.log_level_label.setText(self.translator.t(Text(en='Log level', zh_cn='日志级别', ja='ログレベル')))
         self.log_level_combo.setItemText(
             self.log_level_combo.findData("info"),
-            self.translator.t(Text(en='Info', zh_cn='信息')),
+            self.translator.t(Text(en='Info', zh_cn='信息', ja='情報')),
         )
         self.log_level_combo.setItemText(
             self.log_level_combo.findData("debug"),
-            self.translator.t(Text(en='Debug', zh_cn='调试')),
+            self.translator.t(Text(en='Debug', zh_cn='调试', ja='デバッグ')),
         )
-        self.encode_workers_label.setText(self.translator.t(Text(en='Concurrent full encodes', zh_cn='同时进行的完整编码数')))
+        self.encode_workers_label.setText(self.translator.t(Text(en='Concurrent full encodes', zh_cn='同时进行的完整编码数', ja='同時フルエンコード数')))
         encode_workers_tooltip = self.translator.t(TOOLTIP_ENCODE_WORKERS)
         self.encode_workers_label.setToolTip(encode_workers_tooltip)
         self.encode_workers_spin.setToolTip(encode_workers_tooltip)
         self.post_encode_label.setText(self.translator.t(LABEL_POST_ENCODE_ACTION))
-        self.desktop_notifications_check.setText(self.translator.t(Text(en='Send system notification when queue finishes', zh_cn='队列全部完成后发送桌面通知')))
+        self.desktop_notifications_check.setText(self.translator.t(Text(en='Send system notification when queue finishes', zh_cn='队列全部完成后发送桌面通知', ja='キュー完了時にシステム通知を送信')))
         for action in PostEncodeAction:
             idx = self.post_encode_combo.findData(action.value)
             if idx >= 0:
                 self.post_encode_combo.setItemText(idx, self.translator.t(post_encode_action_text(action)))
-        self.policy_group.setTitle(self.translator.t(Text(en='When Smart analysis cannot meet both targets', zh_cn='Smart 分析无法同时满足时')))
-        self.size_blocked_policy_label.setText(self.translator.t(Text(en='If Smart analysis predicts VMAF needs a larger file', zh_cn='Smart 分析预测达到 VMAF 需要更大文件时')))
-        self.quality_unreachable_policy_label.setText(self.translator.t(Text(en='If tested candidates miss the VMAF target', zh_cn='已测试候选未达到 VMAF 目标时')))
+        self.policy_group.setTitle(self.translator.t(Text(en='When Smart analysis cannot meet both targets', zh_cn='Smart 分析无法同时满足时', ja='Smart分析で両方の目標を満たせない場合')))
+        self.size_blocked_policy_label.setText(self.translator.t(Text(en='If Smart analysis predicts VMAF needs a larger file', zh_cn='Smart 分析预测达到 VMAF 需要更大文件时', ja='VMAF達成により大きなファイルが必要と予測される場合')))
+        self.quality_unreachable_policy_label.setText(self.translator.t(Text(en='If tested candidates miss the VMAF target', zh_cn='已测试候选未达到 VMAF 目标时', ja='テスト候補がVMAF目標を満たさない場合')))
         self.size_blocked_policy_combo.setItemText(
             self.size_blocked_policy_combo.findData(SizeBlockedPolicy.RELAX_SIZE.value),
-            self.translator.t(Text(en='Allow a larger file, up to source size', zh_cn='放宽体积上限，最多到片源大小')),
+            self.translator.t(Text(en='Allow a larger file, up to source size', zh_cn='放宽体积上限，最多到片源大小', ja='ソースサイズを上限としてより大きなファイルを許可')),
         )
         self.size_blocked_policy_combo.setItemText(
             self.size_blocked_policy_combo.findData(SizeBlockedPolicy.RELAX_QUALITY.value),
-            self.translator.t(Text(en='Lower the VMAF target', zh_cn='降低 VMAF 门槛')),
+            self.translator.t(Text(en='Lower the VMAF target', zh_cn='降低 VMAF 门槛', ja='VMAF目標を引き下げる')),
         )
         self.size_blocked_policy_combo.setItemText(
             self.size_blocked_policy_combo.findData(SizeBlockedPolicy.ASK.value),
-            self.translator.t(Text(en='Ask every time', zh_cn='每次询问')),
+            self.translator.t(Text(en='Ask every time', zh_cn='每次询问', ja='毎回確認する')),
         )
         self.quality_unreachable_policy_combo.setItemText(
             self.quality_unreachable_policy_combo.findData(QualityUnreachablePolicy.SKIP.value),
-            self.translator.t(Text(en='Skip the file', zh_cn='跳过该文件')),
+            self.translator.t(Text(en='Skip the file', zh_cn='跳过该文件', ja='ファイルをスキップ')),
         )
         self.quality_unreachable_policy_combo.setItemText(
             self.quality_unreachable_policy_combo.findData(QualityUnreachablePolicy.ASK.value),
-            self.translator.t(Text(en='Ask every time', zh_cn='每次询问')),
+            self.translator.t(Text(en='Ask every time', zh_cn='每次询问', ja='毎回確認する')),
         )
-        self.skipped_output_policy_label.setText(self.translator.t(Text(en='When Smart analysis skips a file', zh_cn='Smart 分析跳过文件时')))
+        self.skipped_output_policy_label.setText(self.translator.t(Text(en='When Smart analysis skips a file', zh_cn='Smart 分析跳过文件时', ja='Smart分析がファイルをスキップした場合')))
         self.skipped_output_policy_combo.setItemText(
             self.skipped_output_policy_combo.findData(SkippedOutputPolicy.COPY.value),
-            self.translator.t(Text(en='Copy the source to the planned output path', zh_cn='把片源复制到预定输出位置')),
+            self.translator.t(Text(en='Copy the source to the planned output path', zh_cn='把片源复制到预定输出位置', ja='ソースを計画された出力パスにコピー')),
         )
         self.skipped_output_policy_combo.setItemText(
             self.skipped_output_policy_combo.findData(SkippedOutputPolicy.ASK.value),
-            self.translator.t(Text(en='Ask after executable files finish', zh_cn='可编码文件完成后询问')),
+            self.translator.t(Text(en='Ask after executable files finish', zh_cn='可编码文件完成后询问', ja='エンコード完了後に確認する')),
         )
         self.skipped_output_policy_combo.setItemText(
             self.skipped_output_policy_combo.findData(SkippedOutputPolicy.IGNORE.value),
-            self.translator.t(Text(en='Leave Smart-skipped files unchanged', zh_cn='不处理 Smart 分析跳过的文件')),
+            self.translator.t(Text(en='Leave Smart-skipped files unchanged', zh_cn='不处理 Smart 分析跳过的文件', ja='Smartでスキップされたファイルをそのままにする')),
         )
-        self.analysis_group.setTitle(self.translator.t(Text(en='Analysis effort', zh_cn='分析强度')))
-        self.analysis_profile_label.setText(self.translator.t(Text(en='Active effort', zh_cn='当前强度')))
+        self.analysis_group.setTitle(self.translator.t(Text(en='Analysis effort', zh_cn='分析强度', ja='分析強度')))
+        self.analysis_profile_label.setText(self.translator.t(Text(en='Active effort', zh_cn='当前强度', ja='現在の強度')))
         self.analysis_profile_combo.setItemText(
             self.analysis_profile_combo.findData(AnalysisProfileName.FAST.value),
             self.translator.t(VALUE_ANALYSIS_FAST),
@@ -446,11 +459,11 @@ class SettingsDialog(QDialog):
             self.analysis_profile_combo.findData(AnalysisProfileName.PRECISE.value),
             self.translator.t(VALUE_ANALYSIS_PRECISE),
         )
-        self.workdir_button.setText(self.translator.t(Text(en='Pick Dir', zh_cn='选择目录')))
+        self.workdir_button.setText(self.translator.t(Text(en='Pick Dir', zh_cn='选择目录', ja='フォルダーを選択')))
         self.ffmpeg_button.setText(self.translator.t(BUTTON_BROWSE_EXE))
         self.ffprobe_button.setText(self.translator.t(BUTTON_BROWSE_EXE))
-        self.redetect_button.setText(self.translator.t(Text(en='Re-detect encoders', zh_cn='重新检测编码器')))
-        self.check_paths_button.setText(self.translator.t(Text(en='Check paths', zh_cn='检查路径')))
+        self.redetect_button.setText(self.translator.t(Text(en='Re-detect encoders', zh_cn='重新检测编码器', ja='エンコーダーを再検出')))
+        self.check_paths_button.setText(self.translator.t(Text(en='Check paths', zh_cn='检查路径', ja='パスを確認')))
         if self.redetect_requested:
             self.detection_hint_label.setText(self.translator.t(STATUS_RE_DETECT_PENDING))
         self.ffmpeg_edit.setPlaceholderText(self.translator.t(PLACEHOLDER_FFMPEG))
@@ -467,9 +480,9 @@ class SettingsDialog(QDialog):
         ok_button = maybe_none(self.button_box.button(QDialogButtonBox.StandardButton.Ok))
         cancel_button = maybe_none(self.button_box.button(QDialogButtonBox.StandardButton.Cancel))
         if ok_button is not None:
-            ok_button.setText(self.translator.t(Text(en='OK', zh_cn='确定')))
+            ok_button.setText(self.translator.t(Text(en='OK', zh_cn='确定', ja='OK')))
         if cancel_button is not None:
-            cancel_button.setText(self.translator.t(Text(en='Cancel', zh_cn='取消')))
+            cancel_button.setText(self.translator.t(Text(en='Cancel', zh_cn='取消', ja='キャンセル')))
         if self.detection_hint_label.isVisible():
             self.detection_hint_label.setText(self.translator.t(STATUS_RE_DETECT_PENDING))
         pairs = (
@@ -510,19 +523,19 @@ class SettingsDialog(QDialog):
         }
 
     def _browse_workdir(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, self.translator.t(Text(en='Select workdir', zh_cn='选择工作目录')))
+        path = QFileDialog.getExistingDirectory(self, self.translator.t(Text(en='Select workdir', zh_cn='选择工作目录', ja='作業フォルダーを選択')))
         if path:
             self.workdir_edit.setText(path)
             self._check_paths()
 
     def _browse_ffmpeg(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, self.translator.t(Text(en='Select ffmpeg executable', zh_cn='选择 ffmpeg 可执行文件')))
+        path, _ = QFileDialog.getOpenFileName(self, self.translator.t(Text(en='Select ffmpeg executable', zh_cn='选择 ffmpeg 可执行文件', ja='ffmpeg 実行ファイルを選択')))
         if path:
             self.ffmpeg_edit.setText(path)
             self._check_paths()
 
     def _browse_ffprobe(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, self.translator.t(Text(en='Select ffprobe executable', zh_cn='选择 ffprobe 可执行文件')))
+        path, _ = QFileDialog.getOpenFileName(self, self.translator.t(Text(en='Select ffprobe executable', zh_cn='选择 ffprobe 可执行文件', ja='ffprobe 実行ファイルを選択')))
         if path:
             self.ffprobe_edit.setText(path)
             self._check_paths()

@@ -47,61 +47,73 @@ from gui.icons import set_button_icon
 COMPARE_AUDIO_HINT = Text(
     en="Choose which file's audio track to hear.",
     zh_cn='选择要播放哪个文件的音轨。',
+    ja='再生する音声トラックのファイルを選択します。',
 )
 
 COMPARE_ERROR = Text(
     en='Comparison failed: {error}. Check the files/tools, or select normal synchronization if only precise inspection failed.',
     zh_cn='对比失败：{error}。请检查文件和工具；如果仅精确检查失败，可选择普通同步。',
+    ja='比較に失敗しました: {error}。ファイルとツールを確認するか、精密検査のみが失敗した場合は通常同期を選択してください。',
 )
 
 COMPARE_HELP = Text(
     en='Space: play/pause · T: switch A/B in single view · ←/→: seek 5 seconds. Click or drag the timeline to seek both videos. Precise inspection aligns paused frames by timestamp; playback shares one presentation clock. All decoding uses the selected external FFmpeg.\nA frame: , / .   B frame: Shift+, / Shift+.   Editing controls keep their own keys.',
     zh_cn='Space：播放/暂停 · T：单画面切换 A/B · ←/→：跳转 5 秒。点击或拖动进度条同步定位两个视频。精确检查按时间戳定位暂停画面；播放共用一个时钟。全部解码使用所选外部 FFmpeg。\nA 逐帧：, / .；B 逐帧：Shift+, / Shift+.。编辑控件保留自身按键。',
+    ja='Space: 再生/一時停止 · T: 単一ビューでA/B切り替え · ←/→: 5秒シーク。タイムラインをクリックまたはドラッグして両方の動画を同期シーク。精密検査では一時停止フレームをタイムスタンプで整列し、再生時は共通のクロックを使用します。すべてのデコードは選択された外部FFmpegを使用します。\nAフレーム: , / .   Bフレーム: Shift+, / Shift+.   編集コントロールは独自のキーを維持します。',
 )
 
 COMPARE_HELP_TOGGLE = Text(
     en='Help',
     zh_cn='帮助',
+    ja='ヘルプ',
 )
 
 COMPARE_MODE_HINT = Text(
     en='Choose side-by-side or a single A/B view.',
     zh_cn='选择并排显示或单个 A/B 视图。',
+    ja='並列表示または単一A/Bビューを選択します。',
 )
 
 COMPARE_OFFSET = Text(
     en='B offset:',
     zh_cn='B 偏移：',
+    ja='B オフセット:',
 )
 
 COMPARE_OFFSET_HINT = Text(
     en='B time = A time + offset. Positive values skip the beginning of B. Frame buttons use actual B frame timestamps.',
     zh_cn='B 时间 = A 时间 + 偏移。正值跳过 B 的片头。帧微调按钮使用 B 的实际帧时间戳。',
+    ja='B時間 = A時間 + オフセット。正の値はBの開始部分をスキップします。フレームボタンはBの実際のフレームタイムスタンプを使用します。',
 )
 
 COMPARE_PLACEHOLDER = Text(
     en='Open or drop a video',
     zh_cn='打开或拖入视频',
+    ja='動画を開くかドロップ',
 )
 
 COMPARE_PRECISION_HINT = Text(
     en='Precise inspection aligns paused frames by timestamp; normal mode uses the shared playback clock.',
     zh_cn='精确检查按时间戳对齐暂停帧；普通模式使用共享播放时钟。',
+    ja='精密検査は一時停止フレームをタイムスタンプで整列します。通常モードは共有再生クロックを使用します。',
 )
 
 COMPARE_SCRUBBING = Text(
     en='Seeking both videos…',
     zh_cn='正在同步定位两个视频…',
+    ja='両方の動画をシーク中…',
 )
 
 COMPARE_TITLE = Text(
     en='Video comparison',
     zh_cn='视频对比',
+    ja='動画比較',
 )
 
 COMPARE_WAITING_OTHER = Text(
     en='Ready. Open video {side} to compare.',
     zh_cn='已就绪。请打开视频 {side} 以开始对比。',
+    ja='準備完了。比較する動画 {side} を開いてください。',
 )
 
 
@@ -346,11 +358,11 @@ class ComparisonWindow(QWidget):
         t = translator.t
         self.setWindowTitle(t(COMPARE_TITLE))
         for side, button in enumerate(self.open_buttons):
-            button.setText(t(Text(en='Open {side}…', zh_cn='打开 {side}…'), side="AB"[side]))
+            button.setText(t(Text(en='Open {side}…', zh_cn='打开 {side}…', ja='{side} を開く…'), side="AB"[side]))
         for combo, labels in [
-            (self.mode, (t(Text(en='Side by side', zh_cn='并排显示')), t(Text(en='Single view · A/B', zh_cn='单画面 · A/B')))),
-            (self.precision, (t(Text(en='Precise inspection', zh_cn='精确检查')), t(Text(en='Normal synchronization', zh_cn='普通同步')))),
-            (self.audio, (t(Text(en='Audio track A', zh_cn='音轨 A')), t(Text(en='Audio track B', zh_cn='音轨 B')), t(Text(en='Muted', zh_cn='静音')))),
+            (self.mode, (t(Text(en='Side by side', zh_cn='并排显示', ja='並列表示')), t(Text(en='Single view · A/B', zh_cn='单画面 · A/B', ja='単一ビュー · A/B')))),
+            (self.precision, (t(Text(en='Precise inspection', zh_cn='精确检查', ja='精密検査')), t(Text(en='Normal synchronization', zh_cn='普通同步', ja='通常同期')))),
+            (self.audio, (t(Text(en='Audio track A', zh_cn='音轨 A', ja='音声トラック A')), t(Text(en='Audio track B', zh_cn='音轨 B', ja='音声トラック B')), t(Text(en='Muted', zh_cn='静音', ja='ミュート')))),
         ]:
             index = max(0, combo.currentIndex())
             combo.blockSignals(True)
@@ -358,17 +370,17 @@ class ComparisonWindow(QWidget):
             combo.addItems(labels)
             combo.setCurrentIndex(index)
             combo.blockSignals(False)
-        self.switch_button.setText(t(Text(en='Switch A/B · Tab', zh_cn='切换 A/B · Tab')))
-        self.previous_button.setText(t(Text(en='A −1 frame', zh_cn='A −1 帧')))
-        self.next_button.setText(t(Text(en='A +1 frame', zh_cn='A +1 帧')))
-        self.offset_previous.setText(t(Text(en='B −1 frame', zh_cn='B −1 帧')))
-        self.offset_next.setText(t(Text(en='B +1 frame', zh_cn='B +1 帧')))
+        self.switch_button.setText(t(Text(en='Switch A/B · Tab', zh_cn='切换 A/B · Tab', ja='A/B 切り替え · Tab')))
+        self.previous_button.setText(t(Text(en='A −1 frame', zh_cn='A −1 帧', ja='A −1 フレーム')))
+        self.next_button.setText(t(Text(en='A +1 frame', zh_cn='A +1 帧', ja='A +1 フレーム')))
+        self.offset_previous.setText(t(Text(en='B −1 frame', zh_cn='B −1 帧', ja='B −1 フレーム')))
+        self.offset_next.setText(t(Text(en='B +1 frame', zh_cn='B +1 帧', ja='B +1 フレーム')))
         self.offset_label.setText(t(COMPARE_OFFSET))
         self.offset.setToolTip(t(COMPARE_OFFSET_HINT))
         self.help_label.setText(t(COMPARE_HELP))
         self.help_button.setToolTip(t(COMPARE_HELP_TOGGLE))
         self.help_button.setAccessibleName(t(COMPARE_HELP_TOGGLE))
-        for control, label in ((self.mode, t(COMPARE_MODE_HINT)), (self.precision, t(COMPARE_PRECISION_HINT)), (self.audio, t(COMPARE_AUDIO_HINT)), (self.slider, t(Text(en='Playback position', zh_cn='播放位置'))), (self.offset, t(COMPARE_OFFSET))):
+        for control, label in ((self.mode, t(COMPARE_MODE_HINT)), (self.precision, t(COMPARE_PRECISION_HINT)), (self.audio, t(COMPARE_AUDIO_HINT)), (self.slider, t(Text(en='Playback position', zh_cn='播放位置', ja='再生位置'))), (self.offset, t(COMPARE_OFFSET))):
             control.setAccessibleName(label)
         self.mode.setToolTip(t(COMPARE_MODE_HINT))
         self.precision.setToolTip(t(COMPARE_PRECISION_HINT))
@@ -446,12 +458,12 @@ class ComparisonWindow(QWidget):
 
     def _video_filter(self) -> str:
         extensions = " ".join(f"*{suffix}" for suffix in sorted(VIDEO_EXTENSIONS))
-        return f"{self.translator.t(Text(en='Video files', zh_cn='视频文件'))} ({extensions});;{self.translator.t(Text(en='All files', zh_cn='所有文件'))} (*)"
+        return f"{self.translator.t(Text(en='Video files', zh_cn='视频文件', ja='動画ファイル'))} ({extensions});;{self.translator.t(Text(en='All files', zh_cn='所有文件', ja='すべてのファイル'))} (*)"
 
     def _choose_file(self, side: int) -> None:
         path, _filter = QFileDialog.getOpenFileName(
             self,
-            self.translator.t(Text(en='Open video {side}…', zh_cn='打开视频 {side}…'), side="AB"[side]),
+            self.translator.t(Text(en='Open video {side}…', zh_cn='打开视频 {side}…', ja='動画 {side} を開く…'), side="AB"[side]),
             "",
             self._video_filter(),
         )
@@ -476,7 +488,7 @@ class ComparisonWindow(QWidget):
         for pane in self.panes:
             pane.show_frame(QImage())
         self.phase = ComparisonPhase.LOADING
-        self.status.setText(self.translator.t(Text(en='Inspecting videos…', zh_cn='正在读取视频信息…')))
+        self.status.setText(self.translator.t(Text(en='Inspecting videos…', zh_cn='正在读取视频信息…', ja='動画情報を取得中…')))
         self._update_controls()
         self._update_labels()
         self._launch(lambda runner: inspect_pair((a, b), self.ffmpeg_setting, self.ffprobe_setting, runner),
@@ -491,29 +503,29 @@ class ComparisonWindow(QWidget):
 
     def _decode_error(self, error: str) -> None:
         error_keys = {
-            'FFmpeg video decoding cannot keep up with playback': self.translator.t(Text(en='FFmpeg video decoding cannot keep up with playback', zh_cn='FFmpeg 解码速度无法跟上播放。')),
-            'Cannot open PCM audio output': self.translator.t(Text(en='Cannot open PCM audio output', zh_cn='无法打开 PCM 音频输出。')),
-            'Cannot write PCM audio output': self.translator.t(Text(en='Cannot write PCM audio output', zh_cn='无法写入 PCM 音频输出。')),
-            'Invalid decoded frame image': self.translator.t(Text(en='Invalid decoded frame image', zh_cn='解码后的帧图像无效。')),
-            'No FFmpeg frame timestamp within 60 seconds': self.translator.t(Text(en='No FFmpeg frame timestamp within 60 seconds', zh_cn='60 秒内未收到 FFmpeg 帧时间戳。')),
-            'Video inspection exceeded 60 seconds': self.translator.t(Text(en='Video inspection exceeded 60 seconds', zh_cn='视频检查超过 60 秒。')),
-            'No decoded video frames': self.translator.t(Text(en='No decoded video frames', zh_cn='未解码出视频帧。')),
-            'Invalid FFmpeg video pipe header': self.translator.t(Text(en='Invalid FFmpeg video pipe header', zh_cn='FFmpeg 视频管道头部无效。')),
-            'Unsupported FFmpeg video pipe dimensions': self.translator.t(Text(en='Unsupported FFmpeg video pipe dimensions', zh_cn='FFmpeg 视频管道尺寸不受支持。')),
-            'Incomplete FFmpeg video frame': self.translator.t(Text(en='Incomplete FFmpeg video frame', zh_cn='FFmpeg 视频帧不完整。')),
-            'Invalid FFmpeg video frame': self.translator.t(Text(en='Invalid FFmpeg video frame', zh_cn='FFmpeg 视频帧无效。')),
-            'No decoded video frame': self.translator.t(Text(en='No decoded video frame', zh_cn='未解码出视频帧。')),
-            'No timestamped preview frame': self.translator.t(Text(en='No timestamped preview frame', zh_cn='未获得带时间戳的预览帧。')),
-            'No video frames at the requested position': self.translator.t(Text(en='No video frames at the requested position', zh_cn='请求位置没有视频帧。')),
-            'Invalid video timing metadata': self.translator.t(Text(en='Invalid video timing metadata', zh_cn='视频时间信息无效。')),
-            'Video duration and frame rate must be positive': self.translator.t(Text(en='Video duration and frame rate must be positive', zh_cn='视频时长和帧率必须大于零。')),
+            'FFmpeg video decoding cannot keep up with playback': self.translator.t(Text(en='FFmpeg video decoding cannot keep up with playback', zh_cn='FFmpeg 解码速度无法跟上播放。', ja='FFmpegの動画デコードが再生に追いつきません')),
+            'Cannot open PCM audio output': self.translator.t(Text(en='Cannot open PCM audio output', zh_cn='无法打开 PCM 音频输出。', ja='PCM音声出力を開けません')),
+            'Cannot write PCM audio output': self.translator.t(Text(en='Cannot write PCM audio output', zh_cn='无法写入 PCM 音频输出。', ja='PCM音声出力に書き込めません')),
+            'Invalid decoded frame image': self.translator.t(Text(en='Invalid decoded frame image', zh_cn='解码后的帧图像无效。', ja='デコードされたフレーム画像が無効です')),
+            'No FFmpeg frame timestamp within 60 seconds': self.translator.t(Text(en='No FFmpeg frame timestamp within 60 seconds', zh_cn='60 秒内未收到 FFmpeg 帧时间戳。', ja='60秒以内にFFmpegフレームタイムスタンプを受信できませんでした')),
+            'Video inspection exceeded 60 seconds': self.translator.t(Text(en='Video inspection exceeded 60 seconds', zh_cn='视频检查超过 60 秒。', ja='動画の確認が60秒を超過しました')),
+            'No decoded video frames': self.translator.t(Text(en='No decoded video frames', zh_cn='未解码出视频帧。', ja='動画フレームがデコードされませんでした')),
+            'Invalid FFmpeg video pipe header': self.translator.t(Text(en='Invalid FFmpeg video pipe header', zh_cn='FFmpeg 视频管道头部无效。', ja='FFmpeg動画パイプヘッダーが無効です')),
+            'Unsupported FFmpeg video pipe dimensions': self.translator.t(Text(en='Unsupported FFmpeg video pipe dimensions', zh_cn='FFmpeg 视频管道尺寸不受支持。', ja='サポートされていないFFmpeg動画パイプ寸法です')),
+            'Incomplete FFmpeg video frame': self.translator.t(Text(en='Incomplete FFmpeg video frame', zh_cn='FFmpeg 视频帧不完整。', ja='不完全なFFmpeg動画フレームです')),
+            'Invalid FFmpeg video frame': self.translator.t(Text(en='Invalid FFmpeg video frame', zh_cn='FFmpeg 视频帧无效。', ja='無効なFFmpeg動画フレームです')),
+            'No decoded video frame': self.translator.t(Text(en='No decoded video frame', zh_cn='未解码出视频帧。', ja='動画フレームがデコードされませんでした')),
+            'No timestamped preview frame': self.translator.t(Text(en='No timestamped preview frame', zh_cn='未获得带时间戳的预览帧。', ja='タイムスタンプ付きのプレビューフレームがありません')),
+            'No video frames at the requested position': self.translator.t(Text(en='No video frames at the requested position', zh_cn='请求位置没有视频帧。', ja='要求された位置に動画フレームがありません')),
+            'Invalid video timing metadata': self.translator.t(Text(en='Invalid video timing metadata', zh_cn='视频时间信息无效。', ja='無効な動画タイミングメタデータです')),
+            'Video duration and frame rate must be positive': self.translator.t(Text(en='Video duration and frame rate must be positive', zh_cn='视频时长和帧率必须大于零。', ja='動画の長さとフレームレートは正の値である必要があります')),
         }
         if error in error_keys:
             error = error_keys[error]
         elif error.startswith("No video stream: "):
-            error = self.translator.t(Text(en='No video stream: {file}', zh_cn='没有视频流：{file}'), file=error.removeprefix("No video stream: "))
+            error = self.translator.t(Text(en='No video stream: {file}', zh_cn='没有视频流：{file}', ja='映像ストリームがありません: {file}'), file=error.removeprefix("No video stream: "))
         elif error.startswith("No timestamped video frames: "):
-            error = self.translator.t(Text(en='No timestamped video frames: {file}', zh_cn='视频帧没有时间戳：{file}'), file=error.removeprefix("No timestamped video frames: "))
+            error = self.translator.t(Text(en='No timestamped video frames: {file}', zh_cn='视频帧没有时间戳：{file}', ja='タイムスタンプ付きの動画フレームがありません: {file}'), file=error.removeprefix("No timestamped video frames: "))
         self._invalidate()
         self.preview_timer.stop()
         self.playback.stop()
@@ -553,9 +565,9 @@ class ComparisonWindow(QWidget):
         for button in (self.previous_button, self.next_button, self.offset_previous, self.offset_next):
             button.setEnabled(stepping)
         self.offset.setEnabled(self.media is not None and self.phase != ComparisonPhase.CLOSED)
-        self.play_button.setText(self.translator.t(Text(en='Pause · Space', zh_cn='暂停 · Space'))
+        self.play_button.setText(self.translator.t(Text(en='Pause · Space', zh_cn='暂停 · Space', ja='一時停止 · Space'))
                                  if self.phase == ComparisonPhase.PLAYING
-                                 else self.translator.t(Text(en='Play · Space', zh_cn='播放 · Space')))
+                                 else self.translator.t(Text(en='Play · Space', zh_cn='播放 · Space', ja='再生 · Space')))
         if timeline is not None and timeline.available and self.phase != ComparisonPhase.SCRUBBING:
             self.slider.blockSignals(True)
             self.slider.setRange(round(timeline.start * 1000), round(timeline.end * 1000))
@@ -626,11 +638,11 @@ class ComparisonWindow(QWidget):
         if self.position >= timeline.end - 0.001:
             self.position = timeline.start
         self.phase = ComparisonPhase.PLAYING
-        self.status.setText(self.translator.t(Text(en='Synchronized playback', zh_cn='同步播放中')))
+        self.status.setText(self.translator.t(Text(en='Synchronized playback', zh_cn='同步播放中', ja='同期再生中')))
         try:
             self.playback.start(self.media, self.position, timeline.offset, self.audio.currentIndex())
             if not self.playback.audio_available:
-                self.status.setText(self.translator.t(Text(en='Synchronized playback · no audio output device is available.', zh_cn='同步播放中 · 没有可用的音频输出设备。')))
+                self.status.setText(self.translator.t(Text(en='Synchronized playback · no audio output device is available.', zh_cn='同步播放中 · 没有可用的音频输出设备。', ja='同期再生中 · 利用可能な音声出力デバイスがありません。')))
         except Exception as exc:
             self._decode_error(str(exc))
         self._update_controls()
@@ -665,7 +677,7 @@ class ComparisonWindow(QWidget):
         position, offset = self.position, self.offset.value() / 1000
         self._resume_after_seek = resume
         self.phase = ComparisonPhase.SEEKING
-        self.status.setText(self.translator.t(Text(en='Decoding corresponding frames…', zh_cn='正在解码对应时间帧…')))
+        self.status.setText(self.translator.t(Text(en='Decoding corresponding frames…', zh_cn='正在解码对应时间帧…', ja='対応するフレームをデコード中…')))
         self._update_controls()
         self._launch(lambda runner: decode_pair(media, position, offset, runner, side, direction),
                      lambda result: self._frames_ready(result, resume, side, direction))
@@ -686,8 +698,8 @@ class ComparisonWindow(QWidget):
         for index, image in enumerate(images):
             self.panes[index].show_frame(image)
         self.phase = ComparisonPhase.PAUSED
-        self.status.setText(self.translator.t(Text(en='Paused · timestamp-aligned frames', zh_cn='已暂停 · 已按时间戳定位画面')) if self.precision.currentIndex() == 0
-                            else self.translator.t(Text(en='Paused · normal synchronization', zh_cn='已暂停 · 普通同步')))
+        self.status.setText(self.translator.t(Text(en='Paused · timestamp-aligned frames', zh_cn='已暂停 · 已按时间戳定位画面', ja='一時停止中 · タイムスタンプ整列フレーム')) if self.precision.currentIndex() == 0
+                            else self.translator.t(Text(en='Paused · normal synchronization', zh_cn='已暂停 · 普通同步', ja='一時停止中 · 通常同期')))
         self._update_controls()
         self._update_labels()
         if resume:
@@ -715,7 +727,7 @@ class ComparisonWindow(QWidget):
             self._invalidate()
             self.playback.stop()
             self.phase = ComparisonPhase.PAUSED
-            self.status.setText(self.translator.t(Text(en='No common playback interval. Adjust the B offset.', zh_cn='没有共同播放区间，请调整 B 偏移。')))
+            self.status.setText(self.translator.t(Text(en='No common playback interval. Adjust the B offset.', zh_cn='没有共同播放区间，请调整 B 偏移。', ja='共通の再生区間がありません。Bのオフセットを調整してください。')))
             self._update_controls()
         else:
             self.seek(self.position)

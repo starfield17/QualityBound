@@ -21,6 +21,7 @@ from gui.queue.state import QueueItemRecord, QueueItemStatus, build_tags, status
 DETAILS_CLOSE = Text(
     en='Close details',
     zh_cn='关闭详情',
+    ja='詳細を閉じる',
 )
 
 
@@ -89,14 +90,14 @@ class ItemDetailsPanel(QFrame):
 
     def apply_translations(self, translator: Translator) -> None:
         self.translator = translator
-        self.title_label.setText(translator.t(Text(en='Selected item', zh_cn='选中项目')))
+        self.title_label.setText(translator.t(Text(en='Selected item', zh_cn='选中项目', ja='選択された項目')))
         self.close_button.setToolTip(translator.t(DETAILS_CLOSE))
         self.close_button.setAccessibleName(translator.t(DETAILS_CLOSE))
-        self.open_source_button.setText(translator.t(Text(en='Open source folder', zh_cn='打开源目录')))
-        self.open_output_button.setText(translator.t(Text(en='Open output folder', zh_cn='打开输出目录')))
-        self.compare_button.setText(translator.t(Text(en='Compare source and output', zh_cn='对比输入与输出')))
-        self.resolve_button.setText(translator.t(Text(en='Resolve decision', zh_cn='处理决定')))
-        self.copy_button.setText(translator.t(Text(en='Copy details', zh_cn='复制详情')))
+        self.open_source_button.setText(translator.t(Text(en='Open source folder', zh_cn='打开源目录', ja='ソースフォルダーを開く')))
+        self.open_output_button.setText(translator.t(Text(en='Open output folder', zh_cn='打开输出目录', ja='出力フォルダーを開く')))
+        self.compare_button.setText(translator.t(Text(en='Compare source and output', zh_cn='对比输入与输出', ja='ソースと出力を比較')))
+        self.resolve_button.setText(translator.t(Text(en='Resolve decision', zh_cn='处理决定', ja='決定を解決')))
+        self.copy_button.setText(translator.t(Text(en='Copy details', zh_cn='复制详情', ja='詳細をコピー')))
         if self.record is not None:
             self.set_record(self.record, translator)
 
@@ -132,11 +133,11 @@ class ItemDetailsPanel(QFrame):
     def _details_text(self, record: QueueItemRecord, translator: Translator) -> str:
         tr = translator.t
         lines = [
-            f"{tr(Text(en='Status', zh_cn='状态'))}: {tr(status_text(record.status))}",
-            f"{tr(Text(en='Source', zh_cn='输入源'))}: {record.source_path}",
+            f"{tr(Text(en='Status', zh_cn='状态', ja='状態'))}: {tr(status_text(record.status))}",
+            f"{tr(Text(en='Source', zh_cn='输入源', ja='ソース'))}: {record.source_path}",
         ]
         if record.plan_item is not None:
-            lines.append(f"{tr(Text(en='Output', zh_cn='输出'))}: {record.output_path}")
+            lines.append(f"{tr(Text(en='Output', zh_cn='输出', ja='出力'))}: {record.output_path}")
             quality = record.bound_plan_item.quality_search_result
             segmented = record.bound_plan_item.segmented_analysis_result
             planned_quality: float | None = None
@@ -152,32 +153,32 @@ class ItemDetailsPanel(QFrame):
                 planned_quality = quality.min_vmaf
                 planned_ratio = quality.predicted_output_ratio or quality.required_output_ratio
             if planned_quality is not None:
-                lines.append(f"{tr(Text(en='Measured VMAF', zh_cn='实测 VMAF')) if measured_quality else tr(Text(en='Planned VMAF', zh_cn='计划 VMAF'))}: {'' if measured_quality else '~'}{planned_quality:.1f}")
+                lines.append(f"{tr(Text(en='Measured VMAF', zh_cn='实测 VMAF', ja='測定VMAF')) if measured_quality else tr(Text(en='Planned VMAF', zh_cn='计划 VMAF', ja='計画VMAF'))}: {'' if measured_quality else '~'}{planned_quality:.1f}")
             if planned_ratio is not None:
-                lines.append(f"{tr(Text(en='Planned size ratio', zh_cn='计划体积比例'))}: ~{planned_ratio * 100:.1f}%")
+                lines.append(f"{tr(Text(en='Planned size ratio', zh_cn='计划体积比例', ja='計画サイズ比率'))}: ~{planned_ratio * 100:.1f}%")
             if record.result is not None and record.result.rejected_output_path is not None:
-                lines.append(f"{tr(Text(en='Preserved file', zh_cn='保留文件'))}: {record.result.rejected_output_path}")
-                lines.append(f"{tr(Text(en='Preserved file size (not published)', zh_cn='保留文件体积（尚未发布）'))}: {format_size(record.result.actual_output_bytes)}")
+                lines.append(f"{tr(Text(en='Preserved file', zh_cn='保留文件', ja='保持されたファイル'))}: {record.result.rejected_output_path}")
+                lines.append(f"{tr(Text(en='Preserved file size (not published)', zh_cn='保留文件体积（尚未发布）', ja='保持ファイルサイズ（未公開）'))}: {format_size(record.result.actual_output_bytes)}")
             actual_bytes = self._actual_output_bytes(record)
             if actual_bytes is not None:
                 lines.append(f"{tr(DETAILS_ACTUAL_SIZE)}: {format_size(actual_bytes)}")
                 source_bytes = self._source_bytes(record)
                 if source_bytes is not None:
                     lines.append(
-                        f"{tr(Text(en='Saved space', zh_cn='节省空间'))}: {format_size(source_bytes - actual_bytes)}"
+                        f"{tr(Text(en='Saved space', zh_cn='节省空间', ja='削減サイズ'))}: {format_size(source_bytes - actual_bytes)}"
                     )
         tags = build_tags(record, translator)
         if tags:
-            lines.append(f"{tr(Text(en='Tags', zh_cn='标签'))}: {', '.join(tags)}")
+            lines.append(f"{tr(Text(en='Tags', zh_cn='标签', ja='タグ'))}: {', '.join(tags)}")
         warnings = record.bound_plan_item.warnings if record.plan_item is not None else []
         if warnings:
-            lines.append(f"{tr(Text(en='Warnings', zh_cn='警告'))}: {'; '.join(warnings)}")
+            lines.append(f"{tr(Text(en='Warnings', zh_cn='警告', ja='警告'))}: {'; '.join(warnings)}")
         reason = record.error_summary
         if not reason and record.plan_item is not None:
             quality = record.bound_plan_item.quality_search_result
             reason = quality.reason if quality is not None else None
         if reason:
-            lines.append(f"{tr(Text(en='Reason', zh_cn='原因'))}: {reason}")
+            lines.append(f"{tr(Text(en='Reason', zh_cn='原因', ja='理由'))}: {reason}")
         return "\n".join(lines)
 
     @staticmethod

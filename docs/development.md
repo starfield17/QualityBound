@@ -174,7 +174,7 @@ rather than treating those deletions as lost coverage.
 
 ## Translations
 
-Translations are immutable `Text(en=..., zh_cn=...)` values from `core.i18n`.
+Translations are immutable `Text(en=..., zh_cn=..., ja=...)` values from `core.i18n`.
 Short text is declared at the call site; long or reused text is a named constant
 in the module that owns the behavior. Shared functional owners export text for
 consumers of the same concept. There are no keys, catalogs or registration.
@@ -183,10 +183,10 @@ consumers of the same concept. There are no keys, catalogs or registration.
 from core.i18n import Text, Translator
 
 tr = Translator("zh_cn")
-print(tr.t(Text(en="Plan items: {count}", zh_cn="计划项目：{count}"), count=3))
+print(tr.t(Text(en="Plan items: {count}", zh_cn="计划项目：{count}", ja="プラン項目: {count}"), count=3))
 ```
 
-Both languages are required. Keep declarations literal and supply values as
+All three languages are required. Keep declarations literal and supply values as
 format arguments to `Translator.t()`, so language selection happens before
 formatting. The source validation test checks language completeness, valid
 named placeholders and placeholder parity without importing GUI modules.
@@ -194,7 +194,7 @@ Each translator holds its own language; existing GUI refresh methods re-render
 visible controls when the language changes. Already emitted log lines retain
 the text recorded at the time of the event.
 
-Supported locale codes remain `en` and `zh_cn`. Saved unknown locale codes fall
+Supported locale codes remain `en`, `zh_cn`, and `ja`. Saved unknown locale codes fall
 back to English. External JSON language packs and overrides are no longer
 supported; legacy files are left on disk but are neither read nor created.
 Adding a language requires extending `Text`, the language list and declarations

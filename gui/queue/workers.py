@@ -22,11 +22,13 @@ from gui.queue.state import QueueItemRecord, QueueSourceDraft, create_draft_reco
 LOG_INTAKE_CANCELLED = Text(
     en='Source intake cancelled.',
     zh_cn='已取消导入源文件。',
+    ja='ソースファイルの取り込みがキャンセルされました。',
 )
 
 LOG_INTAKE_FAILED = Text(
     en='Cannot read {file}: {error}',
     zh_cn='无法读取 {file}：{error}',
+    ja='{file} を読み込めません: {error}',
 )
 
 

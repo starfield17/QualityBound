@@ -62,6 +62,7 @@ from gui.theme import status_color
 DETAILS_ACTUAL_SIZE = Text(
     en='Actual output size',
     zh_cn='实际输出体积',
+    ja='実際の出力サイズ',
 )
 
 
@@ -186,18 +187,18 @@ class QueueTableModel(QAbstractTableModel):
         if orientation == Qt.Orientation.Vertical:
             return section + 1
         labels = {
-            QueueColumn.NAME: self.translator.t(Text(en='Name', zh_cn='名称')),
-            QueueColumn.FOLDER: self.translator.t(Text(en='Source folder', zh_cn='源目录')),
-            QueueColumn.RESOLUTION: self.translator.t(Text(en='Resolution', zh_cn='分辨率')),
-            QueueColumn.DURATION: self.translator.t(Text(en='Duration', zh_cn='时长')),
-            QueueColumn.SOURCE_BITRATE: self.translator.t(Text(en='Source kbps', zh_cn='源码率 (kbps)')),
-            QueueColumn.TARGET_BITRATE: self.translator.t(Text(en='Target kbps', zh_cn='目标码率 (kbps)')),
-            QueueColumn.QUALITY: self.translator.t(Text(en='VMAF / size (est.)', zh_cn='VMAF / 体积（预估）')),
-            QueueColumn.ENCODER: self.translator.t(Text(en='Encoder', zh_cn='编码器')),
-            QueueColumn.OUTPUT: self.translator.t(Text(en='Output file', zh_cn='输出文件')),
-            QueueColumn.TAGS: self.translator.t(Text(en='Tags', zh_cn='标签')),
-            QueueColumn.STATUS: self.translator.t(Text(en='Status', zh_cn='状态')),
-            QueueColumn.PROGRESS: self.translator.t(Text(en='Progress', zh_cn='进度')),
+            QueueColumn.NAME: self.translator.t(Text(en='Name', zh_cn='名称', ja='名前')),
+            QueueColumn.FOLDER: self.translator.t(Text(en='Source folder', zh_cn='源目录', ja='ソースフォルダー')),
+            QueueColumn.RESOLUTION: self.translator.t(Text(en='Resolution', zh_cn='分辨率', ja='解像度')),
+            QueueColumn.DURATION: self.translator.t(Text(en='Duration', zh_cn='时长', ja='再生時間')),
+            QueueColumn.SOURCE_BITRATE: self.translator.t(Text(en='Source kbps', zh_cn='源码率 (kbps)', ja='元ビットレート (kbps)')),
+            QueueColumn.TARGET_BITRATE: self.translator.t(Text(en='Target kbps', zh_cn='目标码率 (kbps)', ja='目標ビットレート (kbps)')),
+            QueueColumn.QUALITY: self.translator.t(Text(en='VMAF / size (est.)', zh_cn='VMAF / 体积（预估）', ja='VMAF / サイズ (推定)')),
+            QueueColumn.ENCODER: self.translator.t(Text(en='Encoder', zh_cn='编码器', ja='エンコーダー')),
+            QueueColumn.OUTPUT: self.translator.t(Text(en='Output file', zh_cn='输出文件', ja='出力ファイル')),
+            QueueColumn.TAGS: self.translator.t(Text(en='Tags', zh_cn='标签', ja='タグ')),
+            QueueColumn.STATUS: self.translator.t(Text(en='Status', zh_cn='状态', ja='状態')),
+            QueueColumn.PROGRESS: self.translator.t(Text(en='Progress', zh_cn='进度', ja='進捗')),
         }
         return labels.get(QueueColumn(section), "")
 
@@ -215,7 +216,7 @@ class QueueTableModel(QAbstractTableModel):
 
         if role == Qt.ItemDataRole.DisplayRole:
             if record.plan_item is None and column in {QueueColumn.TARGET_BITRATE, QueueColumn.ENCODER, QueueColumn.OUTPUT}:
-                return self.translator.t(Text(en='Set at Start', zh_cn='开始时设置'))
+                return self.translator.t(Text(en='Set at Start', zh_cn='开始时设置', ja='開始時に設定'))
             if record.plan_item is None and column == QueueColumn.QUALITY:
                 return "-"
             if column == QueueColumn.NAME:
@@ -235,7 +236,7 @@ class QueueTableModel(QAbstractTableModel):
                 if target_bps:
                     return format_kbps_value(target_bps)
                 if record.bound_plan_item.options.compression_mode == CompressionMode.SMART:
-                    return self.translator.t(Text(en='Pending', zh_cn='待分析'))
+                    return self.translator.t(Text(en='Pending', zh_cn='待分析', ja='保留中'))
                 return "—"
             if column == QueueColumn.QUALITY:
                 segmented = record.bound_plan_item.segmented_analysis_result
@@ -650,12 +651,12 @@ class QueueTableModel(QAbstractTableModel):
     def apply_prepared_plan(self, item_ids: list[str], plan: EncodePlan, workdir: Path) -> None:
         """Atomically replace only the drafts included in this preparation."""
         if len(item_ids) != len(plan.items) or len(set(item_ids)) != len(item_ids):
-            raise RuntimeError(self.translator.t(Text(en='Prepared queue item identity mismatch.', zh_cn='已准备的队列项目身份不匹配。')))
+            raise RuntimeError(self.translator.t(Text(en='Prepared queue item identity mismatch.', zh_cn='已准备的队列项目身份不匹配。', ja='準備されたキュー項目のIDが一致しません。')))
         replacements: dict[int, QueueItemRecord] = {}
         for item_id, item in zip(item_ids, plan.items, strict=True):
             row, original = self.record_for_id(item_id)
             if row is None or original is None or original.status != QueueItemStatus.AWAITING_START or original.source_path != item.source_path:
-                raise RuntimeError(self.translator.t(Text(en='Queue changed during preparation.', zh_cn='准备期间队列发生了变化。')))
+                raise RuntimeError(self.translator.t(Text(en='Queue changed during preparation.', zh_cn='准备期间队列发生了变化。', ja='準備中にキューが変更されました。')))
             candidate = copy.deepcopy(original)
             candidate.plan_item = copy.deepcopy(item)
             candidate.job_snapshot = build_queue_job_snapshot(plan, workdir)
@@ -767,17 +768,17 @@ class QueueTableModel(QAbstractTableModel):
         edit: Callable[[QueueItemRecord], bool],
     ) -> int:
         if self._preparing or self._execution_locked:
-            raise RuntimeError(self.translator.t(Text(en='Queue preparation owns these settings until it finishes.', zh_cn='队列准备完成前无法更改这些设置。')))
+            raise RuntimeError(self.translator.t(Text(en='Queue preparation owns these settings until it finishes.', zh_cn='队列准备完成前无法更改这些设置。', ja='キュー準備が完了するまでこれらの設定は変更できません。')))
         targets = sorted(set(rows))
         if not targets or not self.can_edit_rows(targets):
-            raise RuntimeError(self.translator.t(Text(en='Every selected queue item must be editable.', zh_cn='所有选中的队列项目都必须处于可编辑状态。')))
+            raise RuntimeError(self.translator.t(Text(en='Every selected queue item must be editable.', zh_cn='所有选中的队列项目都必须处于可编辑状态。', ja='選択されたすべてのキュー項目が編集可能である必要があります。')))
         replacements: dict[int, QueueItemRecord] = {}
         for row in targets:
             record = self.record_for_row(row)
             assert record is not None
             candidate = copy.deepcopy(record)
             if not edit(candidate):
-                raise RuntimeError(self.translator.t(Text(en='Queue item {file} is not editable.', zh_cn='队列项目 {file} 不可编辑。'), file=record.source_path.name))
+                raise RuntimeError(self.translator.t(Text(en='Queue item {file} is not editable.', zh_cn='队列项目 {file} 不可编辑。', ja='キュー項目 {file} は編集できません。'), file=record.source_path.name))
             replacements[row] = candidate
         combined = [replacements.get(row, record) for row, record in enumerate(self._records)]
         validate_unique_output_paths(
