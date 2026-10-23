@@ -297,11 +297,11 @@ class ComparisonWindowTests(unittest.TestCase):
         with patch.object(self.window, "_launch"):
             self.window.seek(2)
             self.assertEqual(self.window.phase, ComparisonPhase.SEEKING)
-            self.assertTrue(self.window._resume_after_seek)
+            self.assertTrue(self.window._playback_intent())
             self.window.seek(3)
-            self.assertTrue(self.window._resume_after_seek)
+            self.assertTrue(self.window._playback_intent())
             self.window._scrub_started()
-            self.assertTrue(self.window._resume_after_scrub)
+            self.assertTrue(self.window._playback_intent())
 
     def test_mode_and_switch_shortcut_keep_time_and_playback(self) -> None:
         self.window.position = 4
@@ -393,7 +393,7 @@ class ComparisonWindowTests(unittest.TestCase):
         # this test checks session application independently of that decoder.
         with patch("gui.comparison.window.QImage.fromData", return_value=image):
             self.window._frames_ready(FramePair(DecodedFrame(1.04, b"a"),
-                                                DecodedFrame(1.06, b"b"), 0, 1.055), False, 0, 0)
+                                                DecodedFrame(1.06, b"b"), 0, 1.055), 0, 0)
         self.assertEqual(self.window.timestamps, [1.04, 1.06])
         self.assertIn("00:00:01.040", self.window.panes[0].label.text())
         self.assertEqual(self.window.panes[0].stack.currentWidget(), self.window.panes[0].canvas)

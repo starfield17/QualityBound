@@ -640,4 +640,5 @@ class GuiRegressionTests(unittest.TestCase):
         window._update_shortcuts()
         self.assertTrue(window.offset.hasFocus() or window.offset.lineEdit().hasFocus())
         self.assertTrue(all(not shortcut.isEnabled() for shortcut in window._shortcuts))
-        self.assertNotIn("Tab", [shortcut.key().toString() for shortcut in window._shortcuts])
+        # Tab switches A/B outside editors; editing still retains focus traversal.
+        self.assertIn("Tab", [shortcut.key().toString() for shortcut in window._shortcuts])
