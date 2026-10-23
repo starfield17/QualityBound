@@ -1424,9 +1424,13 @@ class MainWindow(QMainWindow):
 
     def _open_settings_dialog(self) -> None:
         dialog = SettingsDialog(self.translator, self.app_config, self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        values = dialog.values()
+        try:
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            values = dialog.values()
+            redetect_requested = dialog.redetect_requested
+        finally:
+            dialog.deleteLater()
         old_language = self.language
         old_ffmpeg_path = str(self.app_config.get("ffmpeg_path", "")).strip()
         self.app_config.update(values)
@@ -1443,7 +1447,7 @@ class MainWindow(QMainWindow):
         if values["language"] != old_language:
             self._language_changed(str(values["language"]))
         new_ffmpeg_path = str(values.get("ffmpeg_path", "")).strip()
-        if dialog.redetect_requested or new_ffmpeg_path != old_ffmpeg_path:
+        if redetect_requested or new_ffmpeg_path != old_ffmpeg_path:
             self._start_encoder_capability_detection(force_refresh=True)
 
     def _open_preset_manager(self) -> None:
@@ -1453,11 +1457,13 @@ class MainWindow(QMainWindow):
             str(self.app_config.get("default_preset_name", "")),
             self,
         )
-        if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.selected_action:
-            return
-
-        action = dialog.selected_action["action"]
-        name = dialog.selected_action["name"]
+        try:
+            if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.selected_action:
+                return
+            action = dialog.selected_action["action"]
+            name = dialog.selected_action["name"]
+        finally:
+            dialog.deleteLater()
 
         try:
             if action == "load":
@@ -2506,7 +2512,10 @@ class MainWindow(QMainWindow):
             and any(record.status in TERMINAL_ITEM_STATUSES for record in self.queue_model.records())
         )
 
-        action = maybe_none(menu.exec(view.viewport().mapToGlobal(pos)))
+        try:
+            action = maybe_none(menu.exec(view.viewport().mapToGlobal(pos)))
+        finally:
+            menu.deleteLater()
         if action is None:
             return
         if action == open_source_action and selected_record is not None:
@@ -2622,7 +2631,10 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         reset_action = menu.addAction(self.translator.t(Text(en='Reset Queue Order', zh_cn='恢复队列顺序', ja='キューの順序をリセット')))
         reset_action.setEnabled(self.queue_model.has_sort_order())
-        chosen = maybe_none(menu.exec(header.mapToGlobal(pos)))
+        try:
+            chosen = maybe_none(menu.exec(header.mapToGlobal(pos)))
+        finally:
+            menu.deleteLater()
         if chosen is None:
             return
         if chosen == reset_action:

@@ -316,7 +316,11 @@ class QueueCompletionHandler(QObject):
         post_action = parse_post_encode_action(config.get("post_encode_action", PostEncodeAction.DO_NOTHING.value))
         if post_action != PostEncodeAction.DO_NOTHING and savings.successful_files > 0:
             dialog = PowerActionCountdownDialog(tr, post_action, timeout_sec=30, parent=self._parent)
-            if dialog.exec() == QDialog.DialogCode.Accepted:
+            try:
+                accepted = dialog.exec() == QDialog.DialogCode.Accepted
+            finally:
+                dialog.deleteLater()
+            if accepted:
                 if post_action == PostEncodeAction.QUIT:
                     self._close()
                 elif post_action in {PostEncodeAction.SLEEP, PostEncodeAction.SHUTDOWN}:

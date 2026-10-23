@@ -298,9 +298,12 @@ def choose_quality_decision(
             role="danger" if option.action_code == DecisionActionCode.SKIP else "",
         )
     dialog.decide_later_button.setText(tr.t(DECISION_DECIDE_LATER))
-    if dialog.exec() != QDialog.DialogCode.Accepted:
-        return None
-    return dialog.choice if isinstance(dialog.choice, DecisionOption) else None
+    try:
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return dialog.choice if isinstance(dialog.choice, DecisionOption) else None
+    finally:
+        dialog.deleteLater()
 
 
 def choose_size_miss_decision(
@@ -354,6 +357,9 @@ def choose_size_miss_decision(
     footer.addStretch(1)
     dialog.actions_layout.addLayout(footer)
     dialog.decide_later_button.setText(tr.t(DECISION_DECIDE_LATER))
-    if dialog.exec() != QDialog.DialogCode.Accepted:
-        return None
-    return dialog.choice if isinstance(dialog.choice, SizeMissDecision) else None
+    try:
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return dialog.choice if isinstance(dialog.choice, SizeMissDecision) else None
+    finally:
+        dialog.deleteLater()
