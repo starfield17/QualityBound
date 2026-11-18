@@ -6,19 +6,17 @@
 [![Release](https://img.shields.io/github/v/release/starfield17/QualityBound)](https://github.com/starfield17/QualityBound/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-315276.svg)](LICENSE)
 
-QualityBound analyzes a video before encoding, searches for an operating point
-that satisfies a perceptual-quality target, and verifies the result on content
-that was not used during the search.
-
-Instead of guessing a CRF value, specify the constraints:
+CRF is an encoder setting, not a perceptual-quality measurement, and a fixed
+bitrate leaves quality unchecked. Specify the constraints directly instead:
 
 ```text
 VMAF >= 90
 output <= 50% of source
 ```
 
-QualityBound then searches for a viable AV1 or HEVC encode and checks the final
-file before publishing it.
+QualityBound samples the video, searches for a conforming AV1 or HEVC bitrate,
+validates it on unseen holdout windows, and checks the completed encode before
+publishing it.
 
 ![QualityBound main window](docs/assets/qualitybound-main-window.png)
 
@@ -26,56 +24,47 @@ file before publishing it.
 
 [Download the latest release](https://github.com/starfield17/QualityBound/releases/latest)
 for Windows x86-64/ARM64, Linux x86-64/ARM64, or macOS Apple Silicon. Tagged
-packages include a compatible FFmpeg and FFprobe build. Assets published before
-the QualityBound rename retain their original filenames.
+packages bundle a compatible FFmpeg and FFprobe build (pre-rename releases
+retain their original filenames).
 
-The macOS release is ad-hoc signed rather than notarized. Gatekeeper may require
-right-clicking the application and choosing **Open**. Linux packages require a
-reasonably recent glibc distribution.
+- **macOS:** Releases are ad-hoc signed, not notarized; Gatekeeper may require
+  right-click → **Open**.
+- **Linux:** Requires a reasonably recent `glibc`.
 
-## Why QualityBound exists
+## How it works
 
-CRF is an encoder setting, not a perceptual-quality measurement. The same CRF
-can produce very different quality and file sizes on different sources. A fixed
-bitrate makes size more predictable, but does not guarantee quality. Repeated
-whole-file trial encodes can answer both questions, but at high cost.
+QualityBound is not a general-purpose FFmpeg wrapper, media editor, or format
+converter. It deliberately restricts options to HEVC/AV1 presets and constraint
+controls so every job runs through one verifiable pipeline:
 
-QualityBound treats the desired perceptual quality and file size as constraints:
+1. **Scout:** Scans the timeline for spatial complexity (SI), temporal
+   complexity (TI), and scene boundaries (short clips are analyzed whole).
+2. **Window selection:** Combines difficult and time-stratified windows for
+   search while keeping a disjoint, non-overlapping holdout set untouched.
+3. **Candidate search:** Encodes trial windows with the bound encoder, scores
+   them with Netflix VMAF, and predicts full-file size from measured sample
+   bytes rather than requested bitrate.
+4. **Holdout check:** Validates the chosen bitrate on the unseen holdout
+   windows.
+5. **Constraint promotion:** If any holdout fails, all failed holdouts become
+   search constraints and the search resumes upward.
+6. **Validated publication & size-miss gate:** Writes the full encode to a
+   temporary file beside the target and checks its actual size before
+   publishing. Oversized outputs are preserved as `*.size-miss-<id>.*` for
+   explicit accept, retry, or delete — never silently published over the target.
 
-1. Scout scans the timeline for spatial complexity, temporal complexity, and
-   scene boundaries.
-2. Search windows combine difficult content with coverage across the timeline.
-3. Candidate encodes are measured with Netflix VMAF.
-4. Separate holdout windows validate the selected bitrate.
-5. A failed holdout becomes a search constraint and the search resumes upward.
-6. The completed encode is published only after its actual size is validated.
+- **Conflicts & skips:** Predicted quality/size conflicts follow your
+  configured relaxation or ask policy; if the remaining conflict predicts a file
+  larger than the source, the item is skipped and handled by the **Copy / Ask /
+  Ignore** source-output policy.
+- **Receipt cache:** Sample measurements persist as versioned receipts keyed
+  by source, FFmpeg binary, bound encoder, measurement settings, and sample
+  scheme (`workdir/analysis/receipts/`), so policy-only threshold changes reuse
+  existing candidate scores.
 
-Search and validation windows do not overlap. The samples used to choose a
-bitrate are not the same samples used to validate it.
-
-Read [How QualityBound works](docs/algorithm.md) for the measurement and
-decision flow, and [Smart evaluation](docs/smart-evaluation.md) for what the
+See [Algorithm and constraint flow](docs/algorithm.md) for the scoring and
+prediction details, and [Evaluation scope](docs/smart-evaluation.md) for what
 current evidence does and does not establish.
-
-## This is not a general-purpose FFmpeg GUI
-
-QualityBound deliberately does not expose every FFmpeg option. It is designed
-around a narrower problem: finding a compact encode that satisfies an explicit
-perceptual-quality target.
-
-It does not aim to be a media editor, format-conversion toolbox, or exhaustive
-encoder-parameter frontend. Its evidence and validation flow is the product:
-
-- Scout selects windows from scene boundaries, spatial complexity, temporal
-  complexity, and timeline strata.
-- Search and validation windows are kept separate.
-- Failed holdouts are promoted into the search constraints together.
-- Size prediction uses measured sample output rather than requested bitrate.
-- A completed size miss becomes an explicit decision and cannot overwrite the
-  requested output silently.
-
-The desktop GUI makes that workflow accessible, but the constraint and
-verification model is the central feature.
 
 ## Quick start
 
@@ -86,109 +75,60 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
-The interface supports English, 简体中文, and 日本語. Choose **Settings → Language**
-to change the GUI language, or select Japanese when launching:
+- **GUI:** Add or drop files into the queue, set constraints and output
+  directory, and click **Start Queue**. Batch settings bind on start (with
+  per-row right-click overrides and **Needs decision** prompts when a rule
+  fails). Supports English, 简体中文, and 日本語 via **Settings → Language** or
+  `--lang`.
+- **CLI & presets:** Built-in HEVC and AV1 presets default to Smart v1
+  (`--min-vmaf 90`; `--max-output-ratio` `0.7` for HEVC, `0.5` for AV1). CLI
+  exit codes: `0` success (including intentional skips), `2` failure or error,
+  `3` decision required.
 
 ```bash
 python main.py --gui --lang ja
 python main.py --cli plan input.mp4 --lang ja
-```
-
-In the GUI, add or drop files first, adjust encoding settings and the output
-directory, then click **Start Queue**. The queue is the primary workspace: the
-source and encoding card collapses to a compact constraint summary, and selecting
-a row shows its planned and measured details. The window follows the system
-light/dark appearance. Settings are bound at Start. Right-click overrides apply
-only to the selected sources; parameter and output-directory overrides are
-independent and can each be reset to follow the global settings. Resume keeps the
-current run's settings; a manual retry selects settings again.
-
-Plan or encode from the CLI:
-
-```bash
-python main.py --cli plan input.mp4
 python main.py --cli encode input.mp4 --backend auto --overwrite
 ```
 
-The built-in HEVC and AV1 presets use Smart compression by default. The default
-minimum is VMAF 90; the default maximum output ratio is 70% for HEVC and 50% for
-AV1. Use fixed-bitrate mode explicitly when compatible VMAF filters are not
-available:
+When compatible VMAF filters are unavailable, use fixed-bitrate mode
+explicitly:
 
 ```bash
-python main.py --cli encode input.mp4 \
-  --compression-mode fixed_bitrate \
-  --ratio 0.76
+python main.py --cli encode input.mp4 --compression-mode fixed_bitrate --ratio 0.76
 ```
 
-Supported encoding backends are CPU, NVIDIA NVENC, Intel QSV, AMD AMF, and
-Apple VideoToolbox where the selected FFmpeg build and hardware expose them.
-
-Use **Video comparison** in the toolbar to open two local videos, or right-click
-one successfully encoded queue item and select **Compare source and output**.
-The comparison window offers side-by-side playback and a single view switched
-with **Tab**. **Space** plays or pauses both videos; click or drag the shared
-timeline to seek. Releasing a drag restores the previous playback state.
-Select audio from A or B, or mute both. Adjust **B offset** to align different
-introductions: positive values skip the beginning of B. Frame buttons provide
-timestamp-based fine adjustment. Playback stops at the common interval's end.
-
-**Precise inspection** decodes paused frames at the corresponding timestamps,
-including after seeking, and supports previous/next-frame inspection. Different
-frame rates can produce different displayed frame timestamps. **Normal
-synchronization** decodes the first available frame at or after the requested
-time, without the additional frame-timestamp probe. Playback uses one shared
-presentation clock; different frame rates need not display identical timestamps.
-All video and audio decoding uses the selected external FFmpeg, and frame
-inspection uses its FFprobe companion. Qt displays decoded images and sends PCM
-samples to the audio device; it does not supply an additional FFmpeg decoder.
-
-Smart v1 remains the default. To try per-shot allocation, select **Smart v2
-(experimental)** in the GUI Smart options, or pass `--smart-algorithm
-v2_experimental` in the CLI. V2 interprets `--min-vmaf` as a whole-video mean
-target, applies local quality floors and scores the complete final output.
-It requires CFR SDR and a successful encoder/decoder-configuration preflight;
-it may take substantially longer. See [Smart v2](docs/smart-v2.md) for supported
-cases, measured limitations and explicit-tool examples.
-QualityBound performs runtime encoder smoke tests rather than assuming support
-from an encoder name alone.
-
-## Constraint outcomes
-
-QualityBound does not silently publish a result that missed its constraints.
-
-- A predicted quality/size conflict follows the configured Smart policy.
-- Smart first tries the configured size or quality relaxation. If the remaining
-  size conflict predicts a file larger than its source, the item is skipped.
-- Intentional Smart skips follow the separate **Copy / Ask / Ignore** source
-  output setting. Copy publishes the original file to the requested output path.
-- In the GUI, size-conflict and quality-miss questions appear after executable
-  encodes finish. The source-copy question is separate; pending decisions do not
-  block copying skipped sources. Cancelling a constraint question leaves that
-  item in **Needs decision**.
-- A completed file that exceeds the size limit is preserved as a size-miss file
-  for explicit accept, retry, or delete action; it does not overwrite the target.
-- CLI exit code `3` means a decision is required, `2` means analysis, encoding or copying
-  failed, and intentional skips remain a successful batch outcome.
-
-Smart measurements are cached as versioned receipts. Quality and size policy
-changes may reuse measured candidates; source, FFmpeg, encoder, measurement, or
-sample-scheme changes produce a different receipt identity.
+- **Backends:** Supports CPU, NVIDIA NVENC, Intel QSV, AMD AMF, and Apple
+  VideoToolbox where FFmpeg and local hardware expose them (plus `auto`).
+  QualityBound runs runtime encoder smoke tests rather than assuming support
+  from encoder names alone.
+- **Video comparison:** Open via **Video comparison** in the toolbar or
+  right-click a finished row (**Compare source and output**). Provides
+  side-by-side and single-view A/B toggling (`Tab` / `T`), synchronized
+  playback (`Space`), `B offset` alignment, and paused frame-by-frame
+  inspection decoded by the selected external FFmpeg/FFprobe pair (Qt displays
+  images and outputs PCM audio only).
+- **Smart v2 (experimental):** Opt in via **Smart v2 (experimental)** in the
+  GUI or `--smart-algorithm v2_experimental`. Unlike Smart v1's single-bitrate
+  sampled gate, v2 allocates bitrates per shot against a whole-video mean
+  `--min-vmaf` target with per-shot quality floors, runs an encode/concat
+  preflight, and scores the complete output. Requires CFR SDR media and takes
+  noticeably longer; see [Smart v2](docs/smart-v2.md).
 
 ## Known limitations
 
-- **MP4 output cannot carry bitmap subtitles.** MP4 subtitles are encoded as
-  `mov_text`, which only accepts text sources, so a PGS, VobSub or DVB subtitle
-  stream cannot be carried into an MP4 output. Planning refuses such a source
-  with the offending codec and publishes nothing, instead of failing after the
-  full video encode. Choose MKV to keep such subtitles; text subtitles and MKV
-  sources are unaffected. See
-  [Development, translations, and packaging](docs/development.md) (Known limitations)
-  for the codec list and the reproduced commands.
+- **MP4 output cannot carry bitmap subtitles.** MP4 subtitle streams use
+  `mov_text`, which accepts text sources only. Sources containing PGS, VobSub,
+  or DVB subtitle streams are refused during planning with the offending codec
+  rather than failing after a full encode or silently dropping streams. Choose
+  MKV to keep bitmap subtitles; see
+  [Development, translations, and packaging](docs/development.md) (Known
+  limitations).
 
 ## Documentation
 
 - [Algorithm and constraint flow](docs/algorithm.md)
+- [Smart v2 (experimental)](docs/smart-v2.md)
 - [Architecture](docs/architecture.md)
 - [Development, translations, and packaging](docs/development.md)
 - [Evaluation scope and limitations](docs/smart-evaluation.md)
